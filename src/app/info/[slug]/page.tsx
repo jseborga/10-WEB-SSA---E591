@@ -2,17 +2,21 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
+import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const page = await db.publication.findFirst({
-    where: {
-      slug,
-      published: true,
-    },
-  })
+  const [page, siteSettings] = await Promise.all([
+    db.publication.findFirst({
+      where: {
+        slug,
+        published: true,
+      },
+    }),
+    ensureSiteSettings().catch(() => getDefaultSiteSettings()),
+  ])
 
   if (!page) {
     return {
@@ -21,19 +25,22 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   return {
-    title: `${page.title} | SSA Ingenieria`,
+    title: `${page.title} | ${siteSettings.companyName}`,
     description: page.excerpt || page.title,
   }
 }
 
 export default async function InfoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const page = await db.publication.findFirst({
-    where: {
-      slug,
-      published: true,
-    },
-  })
+  const [page, siteSettings] = await Promise.all([
+    db.publication.findFirst({
+      where: {
+        slug,
+        published: true,
+      },
+    }),
+    ensureSiteSettings().catch(() => getDefaultSiteSettings()),
+  ])
 
   if (!page) {
     notFound()
@@ -49,7 +56,7 @@ export default async function InfoPage({ params }: { params: Promise<{ slug: str
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         <div className="flex items-center justify-between gap-4 border-b border-zinc-200 pb-6">
           <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">SSA Ingenieria</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">{siteSettings.companyName}</p>
             <h1 className="text-3xl sm:text-5xl font-light tracking-tight mt-2">{page.title}</h1>
             {page.excerpt && <p className="text-sm sm:text-base text-zinc-600 mt-4 max-w-3xl">{page.excerpt}</p>}
           </div>

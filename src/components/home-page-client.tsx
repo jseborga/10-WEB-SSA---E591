@@ -35,12 +35,31 @@ interface Project {
 interface HomePageClientProps {
   initialProjects?: Project[]
   menuPages?: MenuPage[]
+  siteSettings?: SiteSettings
 }
 
 interface MenuPage {
   id: string
   title: string
   slug: string
+}
+
+interface SiteSettings {
+  companyName?: string | null
+  legalName?: string | null
+  tagline?: string | null
+  email?: string | null
+  phone?: string | null
+  whatsapp?: string | null
+  addressLine?: string | null
+  city?: string | null
+  country?: string | null
+  footerText?: string | null
+  instagramUrl?: string | null
+  facebookUrl?: string | null
+  linkedinUrl?: string | null
+  youtubeUrl?: string | null
+  tiktokUrl?: string | null
 }
 
 const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) => mod.ChatWidget), {
@@ -50,6 +69,14 @@ const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) =
 const ProjectDetail = dynamic(() => import('@/components/project-detail').then((mod) => mod.ProjectDetail), {
   ssr: false,
 })
+
+function normalizePhoneLink(value: string) {
+  return value.replace(/[^\d+]/g, '')
+}
+
+function normalizeWhatsappLink(value: string) {
+  return value.replace(/\D/g, '')
+}
 
 const defaultProjects: Project[] = [
   {
@@ -196,12 +223,38 @@ const services = {
   ]
 }
 
-export default function HomePageClient({ initialProjects = defaultProjects, menuPages = [] }: HomePageClientProps) {
+export default function HomePageClient({
+  initialProjects = defaultProjects,
+  menuPages = [],
+  siteSettings,
+}: HomePageClientProps) {
   const { t, language } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const projects = initialProjects.length > 0 ? initialProjects : defaultProjects
+  const companyName = siteSettings?.companyName?.trim() || 'SSA Ingenieria'
+  const contactEmail = siteSettings?.email?.trim() || t.studio.email
+  const contactPhone = siteSettings?.phone?.trim() || t.studio.phone
+  const contactWhatsapp = siteSettings?.whatsapp?.trim() || ''
+  const locationText =
+    [siteSettings?.addressLine, siteSettings?.city, siteSettings?.country]
+      .map((value) => value?.trim())
+      .filter(Boolean)
+      .join(', ') || t.studio.location
+  const footerText = siteSettings?.footerText?.trim() || t.footer.rights
+  const socialLinks = [
+    { label: 'Instagram', href: siteSettings?.instagramUrl?.trim() || '' },
+    { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '' },
+    { label: 'LinkedIn', href: siteSettings?.linkedinUrl?.trim() || '' },
+    { label: 'YouTube', href: siteSettings?.youtubeUrl?.trim() || '' },
+    { label: 'TikTok', href: siteSettings?.tiktokUrl?.trim() || '' },
+  ].filter((item) => item.href)
+  const iconSocialLinks = [
+    { label: 'Instagram', href: siteSettings?.instagramUrl?.trim() || '', icon: Instagram },
+    { label: 'LinkedIn', href: siteSettings?.linkedinUrl?.trim() || '', icon: Linkedin },
+    { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
+  ].filter((item) => item.href)
 
   // Listen for navigation events from ProjectDetail
   useEffect(() => {
@@ -244,7 +297,7 @@ export default function HomePageClient({ initialProjects = defaultProjects, menu
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-zinc-100">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <a href="#" className="text-xl sm:text-2xl font-normal tracking-tight text-zinc-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-            estudio<span className="font-medium">591</span>
+            {companyName}
           </a>
           
           {/* Desktop Nav */}
@@ -299,8 +352,8 @@ export default function HomePageClient({ initialProjects = defaultProjects, menu
         <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-20 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <h1 className="text-3xl sm:text-5xl md:text-6xl font-light tracking-tight text-zinc-900 mb-3">
-              {t.hero.title}
-              <span className="block mt-1 text-zinc-400">{t.hero.subtitle}</span>
+              {companyName}
+              <span className="block mt-1 text-zinc-400">{siteSettings?.tagline?.trim() || t.hero.subtitle}</span>
             </h1>
             <p className="max-w-lg mx-auto text-sm sm:text-base text-zinc-600 font-light leading-relaxed mb-8">
               {t.hero.description}
@@ -445,21 +498,51 @@ export default function HomePageClient({ initialProjects = defaultProjects, menu
               <h3 className="text-base font-medium text-white mb-6">{t.studio.contact}</h3>
               <div className="space-y-4 mb-10">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-zinc-300">{t.studio.email}</span>
+                  <a href={`mailto:${contactEmail}`} className="text-sm text-zinc-300 hover:text-white transition-colors">
+                    {contactEmail}
+                  </a>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-zinc-300">{t.studio.phone}</span>
+                  <a href={`tel:${normalizePhoneLink(contactPhone)}`} className="text-sm text-zinc-300 hover:text-white transition-colors">
+                    {contactPhone}
+                  </a>
                 </div>
+                {contactWhatsapp && (
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={`https://wa.me/${normalizeWhatsappLink(contactWhatsapp)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-zinc-300 hover:text-white transition-colors"
+                    >
+                      WhatsApp {contactWhatsapp}
+                    </a>
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
                   <MapPin className="w-4 h-4 text-zinc-400" />
-                  <span className="text-sm text-zinc-300">{t.studio.location}</span>
+                  <span className="text-sm text-zinc-300">{locationText}</span>
                 </div>
               </div>
-              <div className="flex gap-4">
-                <a href="#" className="text-zinc-400 hover:text-white transition-colors"><Instagram className="w-5 h-5" /></a>
-                <a href="#" className="text-zinc-400 hover:text-white transition-colors"><Linkedin className="w-5 h-5" /></a>
-                <a href="#" className="text-zinc-400 hover:text-white transition-colors"><Facebook className="w-5 h-5" /></a>
-              </div>
+              {iconSocialLinks.length > 0 && (
+                <div className="flex gap-4">
+                  {iconSocialLinks.map((social) => {
+                    const Icon = social.icon
+                    return (
+                      <a
+                        key={social.label}
+                        href={social.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={social.label}
+                        className="text-zinc-400 hover:text-white transition-colors"
+                      >
+                        <Icon className="w-5 h-5" />
+                      </a>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </motion.div>
         </div>
@@ -470,14 +553,24 @@ export default function HomePageClient({ initialProjects = defaultProjects, menu
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <span className="text-base sm:text-lg font-normal tracking-tight" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-              estudio<span className="font-medium">591</span>
+              {companyName}
             </span>
-            <p className="text-xs text-zinc-500">© {new Date().getFullYear()} {t.footer.rights}</p>
-            <div className="flex gap-4">
-              <a href="#" className="text-xs text-zinc-500 hover:text-white transition-colors tracking-wide">Instagram</a>
-              <a href="#" className="text-xs text-zinc-500 hover:text-white transition-colors tracking-wide">LinkedIn</a>
-              <a href="#" className="text-xs text-zinc-500 hover:text-white transition-colors tracking-wide">Facebook</a>
-            </div>
+            <p className="text-xs text-zinc-500 text-center sm:text-left">© {new Date().getFullYear()} {companyName}. {footerText}</p>
+            {socialLinks.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-4">
+                {socialLinks.map((social) => (
+                  <a
+                    key={social.label}
+                    href={social.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-zinc-500 hover:text-white transition-colors tracking-wide"
+                  >
+                    {social.label}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </footer>

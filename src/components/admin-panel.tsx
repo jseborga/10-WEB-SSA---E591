@@ -58,7 +58,25 @@ interface ChatConfigType {
   temperature: number; maxTokens: number
 }
 
-type TabType = 'projects' | 'publications' | 'contacts' | 'ai-config'
+interface SiteSettings {
+  companyName: string
+  legalName: string
+  tagline: string
+  email: string
+  phone: string
+  whatsapp: string
+  addressLine: string
+  city: string
+  country: string
+  footerText: string
+  instagramUrl: string
+  facebookUrl: string
+  linkedinUrl: string
+  youtubeUrl: string
+  tiktokUrl: string
+}
+
+type TabType = 'projects' | 'publications' | 'site-config' | 'contacts' | 'ai-config'
 type SessionState = { checking: boolean; configured: boolean; authenticated: boolean }
 
 type ProjectFormState = {
@@ -88,6 +106,8 @@ type PublicationFormState = {
   menuOrder: string
 }
 
+type SiteFormState = SiteSettings
+
 const emptyProjectForm: ProjectFormState = {
   title: '',
   description: '',
@@ -113,6 +133,24 @@ const emptyPublicationForm: PublicationFormState = {
   category: 'informacion',
   showInMenu: false,
   menuOrder: '0',
+}
+
+const emptySiteForm: SiteFormState = {
+  companyName: '',
+  legalName: '',
+  tagline: '',
+  email: '',
+  phone: '',
+  whatsapp: '',
+  addressLine: '',
+  city: '',
+  country: '',
+  footerText: '',
+  instagramUrl: '',
+  facebookUrl: '',
+  linkedinUrl: '',
+  youtubeUrl: '',
+  tiktokUrl: '',
 }
 
 const providers = [
@@ -145,6 +183,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
   const [publicationForm, setPublicationForm] = useState<PublicationFormState>(emptyPublicationForm)
+  const [siteForm, setSiteForm] = useState<SiteFormState>(emptySiteForm)
   const [aiForm, setAiForm] = useState({
     enabled: false, provider: 'default', apiKey: '', apiBaseUrl: '', model: '',
     systemPrompt: '', systemPromptEn: '', systemPromptPt: '',
@@ -213,29 +252,48 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   const loadAdminData = async () => {
     try {
-      const [projectsRes, publicationsRes, contactsRes, configRes] = await Promise.all([
+      const [projectsRes, publicationsRes, contactsRes, configRes, siteRes] = await Promise.all([
         fetch('/api/projects', { cache: 'no-store' }),
         fetch('/api/publications', { cache: 'no-store' }),
         fetch('/api/contact', { cache: 'no-store' }),
         fetch('/api/chat-config', { cache: 'no-store' }),
+        fetch('/api/site-settings', { cache: 'no-store' }),
       ])
 
-      if ([projectsRes, publicationsRes, contactsRes, configRes].some(response => response.status === 401)) {
+      if ([projectsRes, publicationsRes, contactsRes, configRes, siteRes].some(response => response.status === 401)) {
         setSession(current => ({ ...current, authenticated: false }))
         return
       }
 
-      const [projectsData, publicationsData, contactsData, configData] = await Promise.all([
+      const [projectsData, publicationsData, contactsData, configData, siteData] = await Promise.all([
         projectsRes.json(),
         publicationsRes.json(),
         contactsRes.json(),
         configRes.json(),
+        siteRes.json(),
       ])
 
       setProjects(Array.isArray(projectsData) ? projectsData : [])
       setPublications(Array.isArray(publicationsData) ? publicationsData : [])
       setContacts(Array.isArray(contactsData) ? contactsData : [])
       setChatConfig(configData)
+      setSiteForm({
+        companyName: siteData.companyName || '',
+        legalName: siteData.legalName || '',
+        tagline: siteData.tagline || '',
+        email: siteData.email || '',
+        phone: siteData.phone || '',
+        whatsapp: siteData.whatsapp || '',
+        addressLine: siteData.addressLine || '',
+        city: siteData.city || '',
+        country: siteData.country || '',
+        footerText: siteData.footerText || '',
+        instagramUrl: siteData.instagramUrl || '',
+        facebookUrl: siteData.facebookUrl || '',
+        linkedinUrl: siteData.linkedinUrl || '',
+        youtubeUrl: siteData.youtubeUrl || '',
+        tiktokUrl: siteData.tiktokUrl || '',
+      })
       setAiForm({
         enabled: configData.enabled,
         provider: configData.provider || 'default',
@@ -507,6 +565,29 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     setShowPublicationDialog(true)
   }
 
+  const handleSaveSiteConfig = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/site-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(siteForm),
+      })
+
+      if (res.ok) {
+        toast.success('Configuracion del sitio actualizada')
+        void loadAdminData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'No se pudo guardar la configuracion del sitio')
+      }
+    } catch {
+      toast.error('Error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSaveAIConfig = async () => {
     setLoading(true)
     try {
@@ -519,6 +600,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const tabs = [
     { key: 'projects' as TabType, label: t.admin.projects, icon: Building2 },
     { key: 'publications' as TabType, label: 'Paginas/Menu', icon: FileText },
+    { key: 'site-config' as TabType, label: 'Sitio', icon: Globe },
     { key: 'contacts' as TabType, label: t.admin.contacts, icon: Mail },
     { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot }
   ]
@@ -660,6 +742,101 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           </div>
                         ))}
                         {publications.length === 0 && <p className="text-center text-zinc-500 py-6 text-sm">{t.admin.noPublications}</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'site-config' && (
+                    <div className="space-y-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-base font-light">Configuracion del sitio</h2>
+                          <p className="text-xs text-zinc-500 mt-1">Edita nombre de empresa, contacto, redes sociales y pie de pagina.</p>
+                        </div>
+                        <Button onClick={handleSaveSiteConfig} disabled={loading} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm">
+                          <Save className="w-4 h-4 mr-1" />
+                          {loading ? t.admin.saving : 'Guardar sitio'}
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Nombre comercial</label>
+                          <Input value={siteForm.companyName} onChange={e => setSiteForm({ ...siteForm, companyName: e.target.value })} className="text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Razon social</label>
+                          <Input value={siteForm.legalName} onChange={e => setSiteForm({ ...siteForm, legalName: e.target.value })} className="text-sm" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-zinc-700 mb-1 block">Eslogan</label>
+                        <Input value={siteForm.tagline} onChange={e => setSiteForm({ ...siteForm, tagline: e.target.value })} className="text-sm" />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Correo</label>
+                          <Input value={siteForm.email} onChange={e => setSiteForm({ ...siteForm, email: e.target.value })} className="text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Telefono</label>
+                          <Input value={siteForm.phone} onChange={e => setSiteForm({ ...siteForm, phone: e.target.value })} className="text-sm" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">WhatsApp</label>
+                          <Input value={siteForm.whatsapp} onChange={e => setSiteForm({ ...siteForm, whatsapp: e.target.value })} className="text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Pie de pagina</label>
+                          <Input value={siteForm.footerText} onChange={e => setSiteForm({ ...siteForm, footerText: e.target.value })} className="text-sm" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-zinc-700 mb-1 block">Direccion</label>
+                        <Input value={siteForm.addressLine} onChange={e => setSiteForm({ ...siteForm, addressLine: e.target.value })} className="text-sm" />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Ciudad</label>
+                          <Input value={siteForm.city} onChange={e => setSiteForm({ ...siteForm, city: e.target.value })} className="text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Pais</label>
+                          <Input value={siteForm.country} onChange={e => setSiteForm({ ...siteForm, country: e.target.value })} className="text-sm" />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                        <h3 className="text-sm font-medium text-zinc-900">Redes sociales</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Instagram</label>
+                            <Input value={siteForm.instagramUrl} onChange={e => setSiteForm({ ...siteForm, instagramUrl: e.target.value })} placeholder="https://instagram.com/..." className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Facebook</label>
+                            <Input value={siteForm.facebookUrl} onChange={e => setSiteForm({ ...siteForm, facebookUrl: e.target.value })} placeholder="https://facebook.com/..." className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">LinkedIn</label>
+                            <Input value={siteForm.linkedinUrl} onChange={e => setSiteForm({ ...siteForm, linkedinUrl: e.target.value })} placeholder="https://linkedin.com/..." className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">YouTube</label>
+                            <Input value={siteForm.youtubeUrl} onChange={e => setSiteForm({ ...siteForm, youtubeUrl: e.target.value })} placeholder="https://youtube.com/..." className="text-sm" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">TikTok</label>
+                            <Input value={siteForm.tiktokUrl} onChange={e => setSiteForm({ ...siteForm, tiktokUrl: e.target.value })} placeholder="https://tiktok.com/..." className="text-sm" />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
