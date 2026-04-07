@@ -116,7 +116,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAdmin(request)
 
     if (unauthorized) {
       return unauthorized

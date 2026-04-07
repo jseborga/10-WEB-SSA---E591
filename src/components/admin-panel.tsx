@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2 } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -27,6 +27,8 @@ interface Project {
   client?: string | null
   status?: string | null
   featured?: boolean
+  published?: boolean
+  publishedAt?: string | null
   createdAt: string
 }
 
@@ -58,6 +60,16 @@ interface ChatConfigType {
   temperature: number; maxTokens: number
 }
 
+interface AdminUser {
+  id: string
+  username: string
+  displayName?: string | null
+  role: 'admin' | 'editor'
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface SiteSettings {
   companyName: string
   legalName: string
@@ -76,8 +88,15 @@ interface SiteSettings {
   tiktokUrl: string
 }
 
-type TabType = 'projects' | 'publications' | 'site-config' | 'contacts' | 'ai-config'
-type SessionState = { checking: boolean; configured: boolean; authenticated: boolean }
+type TabType = 'projects' | 'publications' | 'site-config' | 'contacts' | 'ai-config' | 'users'
+type SessionState = {
+  checking: boolean
+  configured: boolean
+  authenticated: boolean
+  role: 'admin' | 'editor' | null
+  username: string | null
+  root: boolean
+}
 
 type ProjectFormState = {
   title: string
@@ -93,6 +112,7 @@ type ProjectFormState = {
   client: string
   status: string
   featured: boolean
+  published: boolean
 }
 
 type PublicationFormState = {
@@ -108,6 +128,14 @@ type PublicationFormState = {
 
 type SiteFormState = SiteSettings
 
+type UserFormState = {
+  username: string
+  displayName: string
+  password: string
+  role: 'admin' | 'editor'
+  active: boolean
+}
+
 const emptyProjectForm: ProjectFormState = {
   title: '',
   description: '',
@@ -122,6 +150,7 @@ const emptyProjectForm: ProjectFormState = {
   client: '',
   status: 'completed',
   featured: false,
+  published: false,
 }
 
 const emptyPublicationForm: PublicationFormState = {
@@ -153,6 +182,14 @@ const emptySiteForm: SiteFormState = {
   tiktokUrl: '',
 }
 
+const emptyUserForm: UserFormState = {
+  username: '',
+  displayName: '',
+  password: '',
+  role: 'editor',
+  active: true,
+}
+
 const providers = [
   { id: 'default', name: 'Z-AI (Default)', models: ['default'] },
   { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
@@ -173,17 +210,27 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [projects, setProjects] = useState<Project[]>([])
   const [publications, setPublications] = useState<Publication[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [users, setUsers] = useState<AdminUser[]>([])
   const [chatConfig, setChatConfig] = useState<ChatConfigType | null>(null)
   const [loading, setLoading] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
-  const [session, setSession] = useState<SessionState>({ checking: false, configured: false, authenticated: false })
+  const [session, setSession] = useState<SessionState>({
+    checking: false,
+    configured: false,
+    authenticated: false,
+    role: null,
+    username: null,
+    root: false,
+  })
+  const [adminUsername, setAdminUsername] = useState('admin')
   const [adminPassword, setAdminPassword] = useState('')
 
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
   const [publicationForm, setPublicationForm] = useState<PublicationFormState>(emptyPublicationForm)
   const [siteForm, setSiteForm] = useState<SiteFormState>(emptySiteForm)
+  const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm)
   const [aiForm, setAiForm] = useState({
     enabled: false, provider: 'default', apiKey: '', apiBaseUrl: '', model: '',
     systemPrompt: '', systemPromptEn: '', systemPromptPt: '',
@@ -195,6 +242,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [editingPublication, setEditingPublication] = useState<Publication | null>(null)
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [showProjectDialog, setShowProjectDialog] = useState(false)
   const [showPublicationDialog, setShowPublicationDialog] = useState(false)
 
@@ -202,8 +250,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     if (language === 'en') {
       return {
         title: 'Admin access',
-        description: 'Enter the configured password to unlock the panel.',
+        description: 'Use admin or another active user to unlock the panel.',
         notConfigured: 'Admin is disabled. Define ADMIN_PASSWORD and ADMIN_SESSION_SECRET in Easypanel.',
+        username: 'Username',
         password: 'Password',
         login: 'Unlock',
         logout: 'Logout',
@@ -214,8 +263,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     if (language === 'pt') {
       return {
         title: 'Acesso admin',
-        description: 'Digite a senha configurada para liberar o painel.',
+        description: 'Use admin ou outro usuário ativo para liberar o painel.',
         notConfigured: 'O admin está desativado. Defina ADMIN_PASSWORD e ADMIN_SESSION_SECRET no Easypanel.',
+        username: 'Usuário',
         password: 'Senha',
         login: 'Entrar',
         logout: 'Sair',
@@ -225,8 +275,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
     return {
       title: 'Acceso admin',
-      description: 'Ingresa la contraseña configurada para liberar el panel.',
+      description: 'Usa admin u otro usuario activo para liberar el panel.',
       notConfigured: 'El admin está desactivado. Define ADMIN_PASSWORD y ADMIN_SESSION_SECRET en Easypanel.',
+      username: 'Usuario',
       password: 'Contraseña',
       login: 'Entrar',
       logout: 'Salir',
@@ -244,38 +295,45 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         checking: false,
         configured: Boolean(data.configured),
         authenticated: Boolean(data.authenticated),
+        role: data.role === 'admin' ? 'admin' : data.role === 'editor' ? 'editor' : null,
+        username: typeof data.username === 'string' ? data.username : null,
+        root: Boolean(data.root),
       })
     } catch {
-      setSession({ checking: false, configured: false, authenticated: false })
+      setSession({ checking: false, configured: false, authenticated: false, role: null, username: null, root: false })
     }
   }
 
   const loadAdminData = async () => {
     try {
-      const [projectsRes, publicationsRes, contactsRes, configRes, siteRes] = await Promise.all([
+      const isAdminUser = session.role === 'admin'
+      const [projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes] = await Promise.all([
         fetch('/api/projects', { cache: 'no-store' }),
         fetch('/api/publications', { cache: 'no-store' }),
         fetch('/api/contact', { cache: 'no-store' }),
         fetch('/api/chat-config', { cache: 'no-store' }),
         fetch('/api/site-settings', { cache: 'no-store' }),
+        isAdminUser ? fetch('/api/admin/users', { cache: 'no-store' }) : Promise.resolve(null),
       ])
 
-      if ([projectsRes, publicationsRes, contactsRes, configRes, siteRes].some(response => response.status === 401)) {
-        setSession(current => ({ ...current, authenticated: false }))
+      if ([projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes].some(response => response?.status === 401)) {
+        setSession(current => ({ ...current, authenticated: false, role: null, username: null, root: false }))
         return
       }
 
-      const [projectsData, publicationsData, contactsData, configData, siteData] = await Promise.all([
+      const [projectsData, publicationsData, contactsData, configData, siteData, usersData] = await Promise.all([
         projectsRes.json(),
         publicationsRes.json(),
         contactsRes.json(),
         configRes.json(),
         siteRes.json(),
+        usersRes ? usersRes.json() : Promise.resolve([]),
       ])
 
       setProjects(Array.isArray(projectsData) ? projectsData : [])
       setPublications(Array.isArray(publicationsData) ? publicationsData : [])
       setContacts(Array.isArray(contactsData) ? contactsData : [])
+      setUsers(Array.isArray(usersData) ? usersData : [])
       setChatConfig(configData)
       setSiteForm({
         companyName: siteData.companyName || '',
@@ -331,7 +389,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     if (isOpen && session.authenticated) {
       void loadAdminData()
     }
-  }, [isOpen, session.authenticated])
+  }, [isOpen, session.authenticated, session.role])
+
+  useEffect(() => {
+    if (session.role !== 'admin' && ['site-config', 'ai-config', 'users'].includes(activeTab)) {
+      setActiveTab('projects')
+    }
+  }, [activeTab, session.role])
 
   const buildSlug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
@@ -418,7 +482,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPassword }),
+        body: JSON.stringify({ username: adminUsername, password: adminPassword }),
       })
 
       if (!response.ok) {
@@ -427,8 +491,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         return
       }
 
+      const data = await response.json().catch(() => ({}))
+      setAdminUsername(data.username || adminUsername || 'admin')
       setAdminPassword('')
-      setSession(current => ({ ...current, authenticated: true }))
+      setSession(current => ({
+        ...current,
+        authenticated: true,
+        role: data.role === 'admin' ? 'admin' : 'editor',
+        username: data.username || adminUsername || 'admin',
+        root: data.username === 'admin' && data.role === 'admin',
+      }))
     } catch {
       toast.error(authCopy.invalid)
     } finally {
@@ -438,14 +510,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   const handleLogout = async () => {
     await fetch('/api/admin/logout', { method: 'POST' }).catch(() => {})
-    setSession(current => ({ ...current, authenticated: false }))
+    setSession(current => ({ ...current, authenticated: false, role: null, username: null, root: false }))
   }
 
-  const handleSaveProject = async () => {
+  const handleSaveProject = async (publishOverride?: boolean) => {
     setLoading(true)
     try {
       const url = editingProject ? `/api/projects/${editingProject.id}` : '/api/projects'
       const method = editingProject ? 'PUT' : 'POST'
+      const published = publishOverride ?? projectForm.published
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -463,10 +536,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
           client: projectForm.client,
           status: projectForm.status,
           featured: projectForm.featured,
+          published,
         }),
       })
       if (res.ok) {
-        toast.success(editingProject ? 'Proyecto actualizado' : 'Proyecto creado')
+        toast.success(
+          editingProject
+            ? published ? 'Proyecto actualizado y publicado' : 'Proyecto actualizado como borrador'
+            : published ? 'Proyecto creado y publicado' : 'Proyecto guardado como borrador',
+        )
         setShowProjectDialog(false); setEditingProject(null)
         setProjectForm(emptyProjectForm)
         void loadAdminData()
@@ -512,6 +590,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       client: project.client || '',
       status: project.status || 'completed',
       featured: Boolean(project.featured),
+      published: Boolean(project.published),
     })
     setShowProjectDialog(true)
   }
@@ -588,6 +667,53 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     }
   }
 
+  const handleSaveUser = async () => {
+    setLoading(true)
+    try {
+      const url = editingUser ? `/api/admin/users/${editingUser.id}` : '/api/admin/users'
+      const method = editingUser ? 'PUT' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userForm),
+      })
+
+      if (res.ok) {
+        toast.success(editingUser ? 'Usuario actualizado' : 'Usuario creado')
+        setEditingUser(null)
+        setUserForm(emptyUserForm)
+        void loadAdminData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'No se pudo guardar el usuario')
+      }
+    } catch {
+      toast.error('Error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('¿Eliminar este usuario?')) return
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Usuario eliminado')
+        if (editingUser?.id === id) {
+          setEditingUser(null)
+          setUserForm(emptyUserForm)
+        }
+        void loadAdminData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'No se pudo eliminar el usuario')
+      }
+    } catch {
+      toast.error('Error')
+    }
+  }
+
   const handleSaveAIConfig = async () => {
     setLoading(true)
     try {
@@ -600,9 +726,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const tabs = [
     { key: 'projects' as TabType, label: t.admin.projects, icon: Building2 },
     { key: 'publications' as TabType, label: 'Paginas/Menu', icon: FileText },
-    { key: 'site-config' as TabType, label: 'Sitio', icon: Globe },
     { key: 'contacts' as TabType, label: t.admin.contacts, icon: Mail },
-    { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot }
+    ...(session.role === 'admin'
+      ? [
+          { key: 'site-config' as TabType, label: 'Sitio', icon: Globe },
+          { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot },
+          { key: 'users' as TabType, label: 'Usuarios', icon: Users },
+        ]
+      : []),
   ]
 
   return (
@@ -621,7 +752,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
               {/* Header */}
               <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b">
                 <div className="flex items-center gap-3">
-                  <h1 className="text-lg font-light tracking-wide">{t.admin.title}</h1>
+                  <div>
+                    <h1 className="text-lg font-light tracking-wide">{t.admin.title}</h1>
+                    {session.authenticated && session.username && (
+                      <p className="text-[11px] text-zinc-500">@{session.username} · {session.role}</p>
+                    )}
+                  </div>
                   {session.authenticated && (
                     <Button variant="outline" onClick={handleLogout} className="text-xs sm:text-sm">
                       <LogOut className="w-4 h-4 mr-1" />{authCopy.logout}
@@ -648,19 +784,31 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <p className="text-sm text-zinc-600">{authCopy.description}</p>
                     </div>
                     <div>
+                      <label className="text-xs font-medium text-zinc-700 mb-1 block">{authCopy.username}</label>
+                      <Input
+                        value={adminUsername}
+                        onChange={e => setAdminUsername(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && adminUsername.trim() && adminPassword.trim()) {
+                            void handleLogin()
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
                       <label className="text-xs font-medium text-zinc-700 mb-1 block">{authCopy.password}</label>
                       <Input
                         type="password"
                         value={adminPassword}
                         onChange={e => setAdminPassword(e.target.value)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter' && adminPassword.trim()) {
+                          if (e.key === 'Enter' && adminUsername.trim() && adminPassword.trim()) {
                             void handleLogin()
                           }
                         }}
                       />
                     </div>
-                    <Button onClick={() => void handleLogin()} disabled={!adminPassword.trim() || authLoading} className="bg-zinc-900 hover:bg-zinc-800">
+                    <Button onClick={() => void handleLogin()} disabled={!adminUsername.trim() || !adminPassword.trim() || authLoading} className="bg-zinc-900 hover:bg-zinc-800">
                       <LogIn className="w-4 h-4 mr-1" />{authLoading ? t.admin.saving : authCopy.login}
                     </Button>
                   </div>
@@ -691,8 +839,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           <div key={p.id} className="border rounded-lg p-3 sm:p-4 hover:border-zinc-300">
                             <div className="flex justify-between">
                               <div className="flex-1 min-w-0">
-                                <h3 className="font-medium text-sm truncate">{p.title}</h3>
-                              <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
+                                <div className="flex items-center flex-wrap gap-2">
+                                  <h3 className="font-medium text-sm truncate">{p.title}</h3>
+                                  <span className={`text-xs px-2 py-0.5 rounded ${p.published ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                    {p.published ? t.admin.published : t.admin.draft}
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
                                   <span>{p.category}</span>
                                   {p.location && <><span>•</span><span>{p.location}</span></>}
                                   {p.year && <><span>•</span><span>{p.year}</span></>}
@@ -1013,6 +1166,101 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       </Button>
                     </div>
                   )}
+
+                  {activeTab === 'users' && (
+                    <div className="space-y-5">
+                      <div>
+                        <h2 className="text-base font-light">Usuarios del panel</h2>
+                        <p className="text-xs text-zinc-500 mt-1">Crea usuarios editores o administradores. La cuenta raíz sigue siendo `admin` con la contraseña configurada en Easypanel.</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-medium text-zinc-900">{editingUser ? 'Editar usuario' : 'Nuevo usuario'}</h3>
+                          {editingUser && (
+                            <Button
+                              variant="outline"
+                              className="text-xs"
+                              onClick={() => {
+                                setEditingUser(null)
+                                setUserForm(emptyUserForm)
+                              }}
+                            >
+                              Cancelar edición
+                            </Button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Usuario</label>
+                            <Input value={userForm.username} onChange={e => setUserForm({ ...userForm, username: e.target.value })} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Nombre visible</label>
+                            <Input value={userForm.displayName} onChange={e => setUserForm({ ...userForm, displayName: e.target.value })} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Contraseña</label>
+                            <Input type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} className="text-sm" />
+                            {editingUser && <p className="text-[11px] text-zinc-500 mt-1">Déjala vacía si no quieres cambiarla.</p>}
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Rol</label>
+                            <select value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value as 'admin' | 'editor' })} className="w-full h-9 px-3 border rounded-md text-sm">
+                              <option value="editor">Editor</option>
+                              <option value="admin">Administrador</option>
+                            </select>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm text-zinc-700">
+                          <input type="checkbox" checked={userForm.active} onChange={e => setUserForm({ ...userForm, active: e.target.checked })} />
+                          Usuario activo
+                        </label>
+                        <Button onClick={handleSaveUser} disabled={loading || !userForm.username.trim() || (!editingUser && userForm.password.trim().length < 6)} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
+                          <Save className="w-4 h-4 mr-1" />
+                          {loading ? t.admin.saving : editingUser ? 'Actualizar usuario' : 'Crear usuario'}
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-3">
+                        {users.map(user => (
+                          <div key={user.id} className="border rounded-lg p-3 sm:p-4 hover:border-zinc-300">
+                            <div className="flex justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center flex-wrap gap-2">
+                                  <h3 className="font-medium text-sm truncate">{user.displayName || user.username}</h3>
+                                  <span className={`text-xs px-2 py-0.5 rounded ${user.role === 'admin' ? 'bg-zinc-900 text-white' : 'bg-blue-100 text-blue-700'}`}>{user.role}</span>
+                                  {!user.active && <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">inactivo</span>}
+                                </div>
+                                <p className="text-xs text-zinc-500 mt-1">@{user.username}</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => {
+                                    setEditingUser(user)
+                                    setUserForm({
+                                      username: user.username,
+                                      displayName: user.displayName || '',
+                                      password: '',
+                                      role: user.role,
+                                      active: user.active,
+                                    })
+                                  }}
+                                  className="p-1.5 hover:bg-zinc-100 rounded"
+                                >
+                                  <Pencil className="w-4 h-4 text-zinc-500" />
+                                </button>
+                                <button onClick={() => void handleDeleteUser(user.id)} className="p-1.5 hover:bg-red-50 rounded">
+                                  <Trash2 className="w-4 h-4 text-red-500" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {users.length === 0 && <p className="text-center text-zinc-500 py-6 text-sm">No hay usuarios adicionales creados.</p>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </>
@@ -1115,11 +1363,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
               <input type="checkbox" checked={projectForm.featured} onChange={e => setProjectForm({ ...projectForm, featured: e.target.checked })} />
               Mostrar como destacado
             </label>
+            <div className="text-xs text-zinc-500">
+              Estado de publicacion actual: <span className="font-medium text-zinc-700">{projectForm.published ? 'Publicado' : 'Borrador'}</span>
+            </div>
             <p className="text-xs text-zinc-500">Puedes pegar URLs externas o subir archivos. Las subidas quedan guardadas en el volumen del servidor.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowProjectDialog(false)} className="text-sm">{t.admin.cancel}</Button>
-            <Button onClick={handleSaveProject} disabled={!projectForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : t.admin.save}</Button>
+            <Button onClick={() => void handleSaveProject(false)} disabled={!projectForm.title || loading || Boolean(uploadingField)} variant="outline" className="text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar borrador'}</Button>
+            <Button onClick={() => void handleSaveProject(true)} disabled={!projectForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar y publicar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

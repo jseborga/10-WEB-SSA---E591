@@ -11,6 +11,7 @@ export default async function HomePage() {
 
   try {
     projects = await db.project.findMany({
+      where: { published: true },
       orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
     })
 

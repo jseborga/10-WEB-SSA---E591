@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isAdminAuthenticated, requireAdmin } from '@/lib/admin-auth'
+import { isAdminAuthenticated, requireAuthenticatedUser } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
 // GET - Obtener publicación por ID
@@ -43,7 +43,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized
@@ -84,7 +84,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized

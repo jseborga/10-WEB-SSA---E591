@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/admin-auth'
+import { isAdminAuthenticated, requireAuthenticatedUser } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
 function normalizeGallery(gallery: unknown) {
@@ -28,9 +28,11 @@ function normalizeYear(year: unknown) {
 }
 
 // GET - Obtener todos los proyectos
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const isAuthenticated = isAdminAuthenticated(request)
     const projects = await db.project.findMany({
+      where: isAuthenticated ? undefined : { published: true },
       orderBy: { createdAt: 'desc' }
     })
     return NextResponse.json(projects)
@@ -46,7 +48,7 @@ export async function GET() {
 // POST - Crear nuevo proyecto
 export async function POST(request: Request) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
       videoUrl,
       client,
       status,
+      published,
     } = body
 
     const project = await db.project.create({
@@ -84,6 +87,8 @@ export async function POST(request: Request) {
         videoUrl: videoUrl || null,
         client: client || null,
         status: status || null,
+        published: Boolean(published),
+        publishedAt: published ? new Date() : null,
       },
     })
 

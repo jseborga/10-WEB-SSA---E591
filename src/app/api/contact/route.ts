@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/admin-auth'
+import { requireAuthenticatedUser } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
 // GET - Obtener todos los contactos
 export async function GET(request: Request) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized

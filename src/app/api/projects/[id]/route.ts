@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/admin-auth'
+import { isAdminAuthenticated, requireAuthenticatedUser } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
 function normalizeGallery(gallery: unknown) {
@@ -45,6 +45,13 @@ export async function GET(
       )
     }
 
+    if (!project.published && !isAdminAuthenticated(request)) {
+      return NextResponse.json(
+        { error: 'Proyecto no encontrado' },
+        { status: 404 }
+      )
+    }
+
     return NextResponse.json(project)
   } catch (error) {
     console.error('Error fetching project:', error)
@@ -61,7 +68,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized
@@ -83,6 +90,7 @@ export async function PUT(
       videoUrl,
       client,
       status,
+      published,
     } = body
 
     const project = await db.project.update({
@@ -101,6 +109,8 @@ export async function PUT(
         videoUrl: videoUrl || null,
         client: client || null,
         status: status || null,
+        published: Boolean(published),
+        publishedAt: published ? new Date() : null,
       },
     })
 
@@ -125,7 +135,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized

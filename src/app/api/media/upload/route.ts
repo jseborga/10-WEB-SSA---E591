@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/admin-auth'
+import { requireAuthenticatedUser } from '@/lib/admin-auth'
 import { createStoredFileName, saveUploadedFile } from '@/lib/media-storage'
 
 const MAX_FILE_SIZE = 80 * 1024 * 1024
 
 export async function POST(request: Request) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isAdminAuthenticated, requireAdmin } from '@/lib/admin-auth'
+import { isAdminAuthenticated, requireAuthenticatedUser } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
 // GET - Obtener todas las publicaciones
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 // POST - Crear nueva publicación
 export async function POST(request: Request) {
   try {
-    const unauthorized = requireAdmin(request)
+    const unauthorized = await requireAuthenticatedUser(request)
 
     if (unauthorized) {
       return unauthorized

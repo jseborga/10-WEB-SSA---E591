@@ -30,6 +30,7 @@ interface Project {
   videoUrl?: string | null
   client?: string | null
   status?: string | null
+  published?: boolean
 }
 
 interface HomePageClientProps {
@@ -224,7 +225,7 @@ const services = {
 }
 
 export default function HomePageClient({
-  initialProjects = defaultProjects,
+  initialProjects,
   menuPages = [],
   siteSettings,
 }: HomePageClientProps) {
@@ -232,7 +233,7 @@ export default function HomePageClient({
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const projects = initialProjects.length > 0 ? initialProjects : defaultProjects
+  const projects = initialProjects ?? defaultProjects
   const companyName = siteSettings?.companyName?.trim() || 'SSA Ingenieria'
   const contactEmail = siteSettings?.email?.trim() || t.studio.email
   const contactPhone = siteSettings?.phone?.trim() || t.studio.phone
