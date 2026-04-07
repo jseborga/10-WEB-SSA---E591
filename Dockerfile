@@ -52,11 +52,11 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy prisma for runtime
+# Copy full node_modules so Prisma CLI keeps all of its runtime deps
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy prisma schema for runtime db push
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy chat service
 COPY --from=builder /app/mini-services/chat-service ./mini-services/chat-service
