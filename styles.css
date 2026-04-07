@@ -60,6 +60,7 @@ ul {
 .services,
 .technology,
 .focus,
+.videos,
 .contact,
 .site-footer {
   width: min(calc(100% - 48px), var(--content-width));
@@ -274,6 +275,7 @@ ul {
 .services,
 .technology,
 .focus,
+.videos,
 .contact {
   padding-top: 88px;
 }
@@ -317,7 +319,8 @@ ul {
 }
 
 .services-grid,
-.focus-grid {
+.focus-grid,
+.video-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
@@ -399,6 +402,13 @@ ul {
   border-radius: var(--radius-lg);
 }
 
+.focus-card,
+.video-card {
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow);
+}
+
 .focus-card img {
   aspect-ratio: 1.08;
   object-fit: cover;
@@ -408,6 +418,50 @@ ul {
   display: grid;
   gap: 10px;
   padding: 20px 22px 24px;
+}
+
+.reference-note {
+  max-width: 42rem;
+  margin: 22px auto 0;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.video-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.video-card {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.video-embed {
+  aspect-ratio: 16 / 9;
+  background: #0f0f0f;
+}
+
+.video-embed iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.video-card-copy {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px 22px;
+}
+
+.video-card-copy span {
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.video-card-copy p {
+  color: var(--ink-soft);
+  line-height: 1.6;
 }
 
 .contact {
@@ -500,6 +554,7 @@ ul {
 @media (max-width: 980px) {
   .services-grid,
   .focus-grid,
+  .video-grid,
   .technology,
   .contact-grid {
     grid-template-columns: 1fr;
@@ -513,6 +568,7 @@ ul {
   .services,
   .technology,
   .focus,
+  .videos,
   .contact,
   .site-footer {
     width: min(calc(100% - 24px), var(--content-width));
