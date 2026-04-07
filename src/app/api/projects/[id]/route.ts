@@ -14,6 +14,19 @@ function normalizeGallery(gallery: unknown) {
   return null
 }
 
+function normalizeYear(year: unknown) {
+  if (typeof year === 'number' && Number.isFinite(year)) {
+    return year
+  }
+
+  if (typeof year === 'string' && year.trim().length > 0) {
+    const parsed = parseInt(year, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  return null
+}
+
 // GET - Obtener proyecto por ID
 export async function GET(
   request: Request,
@@ -80,9 +93,9 @@ export async function PUT(
         fullDescription,
         category,
         location,
-        year: year ? parseInt(year) : null,
+        year: normalizeYear(year),
         area,
-        featured,
+        featured: Boolean(featured),
         mainImage: mainImage || body.images || null,
         gallery: normalizeGallery(gallery),
         videoUrl: videoUrl || null,
@@ -95,7 +108,12 @@ export async function PUT(
   } catch (error) {
     console.error('Error updating project:', error)
     return NextResponse.json(
-      { error: 'Error al actualizar proyecto' },
+      {
+        error:
+          error instanceof Error
+            ? `Error al actualizar proyecto: ${error.message}`
+            : 'Error al actualizar proyecto',
+      },
       { status: 500 }
     )
   }

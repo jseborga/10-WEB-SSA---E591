@@ -36,7 +36,7 @@ RUN bun run build
 FROM node:20-alpine AS runner
 
 # Install dependencies for runtime
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl su-exec
 
 WORKDIR /app
 
@@ -67,8 +67,6 @@ RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 # Copy start script
 COPY start.sh ./start.sh
 RUN chmod +x ./start.sh
-
-USER nextjs
 
 EXPOSE 3000
 

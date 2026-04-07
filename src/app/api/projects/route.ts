@@ -14,6 +14,19 @@ function normalizeGallery(gallery: unknown) {
   return null
 }
 
+function normalizeYear(year: unknown) {
+  if (typeof year === 'number' && Number.isFinite(year)) {
+    return year
+  }
+
+  if (typeof year === 'string' && year.trim().length > 0) {
+    const parsed = parseInt(year, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  return null
+}
+
 // GET - Obtener todos los proyectos
 export async function GET() {
   try {
@@ -63,9 +76,9 @@ export async function POST(request: Request) {
         fullDescription,
         category,
         location,
-        year: year ? parseInt(year) : null,
+        year: normalizeYear(year),
         area,
-        featured: featured || false,
+        featured: Boolean(featured),
         mainImage: mainImage || body.images || null,
         gallery: normalizeGallery(gallery),
         videoUrl: videoUrl || null,
@@ -78,7 +91,12 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating project:', error)
     return NextResponse.json(
-      { error: 'Error al crear proyecto' },
+      {
+        error:
+          error instanceof Error
+            ? `Error al crear proyecto: ${error.message}`
+            : 'Error al crear proyecto',
+      },
       { status: 500 }
     )
   }
