@@ -22,7 +22,11 @@ rm -f /app/data/.write-test
 
 # Run database migrations/push
 echo "Setting up database..."
-su-exec nextjs:nodejs npx prisma db push --skip-generate
+if [ ! -f /app/node_modules/prisma/build/index.js ]; then
+  echo "Prisma CLI not found at /app/node_modules/prisma/build/index.js"
+  exit 1
+fi
+su-exec nextjs:nodejs node /app/node_modules/prisma/build/index.js db push --skip-generate
 
 # Start chat service in background (use compiled JS for production)
 echo "Starting chat service..."
