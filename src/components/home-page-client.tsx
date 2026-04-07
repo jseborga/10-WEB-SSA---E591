@@ -294,6 +294,29 @@ export default function HomePageClient({
 
   const currentCategories = categories[language] || categories.es
   const currentServices = services[language] || services.es
+  const studioContent =
+    language === 'es'
+      ? {
+          title: 'Oficina',
+          subtitle: 'Conoce nuestro enfoque',
+          description:
+            'Somos una firma de diseno y construccion dedicada a crear espacios que trascienden. Nuestro enfoque combina la innovacion con el respeto por el contexto y el medio ambiente.',
+          philosophy: 'Filosofia',
+          philosophyText:
+            'Creemos que la ingenieria y la arquitectura debe ser atemporales, funcional y bella. Cada proyecto es una oportunidad para crear algo unico que mejore la calidad de vida de quienes lo habitan.',
+          approach: 'Enfoque',
+          approachText:
+            'Trabajamos estrechamente con nuestros clientes para entender sus necesidades y transformarlas en espacios que superen sus expectativa.',
+        }
+      : {
+          title: t.studio.title,
+          subtitle: t.studio.subtitle,
+          description: t.studio.description,
+          philosophy: t.studio.philosophy,
+          philosophyText: t.studio.philosophyText,
+          approach: t.studio.approach,
+          approachText: t.studio.approachText,
+        }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -485,19 +508,19 @@ export default function HomePageClient({
             className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16"
           >
             <div>
-              <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-2">{t.studio.title}</h2>
-              <p className="text-sm text-zinc-400 mb-8">{t.studio.subtitle}</p>
+              <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-2">{studioContent.title}</h2>
+              <p className="text-sm text-zinc-400 mb-8">{studioContent.subtitle}</p>
               
-              <p className="text-sm text-zinc-300 leading-relaxed mb-8">{t.studio.description}</p>
+              <p className="text-sm text-zinc-300 leading-relaxed mb-8">{studioContent.description}</p>
 
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-base font-medium text-white mb-2">{t.studio.philosophy}</h3>
-                  <p className="text-sm text-zinc-400 leading-relaxed">{t.studio.philosophyText}</p>
+                  <h3 className="text-base font-medium text-white mb-2">{studioContent.philosophy}</h3>
+                  <p className="text-sm text-zinc-400 leading-relaxed">{studioContent.philosophyText}</p>
                 </div>
                 <div>
-                  <h3 className="text-base font-medium text-white mb-2">{t.studio.approach}</h3>
-                  <p className="text-sm text-zinc-400 leading-relaxed">{t.studio.approachText}</p>
+                  <h3 className="text-base font-medium text-white mb-2">{studioContent.approach}</h3>
+                  <p className="text-sm text-zinc-400 leading-relaxed">{studioContent.approachText}</p>
                 </div>
               </div>
             </div>
