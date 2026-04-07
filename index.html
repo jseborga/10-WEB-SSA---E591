@@ -40,8 +40,7 @@
           href="#inicio"
           aria-label="Ir al inicio"
         >
-          <span class="brand-mark">SSA</span>
-          <span class="brand-copy">Ingenieria</span>
+          SSA Ingenieria
         </a>
 
         <nav
@@ -49,367 +48,206 @@
           aria-label="Principal"
         >
           <a href="#servicios">Servicios</a>
-          <a href="#tecnologia">Tecnologia</a>
-          <a href="#presentacion">Presentacion</a>
+          <a href="#digital">Digital</a>
+          <a href="#capacidades">Capacidades</a>
           <a href="#contacto">Contacto</a>
         </nav>
-
-        <a
-          class="header-cta"
-          href="#contacto"
-        >
-          Contactar
-        </a>
       </div>
     </header>
 
     <main>
       <section
-        class="hero"
+        class="hero-section hero-primary"
         id="inicio"
       >
-        <div class="hero-backdrop" aria-hidden="true"></div>
-        <div class="hero-grid">
-          <div class="hero-copy">
-            <p class="eyebrow reveal is-visible">SSA Ingenieria</p>
-            <h1 class="hero-title reveal is-visible">
-              Construyendo
-              <span>el futuro</span>
-            </h1>
-            <p class="hero-subtitle reveal">
+        <div class="hero-shell">
+          <div class="hero-copy reveal is-visible">
+            <p class="eyebrow">SSA Ingenieria</p>
+            <h1>Construyendo el futuro</h1>
+            <p class="hero-subtitle">
               Construccion, diseno, supervision, asesoria tecnica especializada
               y tecnologia aplicada a la gestion de obra.
             </p>
-
-            <div class="hero-actions reveal">
+            <div class="hero-links">
               <a
-                class="button button-primary"
+                class="link-cta"
+                href="#contacto"
+              >
+                Contactar
+              </a>
+              <a
+                class="link-cta"
+                href="#capacidades"
+              >
+                Ver capacidades
+              </a>
+            </div>
+          </div>
+
+          <div
+            class="hero-media reveal"
+            data-parallax
+          >
+            <img
+              src="./hero-architecture.svg"
+              alt="Visual referencial de construccion y arquitectura"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="hero-section hero-dark"
+        id="digital"
+      >
+        <div class="hero-shell">
+          <div class="hero-copy reveal">
+            <p class="eyebrow">Digital</p>
+            <h2>Software y ERP para construccion</h2>
+            <p class="hero-subtitle">
+              Una capa digital para ordenar documentos, avance, control y
+              operacion desde un solo sistema.
+            </p>
+            <div class="hero-links">
+              <a
+                class="link-cta link-cta-light"
+                href="#contacto"
+              >
+                Solicitar informacion
+              </a>
+              <a
+                class="link-cta link-cta-light"
+                href="#capacidades"
+              >
+                Explorar sistema
+              </a>
+            </div>
+          </div>
+
+          <div
+            class="hero-media hero-media-compact reveal"
+            data-parallax
+          >
+            <img
+              src="./media/dashboard-demo.svg"
+              alt="Demo visual para software y ERP en construccion"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="hero-section hero-soft"
+        id="servicios"
+      >
+        <div class="hero-shell">
+          <div class="hero-copy reveal">
+            <p class="eyebrow">Servicios</p>
+            <h2>Construccion, diseno, supervision y asesoria tecnica</h2>
+            <p class="hero-subtitle">
+              Una estructura clara para presentar lo esencial de SSA sin forzar
+              una galeria de proyectos que hoy todavia no existe.
+            </p>
+            <div class="hero-links">
+              <a
+                class="link-cta"
                 href="#contacto"
               >
                 Iniciar conversacion
               </a>
               <a
-                class="button button-secondary"
-                href="#servicios"
+                class="link-cta"
+                href="#capacidades"
               >
-                Ver sistema
+                Ver detalle
               </a>
             </div>
           </div>
 
-          <div class="hero-stage reveal">
-            <div class="hero-stage-frame">
-              <img
-                class="hero-art"
-                src="./hero-architecture.svg"
-                alt="Visual de referencia para construccion y arquitectura"
-              />
-              <div class="hero-stage-shine"></div>
-            </div>
-
-            <div class="hero-chip hero-chip-a">
-              <strong>Construccion</strong>
-              <span>coordinacion, calidad y ejecucion</span>
-            </div>
-
-            <div class="hero-chip hero-chip-b">
-              <strong>Supervision</strong>
-              <span>control tecnico y trazabilidad</span>
-            </div>
-
-            <div class="hero-chip hero-chip-c">
-              <strong>ERP y Software</strong>
-              <span>informacion clara para la obra</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="statement reveal">
-        <p class="eyebrow">Vision</p>
-        <h2>Una empresa que combina obra, criterio tecnico y herramientas digitales.</h2>
-        <p class="statement-text">
-          El sitio ahora evita fingir una galeria de proyectos inexistente y en
-          su lugar presenta una experiencia más solida: capacidades, sistema de
-          trabajo, medios demo y una narrativa visual conectada al scroll.
-        </p>
-      </section>
-
-      <section
-        class="capabilities"
-        id="servicios"
-      >
-        <div class="section-intro reveal">
-          <p class="eyebrow">Servicios</p>
-          <h2>Una estructura clara para mostrar lo que SSA hace mejor.</h2>
-        </div>
-
-        <div class="capability-layout">
-          <div class="capability-media reveal">
-            <div class="capability-screen">
-              <article
-                class="capability-slide is-active"
-                data-media="0"
-              >
-                <img
-                  src="./hero-architecture.svg"
-                  alt="Visual referencial de construccion integral"
-                />
-                <div class="capability-slide-copy">
-                  <span>Construccion</span>
-                  <p>Del diseno a la ejecucion con una presencia visual limpia y solida.</p>
-                </div>
-              </article>
-
-              <article
-                class="capability-slide"
-                data-media="1"
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1770823556202-2eba715a415b?auto=format&fit=crop&w=1600&q=80"
-                  alt="Referencia visual de supervision y avance de obra"
-                  loading="lazy"
-                  referrerpolicy="strict-origin-when-cross-origin"
-                />
-                <div class="capability-slide-copy">
-                  <span>Supervision</span>
-                  <p>Seguimiento, control y criterio tecnico para decisiones mejor informadas.</p>
-                </div>
-              </article>
-
-              <article
-                class="capability-slide"
-                data-media="2"
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1762689267016-c841ee6008a6?auto=format&fit=crop&w=1600&q=80"
-                  alt="Referencia visual de diseno y asesoria tecnica"
-                  loading="lazy"
-                  referrerpolicy="strict-origin-when-cross-origin"
-                />
-                <div class="capability-slide-copy">
-                  <span>Diseno y Asesoria</span>
-                  <p>Lectura formal, resolucion tecnica y soporte especializado durante el proyecto.</p>
-                </div>
-              </article>
-
-              <article
-                class="capability-slide"
-                data-media="3"
-              >
-                <img
-                  src="./media/dashboard-demo.svg"
-                  alt="Demo visual para ERP y software en construccion"
-                />
-                <div class="capability-slide-copy">
-                  <span>Software y ERP</span>
-                  <p>Tecnologia aplicada a obra para ordenar informacion, avance y operacion.</p>
-                </div>
-              </article>
-            </div>
-          </div>
-
-          <div class="capability-steps">
-            <article
-              class="capability-step reveal is-active"
-              data-media="0"
-            >
-              <span>01</span>
-              <h3>Construccion</h3>
-              <p>Ejecucion con foco en coordinacion real, calidad y continuidad de obra.</p>
-              <ul>
-                <li>Planificacion y seguimiento</li>
-                <li>Control de calidad</li>
-                <li>Integracion diseno-ejecucion</li>
-              </ul>
-            </article>
-
-            <article
-              class="capability-step reveal"
-              data-media="1"
-            >
-              <span>02</span>
-              <h3>Supervision</h3>
-              <p>Monitoreo tecnico para proteger tiempo, costo y cumplimiento.</p>
-              <ul>
-                <li>Revision de avance</li>
-                <li>Verificacion tecnica</li>
-                <li>Trazabilidad de decisiones</li>
-              </ul>
-            </article>
-
-            <article
-              class="capability-step reveal"
-              data-media="2"
-            >
-              <span>03</span>
-              <h3>Diseno y Asesoria Tecnica Especializada</h3>
-              <p>Una capa de criterio formal y tecnico para proyectos complejos o sensibles.</p>
-              <ul>
-                <li>Definicion de soluciones</li>
-                <li>Analisis tecnico</li>
-                <li>Soporte especializado</li>
-              </ul>
-            </article>
-
-            <article
-              class="capability-step reveal"
-              data-media="3"
-            >
-              <span>04</span>
-              <h3>Software a Medida y ERP</h3>
-              <p>Herramientas digitales pensadas para el flujo real de construccion.</p>
-              <ul>
-                <li>Control de avance</li>
-                <li>Gestion documental</li>
-                <li>Operacion centralizada</li>
-              </ul>
-            </article>
+          <div
+            class="hero-media hero-media-side reveal"
+            data-parallax
+          >
+            <img
+              src="./media/project-03.svg"
+              alt="Visual referencial de supervision y asesoria tecnica"
+            />
           </div>
         </div>
       </section>
 
       <section
-        class="technology reveal"
-        id="tecnologia"
+        class="promo-section"
+        id="capacidades"
       >
-        <div class="technology-copy">
-          <p class="eyebrow">Tecnologia</p>
-          <h2>Una lectura más profesional del componente digital.</h2>
-          <p>
-            En lugar de una galeria vacia, aqui la tecnologia aparece como una
-            capacidad concreta: software a medida, ERP y mejor visibilidad de la
-            operacion constructiva.
-          </p>
+        <div class="promo-intro reveal">
+          <p class="eyebrow">Capacidades</p>
+          <h2>Una estructura más cercana a una home premium, clara y modular.</h2>
         </div>
 
-        <div class="technology-points">
-          <article>
-            <strong>Software</strong>
-            <p>Flujos personalizados para equipos, control y seguimiento.</p>
+        <div class="promo-grid">
+          <article class="promo-card promo-card-light reveal">
+            <div class="promo-copy">
+              <p class="promo-kicker">Construccion</p>
+              <h3>Ejecucion con control real de obra.</h3>
+              <p>Planificacion, coordinacion, calidad y continuidad durante todo el proceso.</p>
+            </div>
+            <img
+              class="promo-art"
+              src="./media/project-01.svg"
+              alt="Referencia visual de construccion"
+            />
           </article>
-          <article>
-            <strong>ERP</strong>
-            <p>Informacion centralizada para obra, documentos y operacion.</p>
+
+          <article class="promo-card promo-card-dark reveal">
+            <div class="promo-copy">
+              <p class="promo-kicker">Supervision</p>
+              <h3>Criterio tecnico para decisiones mejor informadas.</h3>
+              <p>Seguimiento, verificacion y trazabilidad para proteger costo, plazo y calidad.</p>
+            </div>
+            <img
+              class="promo-art"
+              src="https://images.unsplash.com/photo-1770823556202-2eba715a415b?auto=format&fit=crop&w=1200&q=80"
+              alt="Referencia visual de supervision de obra"
+              loading="lazy"
+              referrerpolicy="strict-origin-when-cross-origin"
+            />
           </article>
-          <article>
-            <strong>Decision</strong>
-            <p>Mejor lectura del proyecto mediante datos y trazabilidad.</p>
+
+          <article class="promo-card promo-card-light reveal">
+            <div class="promo-copy">
+              <p class="promo-kicker">Diseno</p>
+              <h3>Soluciones espaciales y formales con lectura limpia.</h3>
+              <p>Una presentacion sobria para arquitectura, interiorismo y definicion tecnica.</p>
+            </div>
+            <img
+              class="promo-art"
+              src="./media/project-02.svg"
+              alt="Referencia visual de diseno arquitectonico"
+            />
+          </article>
+
+          <article class="promo-card promo-card-accent reveal">
+            <div class="promo-copy">
+              <p class="promo-kicker">ERP y Software</p>
+              <h3>Operacion digital pensada para construccion.</h3>
+              <p>Herramientas a medida para documentos, seguimiento, avance y gestion centralizada.</p>
+            </div>
+            <img
+              class="promo-art promo-art-dashboard"
+              src="./media/dashboard-demo.svg"
+              alt="Demo visual para ERP y software"
+            />
           </article>
         </div>
       </section>
 
       <section
-        class="story-showcase"
-        id="presentacion"
-      >
-        <div class="story-shell">
-          <div class="story-copy reveal">
-            <p class="eyebrow">Presentacion</p>
-            <h2>Una presentacion dinamica que cambia mientras haces scroll.</h2>
-            <p>
-              En lugar de depender de videos externos que pueden fallar, esta
-              seccion usa paneles visuales y transiciones controladas por scroll
-              para mostrar obra, supervision y tecnologia de forma mas estable.
-            </p>
-          </div>
-
-          <div class="story-layout">
-            <div class="story-media reveal">
-              <div class="story-screen">
-                <article
-                  class="story-panel is-active"
-                  data-story="0"
-                >
-                  <img
-                    src="./hero-architecture.svg"
-                    alt="Presentacion visual de construccion"
-                  />
-                  <div class="story-panel-copy">
-                    <span>Obra integral</span>
-                    <p>Ejecucion con una lectura visual limpia y profesional.</p>
-                  </div>
-                </article>
-
-                <article
-                  class="story-panel"
-                  data-story="1"
-                >
-                  <img
-                    src="https://images.unsplash.com/photo-1770823556202-2eba715a415b?auto=format&fit=crop&w=1600&q=80"
-                    alt="Presentacion visual de supervision"
-                    loading="lazy"
-                    referrerpolicy="strict-origin-when-cross-origin"
-                  />
-                  <div class="story-panel-copy">
-                    <span>Supervision</span>
-                    <p>Control tecnico, avance y trazabilidad para la toma de decisiones.</p>
-                  </div>
-                </article>
-
-                <article
-                  class="story-panel"
-                  data-story="2"
-                >
-                  <img
-                    src="./media/dashboard-demo.svg"
-                    alt="Presentacion visual de software y ERP"
-                  />
-                  <div class="story-panel-copy">
-                    <span>ERP y software</span>
-                    <p>Informacion ordenada para seguimiento, documentos y operacion.</p>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <div class="story-steps">
-              <article
-                class="story-step reveal is-active"
-                data-story="0"
-              >
-                <span>01</span>
-                <h3>Construccion con presencia</h3>
-                <p>
-                  La empresa puede presentarse como un sistema completo, no solo
-                  como una lista de servicios.
-                </p>
-              </article>
-
-              <article
-                class="story-step reveal"
-                data-story="1"
-              >
-                <span>02</span>
-                <h3>Supervision que transmite control</h3>
-                <p>
-                  El scroll activa una narrativa visual mas convincente para la
-                  parte tecnica y operativa.
-                </p>
-              </article>
-
-              <article
-                class="story-step reveal"
-                data-story="2"
-              >
-                <span>03</span>
-                <h3>Tecnologia que se entiende rapido</h3>
-                <p>
-                  Software a medida y ERP se muestran con una grafica mas clara,
-                  sin depender de un video externo roto.
-                </p>
-              </article>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="contact reveal"
+        class="contact-section"
         id="contacto"
       >
-        <p class="eyebrow">Contacto</p>
-        <div class="contact-grid">
+        <div class="contact-shell reveal">
+          <p class="eyebrow">Contacto</p>
           <h2>SSA Ingenieria. Construccion, tecnica y tecnologia en una sola conversacion.</h2>
           <div class="contact-links">
             <a href="mailto:admin@ingenieria.com.bo">admin@ingenieria.com.bo</a>
