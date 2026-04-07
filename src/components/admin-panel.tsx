@@ -76,6 +76,7 @@ interface SiteSettings {
   tagline: string
   logoUrl: string
   faviconUrl: string
+  heroImages: string
   email: string
   phone: string
   whatsapp: string
@@ -172,6 +173,7 @@ const emptySiteForm: SiteFormState = {
   tagline: '',
   logoUrl: '',
   faviconUrl: '',
+  heroImages: '',
   email: '',
   phone: '',
   whatsapp: '',
@@ -345,6 +347,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         tagline: siteData.tagline || '',
         logoUrl: siteData.logoUrl || '',
         faviconUrl: siteData.faviconUrl || '',
+        heroImages: siteData.heroImages || '',
         email: siteData.email || '',
         phone: siteData.phone || '',
         whatsapp: siteData.whatsapp || '',
@@ -491,6 +494,31 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       const uploadedUrl = await uploadFile(file)
       setSiteForm((current) => ({ ...current, [target]: uploadedUrl }))
       toast.success('Imagen subida correctamente')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
+    } finally {
+      setUploadingField(null)
+    }
+  }
+
+  const handleSiteHeroUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    setUploadingField('heroImages')
+
+    try {
+      const uploadedUrls = []
+
+      for (const file of Array.from(files)) {
+        uploadedUrls.push(await uploadFile(file))
+      }
+
+      setSiteForm((current) => ({
+        ...current,
+        heroImages: [current.heroImages.trim(), ...uploadedUrls].filter(Boolean).join('\n'),
+      }))
+
+      toast.success('Imagenes del hero subidas correctamente')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
     } finally {
@@ -974,6 +1002,24 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           </div>
                           <Input value={siteForm.faviconUrl} onChange={e => setSiteForm({ ...siteForm, faviconUrl: e.target.value })} placeholder="/api/media/favicon.png o https://..." className="text-sm" />
                         </div>
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes del hero</label>
+                          <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                            {uploadingField === 'heroImages' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            Subir varias imagenes
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files)} />
+                          </label>
+                        </div>
+                        <Textarea
+                          value={siteForm.heroImages}
+                          onChange={e => setSiteForm({ ...siteForm, heroImages: e.target.value })}
+                          rows={4}
+                          placeholder="Una URL por linea. Se mezclaran con las imagenes principales de proyectos publicados."
+                          className="text-sm"
+                        />
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

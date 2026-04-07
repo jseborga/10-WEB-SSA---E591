@@ -96,6 +96,7 @@ model SiteSettings {
   tagline      String?
   logoUrl      String?
   faviconUrl   String?
+  heroImages   String?
   email        String?
   phone        String?
   whatsapp     String?

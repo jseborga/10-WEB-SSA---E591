@@ -32,6 +32,7 @@ export async function PUT(request: Request) {
         tagline: body.tagline ?? currentSettings.tagline,
         logoUrl: body.logoUrl ?? currentSettings.logoUrl,
         faviconUrl: body.faviconUrl ?? currentSettings.faviconUrl,
+        heroImages: body.heroImages ?? currentSettings.heroImages,
         email: body.email ?? currentSettings.email,
         phone: body.phone ?? currentSettings.phone,
         whatsapp: body.whatsapp ?? currentSettings.whatsapp,

@@ -7,6 +7,7 @@ export function getDefaultSiteSettings() {
     tagline: 'Construyendo el futuro',
     logoUrl: '',
     faviconUrl: '',
+    heroImages: '',
     email: 'admin@ingenieria.com.bo',
     phone: '+591 2241146',
     whatsapp: '+591 76205333',

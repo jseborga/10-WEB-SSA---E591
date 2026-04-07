@@ -51,6 +51,7 @@ interface SiteSettings {
   tagline?: string | null
   logoUrl?: string | null
   faviconUrl?: string | null
+  heroImages?: string | null
   email?: string | null
   phone?: string | null
   whatsapp?: string | null
@@ -79,6 +80,24 @@ function normalizePhoneLink(value: string) {
 
 function normalizeWhatsappLink(value: string) {
   return value.replace(/\D/g, '')
+}
+
+function parseUrlList(value: string | null | undefined) {
+  return (value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function shuffleItems<T>(items: T[]) {
+  const next = [...items]
+
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[next[index], next[swapIndex]] = [next[swapIndex], next[index]]
+  }
+
+  return next
 }
 
 const defaultProjects: Project[] = [
@@ -235,6 +254,8 @@ export default function HomePageClient({
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [heroCarouselImages, setHeroCarouselImages] = useState<string[]>([])
+  const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const projects = initialProjects ?? defaultProjects
   const companyName = siteSettings?.companyName?.trim() || 'SSA Ingenieria'
   const logoUrl = siteSettings?.logoUrl?.trim() || ''
@@ -259,6 +280,37 @@ export default function HomePageClient({
     { label: 'LinkedIn', href: siteSettings?.linkedinUrl?.trim() || '', icon: Linkedin },
     { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
   ].filter((item) => item.href)
+
+  useEffect(() => {
+    const configuredImages = parseUrlList(siteSettings?.heroImages)
+    const projectImages = projects
+      .flatMap((project) => [project.mainImage, ...parseUrlList(project.gallery)])
+      .filter((value): value is string => Boolean(value))
+
+    const uniqueImages = Array.from(new Set([...configuredImages, ...projectImages]))
+
+    if (uniqueImages.length === 0) {
+      setHeroCarouselImages([])
+      setActiveHeroIndex(0)
+      return
+    }
+
+    const shuffled = shuffleItems(uniqueImages)
+    setHeroCarouselImages(shuffled)
+    setActiveHeroIndex(Math.floor(Math.random() * shuffled.length))
+  }, [projects, siteSettings?.heroImages])
+
+  useEffect(() => {
+    if (heroCarouselImages.length <= 1) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setActiveHeroIndex((current) => (current + 1) % heroCarouselImages.length)
+    }, 4800)
+
+    return () => window.clearInterval(interval)
+  }, [heroCarouselImages.length])
 
   // Listen for navigation events from ProjectDetail
   useEffect(() => {
@@ -376,7 +428,35 @@ export default function HomePageClient({
       {/* Hero */}
       <section id="inicio" className="relative min-h-screen flex items-center justify-center pt-16">
         <div className="absolute inset-0 z-0">
-          <Image src="/images/hero-bg.png" alt="" fill className="object-cover opacity-15" priority />
+          {heroCarouselImages.length > 0 ? (
+            <div className="absolute inset-0 overflow-hidden">
+              {heroCarouselImages.map((imageUrl, index) => {
+                const isActive = index === activeHeroIndex
+                const isAccent = heroCarouselImages.length > 0 && index === (activeHeroIndex + heroCarouselImages.length - 1) % heroCarouselImages.length
+                const opacity = isActive ? 0.2 : isAccent ? 0.12 : 0
+                const scale = isActive ? 1 : isAccent ? 1.03 : 1.05
+                const filter = isActive ? 'grayscale(35%) saturate(0.85)' : isAccent ? 'grayscale(100%) contrast(0.9)' : 'grayscale(100%)'
+
+                return (
+                  <img
+                    key={`${imageUrl}-${index}`}
+                    src={imageUrl}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover transition-all duration-[1800ms] ease-out"
+                    style={{
+                      opacity,
+                      filter,
+                      transform: `scale(${scale})`,
+                    }}
+                  />
+                )
+              })}
+              <div className="absolute inset-0 bg-white/68" />
+            </div>
+          ) : (
+            <Image src="/images/hero-bg.png" alt="" fill className="object-cover opacity-15" priority />
+          )}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.2),_rgba(255,255,255,0.88)_72%)]" />
           <div className="absolute inset-0 bg-gradient-to-b from-white via-white/30 to-white" />
         </div>
         
