@@ -1,0 +1,17 @@
+import { AdminPanel } from '@/components/admin-panel'
+
+export const metadata = {
+  title: 'Admin | estudio591',
+  robots: {
+    index: false,
+    follow: false,
+  },
+}
+
+export default function AdminPage() {
+  return (
+    <main className="min-h-screen bg-zinc-100">
+      <AdminPanel initialOpen />
+    </main>
+  )
+}

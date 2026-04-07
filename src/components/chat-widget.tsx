@@ -30,6 +30,17 @@ interface ChatConfig {
   companyName: string
 }
 
+const DEFAULT_CHAT_CONFIG: ChatConfig = {
+  enabled: false,
+  welcomeMessage: null,
+  welcomeMessageEn: null,
+  welcomeMessagePt: null,
+  fallbackMessage: null,
+  fallbackMessageEn: null,
+  fallbackMessagePt: null,
+  companyName: 'estudio591',
+}
+
 function getSavedSession() {
   if (typeof window === 'undefined') return null
   const saved = localStorage.getItem('chat_session')
@@ -39,6 +50,8 @@ function getSavedSession() {
 export function ChatWidget() {
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
+  const [hasOpened, setHasOpened] = useState(false)
+  const [hasLoadedConfig, setHasLoadedConfig] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [name, setName] = useState(() => getSavedSession()?.name || '')
@@ -53,10 +66,32 @@ export function ChatWidget() {
   const socketUrl = process.env.NEXT_PUBLIC_CHAT_SOCKET_URL?.trim() || '/?XTransformPort=3003'
   const socketPath = process.env.NEXT_PUBLIC_CHAT_SOCKET_PATH?.trim() || undefined
 
-  // Fetch config
   useEffect(() => {
-    fetch('/api/chat-config').then(res => res.json()).then(setChatConfig).catch(() => {})
-  }, [])
+    if (!isOpen || hasLoadedConfig) return
+
+    let isActive = true
+
+    fetch('/api/chat-config')
+      .then(res => res.json())
+      .then((data) => {
+        if (!isActive) return
+        setChatConfig({
+          ...DEFAULT_CHAT_CONFIG,
+          ...data,
+        })
+      })
+      .catch(() => {
+        if (!isActive) return
+        setChatConfig(DEFAULT_CHAT_CONFIG)
+      })
+      .finally(() => {
+        if (isActive) setHasLoadedConfig(true)
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [hasLoadedConfig, isOpen])
 
   // Get welcome message by language
   const getWelcomeMessage = useCallback(() => {
@@ -74,10 +109,21 @@ export function ChatWidget() {
   }, [chatConfig, language, t.chat.helpPrompt])
 
   useEffect(() => {
+    if (!hasOpened) return
+
     const savedSessionId = localStorage.getItem('chat_session_id')
     const newSessionId = savedSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     setSessionId(newSessionId)
     if (!savedSessionId) localStorage.setItem('chat_session_id', newSessionId)
+  }, [hasOpened])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsConnected(false)
+      return
+    }
+
+    if (!hasLoadedConfig) return
 
     if (chatConfig?.enabled) {
       setIsConnected(true)
@@ -108,7 +154,7 @@ export function ChatWidget() {
       socket.disconnect()
       socketRef.current = null
     }
-  }, [chatConfig?.enabled, socketPath, socketUrl])
+  }, [chatConfig?.enabled, hasLoadedConfig, isOpen, socketPath, socketUrl])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -186,7 +232,11 @@ export function ChatWidget() {
     <>
       {/* Floating button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          const nextOpen = !isOpen
+          setIsOpen(nextOpen)
+          if (nextOpen) setHasOpened(true)
+        }}
         className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-zinc-900 text-white rounded-full shadow-lg hover:bg-zinc-800 transition-all duration-300 flex items-center justify-center"
         aria-label="Chat"
       >

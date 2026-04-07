@@ -46,9 +46,14 @@ const providers = [
   { id: 'anthropic', name: 'Anthropic', models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'] }
 ]
 
-export function AdminPanel() {
+interface AdminPanelProps {
+  initialOpen?: boolean
+  hideLauncher?: boolean
+}
+
+export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminPanelProps) {
   const { t, language } = useLanguage()
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(initialOpen)
   const [activeTab, setActiveTab] = useState<TabType>('projects')
   const [projects, setProjects] = useState<Project[]>([])
   const [publications, setPublications] = useState<Publication[]>([])
@@ -301,10 +306,11 @@ export function AdminPanel() {
 
   return (
     <>
-      {/* Admin Button */}
-      <button onClick={() => setIsOpen(true)} className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-50 w-11 h-11 sm:w-14 sm:h-14 bg-white text-zinc-900 rounded-full shadow-lg hover:bg-zinc-100 transition-all flex items-center justify-center border border-zinc-200" aria-label="Admin">
-        <LockKeyhole className="w-5 h-5 sm:w-6 sm:h-6" />
-      </button>
+      {!hideLauncher && (
+        <button onClick={() => setIsOpen(true)} className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-50 w-11 h-11 sm:w-14 sm:h-14 bg-white text-zinc-900 rounded-full shadow-lg hover:bg-zinc-100 transition-all flex items-center justify-center border border-zinc-200" aria-label="Admin">
+          <LockKeyhole className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+      )}
 
       {/* Panel */}
       <AnimatePresence>
