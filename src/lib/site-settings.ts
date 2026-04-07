@@ -8,6 +8,8 @@ export function getDefaultSiteSettings() {
     logoUrl: '',
     faviconUrl: '',
     heroImages: '',
+    heroImageOpacity: 34,
+    heroImageSaturation: 90,
     email: 'admin@ingenieria.com.bo',
     phone: '+591 2241146',
     whatsapp: '+591 76205333',

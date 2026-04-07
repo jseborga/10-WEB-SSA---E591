@@ -97,6 +97,8 @@ model SiteSettings {
   logoUrl      String?
   faviconUrl   String?
   heroImages   String?
+  heroImageOpacity    Int      @default(34)
+  heroImageSaturation Int      @default(90)
   email        String?
   phone        String?
   whatsapp     String?

@@ -77,6 +77,8 @@ interface SiteSettings {
   logoUrl: string
   faviconUrl: string
   heroImages: string
+  heroImageOpacity: string
+  heroImageSaturation: string
   email: string
   phone: string
   whatsapp: string
@@ -174,6 +176,8 @@ const emptySiteForm: SiteFormState = {
   logoUrl: '',
   faviconUrl: '',
   heroImages: '',
+  heroImageOpacity: '34',
+  heroImageSaturation: '90',
   email: '',
   phone: '',
   whatsapp: '',
@@ -203,6 +207,16 @@ const providers = [
   { id: 'google', name: 'Google AI', models: ['gemini-pro', 'gemini-1.5-pro'] },
   { id: 'anthropic', name: 'Anthropic', models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'] }
 ]
+
+function clampIntegerString(value: string, fallback: number, min: number, max: number) {
+  const parsed = Number.parseInt(value, 10)
+
+  if (Number.isNaN(parsed)) {
+    return String(fallback)
+  }
+
+  return String(Math.min(max, Math.max(min, parsed)))
+}
 
 interface AdminPanelProps {
   initialOpen?: boolean
@@ -348,6 +362,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         logoUrl: siteData.logoUrl || '',
         faviconUrl: siteData.faviconUrl || '',
         heroImages: siteData.heroImages || '',
+        heroImageOpacity: String(siteData.heroImageOpacity ?? 34),
+        heroImageSaturation: String(siteData.heroImageSaturation ?? 90),
         email: siteData.email || '',
         phone: siteData.phone || '',
         whatsapp: siteData.whatsapp || '',
@@ -698,14 +714,21 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const handleSaveSiteConfig = async () => {
     setLoading(true)
     try {
+      const normalizedSiteForm = {
+        ...siteForm,
+        heroImageOpacity: clampIntegerString(siteForm.heroImageOpacity, 34, 5, 70),
+        heroImageSaturation: clampIntegerString(siteForm.heroImageSaturation, 90, 0, 160),
+      }
+
       const res = await fetch('/api/site-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(siteForm),
+        body: JSON.stringify(normalizedSiteForm),
       })
 
       if (res.ok) {
         toast.success('Configuracion del sitio actualizada')
+        setSiteForm(normalizedSiteForm)
         void loadAdminData()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -1020,6 +1043,59 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           placeholder="Una URL por linea. Se mezclaran con las imagenes principales de proyectos publicados."
                           className="text-sm"
                         />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 block">Opacidad del hero</label>
+                            <span className="text-xs text-zinc-500">{siteForm.heroImageOpacity || '34'}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="5"
+                            max="70"
+                            step="1"
+                            value={siteForm.heroImageOpacity || '34'}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageOpacity: e.target.value })}
+                            className="w-full accent-zinc-900"
+                          />
+                          <Input
+                            type="number"
+                            min="5"
+                            max="70"
+                            value={siteForm.heroImageOpacity}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageOpacity: e.target.value })}
+                            className="text-sm"
+                          />
+                          <p className="text-xs text-zinc-500">Cuanta presencia tiene la imagen principal del carrusel.</p>
+                        </div>
+
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 block">Saturacion del hero</label>
+                            <span className="text-xs text-zinc-500">{siteForm.heroImageSaturation || '90'}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="160"
+                            step="5"
+                            value={siteForm.heroImageSaturation || '90'}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageSaturation: e.target.value })}
+                            className="w-full accent-zinc-900"
+                          />
+                          <Input
+                            type="number"
+                            min="0"
+                            max="160"
+                            step="5"
+                            value={siteForm.heroImageSaturation}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageSaturation: e.target.value })}
+                            className="text-sm"
+                          />
+                          <p className="text-xs text-zinc-500">0 deja el hero en blanco y negro. Valores altos recuperan mas color.</p>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

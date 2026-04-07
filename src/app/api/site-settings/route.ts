@@ -3,6 +3,16 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 
+function clampInteger(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+
+  if (Number.isNaN(parsed)) {
+    return fallback
+  }
+
+  return Math.min(max, Math.max(min, parsed))
+}
+
 export async function GET() {
   try {
     const settings = await ensureSiteSettings()
@@ -33,6 +43,8 @@ export async function PUT(request: Request) {
         logoUrl: body.logoUrl ?? currentSettings.logoUrl,
         faviconUrl: body.faviconUrl ?? currentSettings.faviconUrl,
         heroImages: body.heroImages ?? currentSettings.heroImages,
+        heroImageOpacity: clampInteger(body.heroImageOpacity, currentSettings.heroImageOpacity, 5, 70),
+        heroImageSaturation: clampInteger(body.heroImageSaturation, currentSettings.heroImageSaturation, 0, 160),
         email: body.email ?? currentSettings.email,
         phone: body.phone ?? currentSettings.phone,
         whatsapp: body.whatsapp ?? currentSettings.whatsapp,

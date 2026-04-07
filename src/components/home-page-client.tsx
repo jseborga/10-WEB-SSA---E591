@@ -52,6 +52,8 @@ interface SiteSettings {
   logoUrl?: string | null
   faviconUrl?: string | null
   heroImages?: string | null
+  heroImageOpacity?: number | null
+  heroImageSaturation?: number | null
   email?: string | null
   phone?: string | null
   whatsapp?: string | null
@@ -116,6 +118,16 @@ function shuffleItems<T>(items: T[]) {
   }
 
   return next
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value)
+
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+
+  return Math.min(max, Math.max(min, parsed))
 }
 
 const defaultProjects: Project[] = [
@@ -298,6 +310,13 @@ export default function HomePageClient({
     { label: 'LinkedIn', href: siteSettings?.linkedinUrl?.trim() || '', icon: Linkedin },
     { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
   ].filter((item) => item.href)
+  const heroImageOpacity = clampNumber(siteSettings?.heroImageOpacity, 34, 5, 70)
+  const heroImageSaturation = clampNumber(siteSettings?.heroImageSaturation, 90, 0, 160)
+  const activeHeroOpacity = heroImageOpacity / 100
+  const accentHeroOpacity = Math.max(0.08, Math.min(0.28, activeHeroOpacity * 0.46))
+  const heroWashOpacity = Math.max(0.16, Math.min(0.56, 0.58 - activeHeroOpacity * 0.45))
+  const activeHeroGrayscale = Math.max(0, Math.round(100 - heroImageSaturation * 0.38))
+  const activeHeroSaturation = Math.max(0, heroImageSaturation / 100)
 
   useEffect(() => {
     const configuredImages = parseUrlList(siteSettings?.heroImages)
@@ -452,9 +471,13 @@ export default function HomePageClient({
               {heroCarouselImages.map((imageUrl, index) => {
                 const isActive = index === activeHeroIndex
                 const isAccent = heroCarouselImages.length > 0 && index === (activeHeroIndex + heroCarouselImages.length - 1) % heroCarouselImages.length
-                const opacity = isActive ? 0.34 : isAccent ? 0.16 : 0
+                const opacity = isActive ? activeHeroOpacity : isAccent ? accentHeroOpacity : 0
                 const scale = isActive ? 1 : isAccent ? 1.02 : 1.05
-                const filter = isActive ? 'grayscale(72%) saturate(0.9) contrast(1.02)' : isAccent ? 'grayscale(100%) contrast(0.92)' : 'grayscale(100%)'
+                const filter = isActive
+                  ? `grayscale(${activeHeroGrayscale}%) saturate(${activeHeroSaturation}) contrast(1.02)`
+                  : isAccent
+                    ? 'grayscale(100%) contrast(0.92)'
+                    : 'grayscale(100%)'
 
                 return (
                   <img
@@ -470,7 +493,7 @@ export default function HomePageClient({
                   />
                 )
               })}
-              <div className="absolute inset-0 bg-white/42" />
+              <div className="absolute inset-0" style={{ backgroundColor: `rgba(255, 255, 255, ${heroWashOpacity})` }} />
             </div>
           ) : (
             <Image src="/images/hero-bg.png" alt="" fill className="object-cover opacity-15" priority />
