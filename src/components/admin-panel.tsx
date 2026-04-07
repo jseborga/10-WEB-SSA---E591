@@ -79,6 +79,12 @@ interface SiteSettings {
   heroImages: string
   heroImageOpacity: string
   heroImageSaturation: string
+  heroImageBrightness: string
+  heroImageContrast: string
+  heroImageFit: 'cover' | 'contain'
+  heroImageTreatment: 'editorial' | 'original' | 'enhanced' | 'monochrome'
+  heroShowCompanyName: boolean
+  heroTextTone: 'dark' | 'light'
   email: string
   phone: string
   whatsapp: string
@@ -178,6 +184,12 @@ const emptySiteForm: SiteFormState = {
   heroImages: '',
   heroImageOpacity: '34',
   heroImageSaturation: '90',
+  heroImageBrightness: '100',
+  heroImageContrast: '105',
+  heroImageFit: 'cover',
+  heroImageTreatment: 'editorial',
+  heroShowCompanyName: false,
+  heroTextTone: 'dark',
   email: '',
   phone: '',
   whatsapp: '',
@@ -216,6 +228,10 @@ function clampIntegerString(value: string, fallback: number, min: number, max: n
   }
 
   return String(Math.min(max, Math.max(min, parsed)))
+}
+
+function normalizeChoice<T extends string>(value: string, fallback: T, options: readonly T[]): T {
+  return options.includes(value as T) ? (value as T) : fallback
 }
 
 interface AdminPanelProps {
@@ -364,6 +380,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         heroImages: siteData.heroImages || '',
         heroImageOpacity: String(siteData.heroImageOpacity ?? 34),
         heroImageSaturation: String(siteData.heroImageSaturation ?? 90),
+        heroImageBrightness: String(siteData.heroImageBrightness ?? 100),
+        heroImageContrast: String(siteData.heroImageContrast ?? 105),
+        heroImageFit: siteData.heroImageFit === 'contain' ? 'contain' : 'cover',
+        heroImageTreatment: ['editorial', 'original', 'enhanced', 'monochrome'].includes(siteData.heroImageTreatment) ? siteData.heroImageTreatment : 'editorial',
+        heroShowCompanyName: Boolean(siteData.heroShowCompanyName),
+        heroTextTone: siteData.heroTextTone === 'light' ? 'light' : 'dark',
         email: siteData.email || '',
         phone: siteData.phone || '',
         whatsapp: siteData.whatsapp || '',
@@ -718,6 +740,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         ...siteForm,
         heroImageOpacity: clampIntegerString(siteForm.heroImageOpacity, 34, 5, 70),
         heroImageSaturation: clampIntegerString(siteForm.heroImageSaturation, 90, 0, 160),
+        heroImageBrightness: clampIntegerString(siteForm.heroImageBrightness, 100, 70, 150),
+        heroImageContrast: clampIntegerString(siteForm.heroImageContrast, 105, 80, 160),
+        heroImageFit: normalizeChoice(siteForm.heroImageFit, 'cover', ['cover', 'contain'] as const),
+        heroImageTreatment: normalizeChoice(siteForm.heroImageTreatment, 'editorial', ['editorial', 'original', 'enhanced', 'monochrome'] as const),
+        heroTextTone: normalizeChoice(siteForm.heroTextTone, 'dark', ['dark', 'light'] as const),
       }
 
       const res = await fetch('/api/site-settings', {
@@ -1095,6 +1122,116 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                             className="text-sm"
                           />
                           <p className="text-xs text-zinc-500">0 deja el hero en blanco y negro. Valores altos recuperan mas color.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <label className="text-xs font-medium text-zinc-700 block">Modo de imagen</label>
+                          <select
+                            value={siteForm.heroImageTreatment}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageTreatment: e.target.value as SiteFormState['heroImageTreatment'] })}
+                            className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
+                          >
+                            <option value="editorial">Editorial suave</option>
+                            <option value="original">Original sin filtros</option>
+                            <option value="enhanced">Mejorada</option>
+                            <option value="monochrome">Blanco y negro</option>
+                          </select>
+                          <p className="text-xs text-zinc-500">Original deja la imagen casi intacta. Mejorada aumenta brillo y contraste.</p>
+                        </div>
+
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <label className="text-xs font-medium text-zinc-700 block">Encuadre de imagen</label>
+                          <select
+                            value={siteForm.heroImageFit}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageFit: e.target.value as SiteFormState['heroImageFit'] })}
+                            className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
+                          >
+                            <option value="cover">Llenar pantalla</option>
+                            <option value="contain">Mostrar imagen entera</option>
+                          </select>
+                          <p className="text-xs text-zinc-500">Usa “Mostrar imagen entera” para respetar el encuadre completo.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 block">Brillo del hero</label>
+                            <span className="text-xs text-zinc-500">{siteForm.heroImageBrightness || '100'}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="70"
+                            max="150"
+                            step="5"
+                            value={siteForm.heroImageBrightness || '100'}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageBrightness: e.target.value })}
+                            className="w-full accent-zinc-900"
+                          />
+                          <Input
+                            type="number"
+                            min="70"
+                            max="150"
+                            step="5"
+                            value={siteForm.heroImageBrightness}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageBrightness: e.target.value })}
+                            className="text-sm"
+                          />
+                        </div>
+
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 block">Contraste del hero</label>
+                            <span className="text-xs text-zinc-500">{siteForm.heroImageContrast || '105'}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="80"
+                            max="160"
+                            step="5"
+                            value={siteForm.heroImageContrast || '105'}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageContrast: e.target.value })}
+                            className="w-full accent-zinc-900"
+                          />
+                          <Input
+                            type="number"
+                            min="80"
+                            max="160"
+                            step="5"
+                            value={siteForm.heroImageContrast}
+                            onChange={e => setSiteForm({ ...siteForm, heroImageContrast: e.target.value })}
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <label className="text-xs font-medium text-zinc-700 block">Texto del hero</label>
+                          <select
+                            value={siteForm.heroTextTone}
+                            onChange={e => setSiteForm({ ...siteForm, heroTextTone: e.target.value as SiteFormState['heroTextTone'] })}
+                            className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900"
+                          >
+                            <option value="dark">Oscuro</option>
+                            <option value="light">Claro</option>
+                          </select>
+                          <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                            <input
+                              type="checkbox"
+                              checked={siteForm.heroShowCompanyName}
+                              onChange={e => setSiteForm({ ...siteForm, heroShowCompanyName: e.target.checked })}
+                              className="h-4 w-4 rounded border-zinc-300"
+                            />
+                            Mostrar nombre de empresa en el hero
+                          </label>
+                        </div>
+
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <p className="text-xs text-zinc-700 font-medium">Comportamiento recomendado</p>
+                          <p className="text-xs text-zinc-500">Para tu estilo actual usa: texto oscuro, modo mejorada u original y “mostrar imagen entera” si quieres respetar el encuadre.</p>
                         </div>
                       </div>
 

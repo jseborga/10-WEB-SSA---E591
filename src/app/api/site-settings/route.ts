@@ -13,6 +13,11 @@ function clampInteger(value: unknown, fallback: number, min: number, max: number
   return Math.min(max, Math.max(min, parsed))
 }
 
+function normalizeChoice(value: unknown, fallback: string, options: string[]) {
+  const parsed = String(value ?? fallback)
+  return options.includes(parsed) ? parsed : fallback
+}
+
 export async function GET() {
   try {
     const settings = await ensureSiteSettings()
@@ -45,6 +50,12 @@ export async function PUT(request: Request) {
         heroImages: body.heroImages ?? currentSettings.heroImages,
         heroImageOpacity: clampInteger(body.heroImageOpacity, currentSettings.heroImageOpacity, 5, 70),
         heroImageSaturation: clampInteger(body.heroImageSaturation, currentSettings.heroImageSaturation, 0, 160),
+        heroImageBrightness: clampInteger(body.heroImageBrightness, currentSettings.heroImageBrightness, 70, 150),
+        heroImageContrast: clampInteger(body.heroImageContrast, currentSettings.heroImageContrast, 80, 160),
+        heroImageFit: normalizeChoice(body.heroImageFit, currentSettings.heroImageFit, ['cover', 'contain']),
+        heroImageTreatment: normalizeChoice(body.heroImageTreatment, currentSettings.heroImageTreatment, ['editorial', 'original', 'enhanced', 'monochrome']),
+        heroShowCompanyName: Boolean(body.heroShowCompanyName),
+        heroTextTone: normalizeChoice(body.heroTextTone, currentSettings.heroTextTone, ['dark', 'light']),
         email: body.email ?? currentSettings.email,
         phone: body.phone ?? currentSettings.phone,
         whatsapp: body.whatsapp ?? currentSettings.whatsapp,

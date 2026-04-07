@@ -54,6 +54,12 @@ interface SiteSettings {
   heroImages?: string | null
   heroImageOpacity?: number | null
   heroImageSaturation?: number | null
+  heroImageBrightness?: number | null
+  heroImageContrast?: number | null
+  heroImageFit?: string | null
+  heroImageTreatment?: string | null
+  heroShowCompanyName?: boolean | null
+  heroTextTone?: string | null
   email?: string | null
   phone?: string | null
   whatsapp?: string | null
@@ -310,13 +316,36 @@ export default function HomePageClient({
     { label: 'LinkedIn', href: siteSettings?.linkedinUrl?.trim() || '', icon: Linkedin },
     { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
   ].filter((item) => item.href)
+  const heroTitle = siteSettings?.tagline?.trim() || t.hero.subtitle
+  const heroImageFit: 'cover' | 'contain' = siteSettings?.heroImageFit === 'contain' ? 'contain' : 'cover'
+  const heroImageTreatment: 'editorial' | 'original' | 'enhanced' | 'monochrome' =
+    siteSettings?.heroImageTreatment === 'original' ||
+    siteSettings?.heroImageTreatment === 'enhanced' ||
+    siteSettings?.heroImageTreatment === 'monochrome'
+      ? siteSettings.heroImageTreatment
+      : 'editorial'
+  const heroShowCompanyName = Boolean(siteSettings?.heroShowCompanyName)
+  const heroTextTone = siteSettings?.heroTextTone === 'light' ? 'light' : 'dark'
   const heroImageOpacity = clampNumber(siteSettings?.heroImageOpacity, 34, 5, 70)
   const heroImageSaturation = clampNumber(siteSettings?.heroImageSaturation, 90, 0, 160)
-  const activeHeroOpacity = heroImageOpacity / 100
-  const accentHeroOpacity = Math.max(0.08, Math.min(0.28, activeHeroOpacity * 0.46))
-  const heroWashOpacity = Math.max(0.16, Math.min(0.56, 0.58 - activeHeroOpacity * 0.45))
+  const heroImageBrightness = clampNumber(siteSettings?.heroImageBrightness, 100, 70, 150)
+  const heroImageContrast = clampNumber(siteSettings?.heroImageContrast, 105, 80, 160)
+  const activeHeroOpacity = heroImageTreatment === 'original' ? 1 : heroImageOpacity / 100
+  const accentHeroOpacity = heroImageTreatment === 'original' ? 0 : Math.max(0.08, Math.min(0.28, activeHeroOpacity * 0.46))
+  const heroWashOpacity = heroImageTreatment === 'original'
+    ? heroTextTone === 'dark' ? 0.18 : 0.08
+    : Math.max(0.16, Math.min(0.56, 0.58 - activeHeroOpacity * 0.45))
   const activeHeroGrayscale = Math.max(0, Math.round(100 - heroImageSaturation * 0.38))
   const activeHeroSaturation = Math.max(0, heroImageSaturation / 100)
+  const heroTitleColorClass = heroTextTone === 'light' ? 'text-white' : 'text-zinc-900'
+  const heroSubtitleColorClass = heroTextTone === 'light' ? 'text-white/88' : 'text-zinc-700'
+  const heroNameColorClass = heroTextTone === 'light' ? 'text-white/70' : 'text-zinc-500'
+  const heroCtaClass = heroTextTone === 'light'
+    ? 'border-white text-white hover:bg-white hover:text-zinc-900'
+    : 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'
+  const heroTextShadow = heroTextTone === 'light'
+    ? '0 1px 20px rgba(0,0,0,0.28)'
+    : '0 1px 20px rgba(255,255,255,0.42)'
 
   useEffect(() => {
     const configuredImages = parseUrlList(siteSettings?.heroImages)
@@ -474,9 +503,17 @@ export default function HomePageClient({
                 const opacity = isActive ? activeHeroOpacity : isAccent ? accentHeroOpacity : 0
                 const scale = isActive ? 1 : isAccent ? 1.02 : 1.05
                 const filter = isActive
-                  ? `grayscale(${activeHeroGrayscale}%) saturate(${activeHeroSaturation}) contrast(1.02)`
+                  ? heroImageTreatment === 'original'
+                    ? `brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                    : heroImageTreatment === 'enhanced'
+                      ? `grayscale(8%) saturate(${Math.max(1, activeHeroSaturation * 1.08)}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                      : heroImageTreatment === 'monochrome'
+                        ? `grayscale(100%) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                        : `grayscale(${activeHeroGrayscale}%) saturate(${activeHeroSaturation}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
                   : isAccent
-                    ? 'grayscale(100%) contrast(0.92)'
+                    ? heroImageTreatment === 'original'
+                      ? 'none'
+                      : 'grayscale(100%) contrast(0.92)'
                     : 'grayscale(100%)'
 
                 return (
@@ -484,7 +521,7 @@ export default function HomePageClient({
                     key={`${imageUrl}-${index}`}
                     src={imageUrl}
                     alt=""
-                    className="absolute inset-0 h-full w-full object-cover transition-all duration-[1800ms] ease-out"
+                    className={`absolute inset-0 h-full w-full ${heroImageFit === 'contain' ? 'object-contain' : 'object-cover'} transition-all duration-[1800ms] ease-out`}
                     style={{
                       opacity,
                       filter,
@@ -504,15 +541,38 @@ export default function HomePageClient({
         
         <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-20 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <h1 className="text-3xl sm:text-5xl md:text-6xl font-light tracking-tight text-zinc-900 mb-3">
-              {companyName}
-              <span className="block mt-1 text-zinc-400">{siteSettings?.tagline?.trim() || t.hero.subtitle}</span>
+            <h1
+              className={`text-3xl sm:text-5xl md:text-6xl font-light tracking-tight mb-3 ${heroTitleColorClass}`}
+              style={{ textShadow: heroTextShadow }}
+            >
+              {heroShowCompanyName ? (
+                <span className={`block mb-2 text-sm sm:text-base md:text-lg tracking-[0.35em] uppercase ${heroNameColorClass}`}>
+                  {companyName}
+                </span>
+              ) : null}
+              <span className="inline-flex items-end justify-center gap-1">
+                <span>{heroTitle}</span>
+                <span className="inline-flex" aria-hidden="true">
+                  {[0, 1, 2].map((dot) => (
+                    <motion.span
+                      key={dot}
+                      animate={{ opacity: [0.2, 1, 0.2] }}
+                      transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.18, ease: 'easeInOut' }}
+                    >
+                      .
+                    </motion.span>
+                  ))}
+                </span>
+              </span>
             </h1>
-            <p className="max-w-lg mx-auto text-sm sm:text-base text-zinc-600 font-light leading-relaxed mb-8">
+            <p
+              className={`max-w-xl mx-auto text-sm sm:text-base font-light leading-relaxed mb-8 ${heroSubtitleColorClass}`}
+              style={{ textShadow: heroTextShadow }}
+            >
               {t.hero.description}
             </p>
             <a href="#proyectos">
-              <Button variant="outline" className="border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white px-6 sm:px-8 py-5 text-xs tracking-widest">
+              <Button variant="outline" className={`${heroCtaClass} px-6 sm:px-8 py-5 text-xs tracking-widest`}>
                 {t.hero.cta}
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
