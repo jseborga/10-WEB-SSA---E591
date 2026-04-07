@@ -50,7 +50,7 @@
         >
           <a href="#servicios">Servicios</a>
           <a href="#tecnologia">Tecnologia</a>
-          <a href="#videos">Presentacion</a>
+          <a href="#presentacion">Presentacion</a>
           <a href="#contacto">Contacto</a>
         </nav>
 
@@ -300,29 +300,105 @@
       </section>
 
       <section
-        class="video-showcase"
-        id="videos"
+        class="story-showcase"
+        id="presentacion"
       >
-        <div class="video-shell">
-          <div class="video-copy reveal">
+        <div class="story-shell">
+          <div class="story-copy reveal">
             <p class="eyebrow">Presentacion</p>
-            <h2>Una capa audiovisual para mostrar la empresa con más fuerza.</h2>
+            <h2>Una presentacion dinamica que cambia mientras haces scroll.</h2>
             <p>
-              Este video es una referencia de comportamiento visual. Luego puede
-              reemplazarse por un reel de SSA, un time-lapse de obra o una
-              presentacion institucional real.
+              En lugar de depender de videos externos que pueden fallar, esta
+              seccion usa paneles visuales y transiciones controladas por scroll
+              para mostrar obra, supervision y tecnologia de forma mas estable.
             </p>
           </div>
 
-          <div class="video-player reveal">
-            <div class="video-embed">
-              <iframe
-                src="https://player.vimeo.com/video/1121027826?title=0&byline=0&portrait=0"
-                title="Video referencial de construccion"
-                loading="lazy"
-                allow="autoplay; fullscreen; picture-in-picture"
-                allowfullscreen
-              ></iframe>
+          <div class="story-layout">
+            <div class="story-media reveal">
+              <div class="story-screen">
+                <article
+                  class="story-panel is-active"
+                  data-story="0"
+                >
+                  <img
+                    src="./hero-architecture.svg"
+                    alt="Presentacion visual de construccion"
+                  />
+                  <div class="story-panel-copy">
+                    <span>Obra integral</span>
+                    <p>Ejecucion con una lectura visual limpia y profesional.</p>
+                  </div>
+                </article>
+
+                <article
+                  class="story-panel"
+                  data-story="1"
+                >
+                  <img
+                    src="https://images.unsplash.com/photo-1770823556202-2eba715a415b?auto=format&fit=crop&w=1600&q=80"
+                    alt="Presentacion visual de supervision"
+                    loading="lazy"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                  />
+                  <div class="story-panel-copy">
+                    <span>Supervision</span>
+                    <p>Control tecnico, avance y trazabilidad para la toma de decisiones.</p>
+                  </div>
+                </article>
+
+                <article
+                  class="story-panel"
+                  data-story="2"
+                >
+                  <img
+                    src="./media/dashboard-demo.svg"
+                    alt="Presentacion visual de software y ERP"
+                  />
+                  <div class="story-panel-copy">
+                    <span>ERP y software</span>
+                    <p>Informacion ordenada para seguimiento, documentos y operacion.</p>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div class="story-steps">
+              <article
+                class="story-step reveal is-active"
+                data-story="0"
+              >
+                <span>01</span>
+                <h3>Construccion con presencia</h3>
+                <p>
+                  La empresa puede presentarse como un sistema completo, no solo
+                  como una lista de servicios.
+                </p>
+              </article>
+
+              <article
+                class="story-step reveal"
+                data-story="1"
+              >
+                <span>02</span>
+                <h3>Supervision que transmite control</h3>
+                <p>
+                  El scroll activa una narrativa visual mas convincente para la
+                  parte tecnica y operativa.
+                </p>
+              </article>
+
+              <article
+                class="story-step reveal"
+                data-story="2"
+              >
+                <span>03</span>
+                <h3>Tecnologia que se entiende rapido</h3>
+                <p>
+                  Software a medida y ERP se muestran con una grafica mas clara,
+                  sin depender de un video externo roto.
+                </p>
+              </article>
             </div>
           </div>
         </div>

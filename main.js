@@ -5,6 +5,8 @@ const headerNode = document.querySelector(".site-header");
 const heroNode = document.querySelector(".hero");
 const capabilitySteps = [...document.querySelectorAll(".capability-step")];
 const capabilitySlides = [...document.querySelectorAll(".capability-slide")];
+const storySteps = [...document.querySelectorAll(".story-step")];
+const storyPanels = [...document.querySelectorAll(".story-panel")];
 
 if (yearNode) {
   yearNode.textContent = new Date().getFullYear();
@@ -62,11 +64,43 @@ const updateCapabilities = () => {
   });
 };
 
+const updateStories = () => {
+  if (!storySteps.length || !storyPanels.length) {
+    return;
+  }
+
+  const anchor = window.innerHeight * 0.46;
+  let activeStep = storySteps[0];
+  let smallestDistance = Number.POSITIVE_INFINITY;
+
+  storySteps.forEach((step) => {
+    const rect = step.getBoundingClientRect();
+    const center = rect.top + rect.height / 2;
+    const distance = Math.abs(center - anchor);
+
+    if (distance < smallestDistance) {
+      smallestDistance = distance;
+      activeStep = step;
+    }
+  });
+
+  const activeStory = activeStep.dataset.story;
+
+  storySteps.forEach((step) => {
+    step.classList.toggle("is-active", step.dataset.story === activeStory);
+  });
+
+  storyPanels.forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.story === activeStory);
+  });
+};
+
 const onFrame = () => {
   rafId = 0;
   updateHeaderState();
   updateHeroProgress();
   updateCapabilities();
+  updateStories();
 };
 
 const requestFrame = () => {
