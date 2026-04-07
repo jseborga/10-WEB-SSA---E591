@@ -83,10 +83,28 @@ function normalizeWhatsappLink(value: string) {
 }
 
 function parseUrlList(value: string | null | undefined) {
-  return (value || '')
+  const rawValue = (value || '').trim()
+
+  if (!rawValue) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue)
+
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.startsWith('/') || item.startsWith('http://') || item.startsWith('https://'))
+    }
+  } catch {
+    // Site settings are usually stored one URL per line.
+  }
+
+  return rawValue
     .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
+    .map((line) => line.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((line) => line.startsWith('/') || line.startsWith('http://') || line.startsWith('https://'))
 }
 
 function shuffleItems<T>(items: T[]) {
@@ -284,10 +302,11 @@ export default function HomePageClient({
   useEffect(() => {
     const configuredImages = parseUrlList(siteSettings?.heroImages)
     const projectImages = projects
-      .flatMap((project) => [project.mainImage, ...parseUrlList(project.gallery)])
-      .filter((value): value is string => Boolean(value))
+      .map((project) => project.mainImage?.trim())
+      .filter((value): value is string => Boolean(value) && (value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://')))
 
-    const uniqueImages = Array.from(new Set([...configuredImages, ...projectImages]))
+    const uniqueProjectImages = projectImages.filter((image, index) => projectImages.indexOf(image) === index && !configuredImages.includes(image))
+    const uniqueImages = [...shuffleItems(configuredImages), ...shuffleItems(uniqueProjectImages)]
 
     if (uniqueImages.length === 0) {
       setHeroCarouselImages([])
@@ -433,9 +452,9 @@ export default function HomePageClient({
               {heroCarouselImages.map((imageUrl, index) => {
                 const isActive = index === activeHeroIndex
                 const isAccent = heroCarouselImages.length > 0 && index === (activeHeroIndex + heroCarouselImages.length - 1) % heroCarouselImages.length
-                const opacity = isActive ? 0.2 : isAccent ? 0.12 : 0
-                const scale = isActive ? 1 : isAccent ? 1.03 : 1.05
-                const filter = isActive ? 'grayscale(35%) saturate(0.85)' : isAccent ? 'grayscale(100%) contrast(0.9)' : 'grayscale(100%)'
+                const opacity = isActive ? 0.34 : isAccent ? 0.16 : 0
+                const scale = isActive ? 1 : isAccent ? 1.02 : 1.05
+                const filter = isActive ? 'grayscale(72%) saturate(0.9) contrast(1.02)' : isAccent ? 'grayscale(100%) contrast(0.92)' : 'grayscale(100%)'
 
                 return (
                   <img
@@ -451,13 +470,13 @@ export default function HomePageClient({
                   />
                 )
               })}
-              <div className="absolute inset-0 bg-white/68" />
+              <div className="absolute inset-0 bg-white/42" />
             </div>
           ) : (
             <Image src="/images/hero-bg.png" alt="" fill className="object-cover opacity-15" priority />
           )}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.2),_rgba(255,255,255,0.88)_72%)]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-white via-white/30 to-white" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.05),_rgba(255,255,255,0.64)_72%)]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/38 via-white/14 to-white/74" />
         </div>
         
         <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-20 text-center">
