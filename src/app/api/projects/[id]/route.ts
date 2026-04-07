@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
+function normalizeGallery(gallery: unknown) {
+  if (Array.isArray(gallery)) {
+    return JSON.stringify(gallery.filter((item): item is string => typeof item === 'string' && item.trim().length > 0))
+  }
+
+  if (typeof gallery === 'string' && gallery.trim().length > 0) {
+    return gallery
+  }
+
+  return null
+}
+
 // GET - Obtener proyecto por ID
 export async function GET(
   request: Request,
@@ -55,6 +67,7 @@ export async function PUT(
       featured,
       mainImage,
       gallery,
+      videoUrl,
       client,
       status,
     } = body
@@ -71,7 +84,8 @@ export async function PUT(
         area,
         featured,
         mainImage: mainImage || body.images || null,
-        gallery: gallery || null,
+        gallery: normalizeGallery(gallery),
+        videoUrl: videoUrl || null,
         client: client || null,
         status: status || null,
       },

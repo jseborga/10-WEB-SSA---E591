@@ -51,7 +51,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { title, slug, excerpt, content, image, published, category } = body
+    const { title, slug, excerpt, content, image, published, category, showInMenu, menuOrder } = body
 
     const publication = await db.publication.update({
       where: { id },
@@ -62,7 +62,9 @@ export async function PUT(
         content,
         image,
         published,
-        category
+        category,
+        showInMenu: showInMenu ?? false,
+        menuOrder: typeof menuOrder === 'number' ? menuOrder : parseInt(menuOrder, 10) || 0,
       }
     })
 

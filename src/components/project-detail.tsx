@@ -23,6 +23,7 @@ interface Project {
   area: string | null
   mainImage?: string | null
   gallery?: string | null
+  videoUrl?: string | null
   client?: string | null
   status?: string | null
 }
@@ -156,6 +157,19 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
               </div>
             )}
           </div>
+
+          {project.videoUrl && (
+            <div className="mb-6 sm:mb-8">
+              <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-black">
+                <video
+                  src={project.videoUrl}
+                  controls
+                  preload="metadata"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Content */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">

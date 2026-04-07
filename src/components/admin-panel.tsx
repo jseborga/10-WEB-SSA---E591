@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,13 +12,36 @@ import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 
 interface Project {
-  id: string; title: string; description: string | null; category: string
-  location: string | null; year: number | null; area: string | null; images: string | null; mainImage?: string | null; createdAt: string
+  id: string
+  title: string
+  description: string | null
+  fullDescription?: string | null
+  category: string
+  location: string | null
+  year: number | null
+  area: string | null
+  images: string | null
+  mainImage?: string | null
+  gallery?: string | null
+  videoUrl?: string | null
+  client?: string | null
+  status?: string | null
+  featured?: boolean
+  createdAt: string
 }
 
 interface Publication {
-  id: string; title: string; slug: string; excerpt: string | null
-  content: string | null; image?: string | null; published: boolean; category: string | null; createdAt: string
+  id: string
+  title: string
+  slug: string
+  excerpt: string | null
+  content: string | null
+  image?: string | null
+  published: boolean
+  showInMenu?: boolean
+  menuOrder?: number
+  category: string | null
+  createdAt: string
 }
 
 interface Contact {
@@ -37,6 +60,60 @@ interface ChatConfigType {
 
 type TabType = 'projects' | 'publications' | 'contacts' | 'ai-config'
 type SessionState = { checking: boolean; configured: boolean; authenticated: boolean }
+
+type ProjectFormState = {
+  title: string
+  description: string
+  fullDescription: string
+  category: string
+  location: string
+  year: string
+  area: string
+  mainImage: string
+  gallery: string
+  videoUrl: string
+  client: string
+  status: string
+  featured: boolean
+}
+
+type PublicationFormState = {
+  title: string
+  slug: string
+  excerpt: string
+  content: string
+  image: string
+  category: string
+  showInMenu: boolean
+  menuOrder: string
+}
+
+const emptyProjectForm: ProjectFormState = {
+  title: '',
+  description: '',
+  fullDescription: '',
+  category: 'residencial',
+  location: '',
+  year: '',
+  area: '',
+  mainImage: '',
+  gallery: '',
+  videoUrl: '',
+  client: '',
+  status: 'completed',
+  featured: false,
+}
+
+const emptyPublicationForm: PublicationFormState = {
+  title: '',
+  slug: '',
+  excerpt: '',
+  content: '',
+  image: '',
+  category: 'informacion',
+  showInMenu: false,
+  menuOrder: '0',
+}
 
 const providers = [
   { id: 'default', name: 'Z-AI (Default)', models: ['default'] },
@@ -61,12 +138,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [chatConfig, setChatConfig] = useState<ChatConfigType | null>(null)
   const [loading, setLoading] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
+  const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
   const [session, setSession] = useState<SessionState>({ checking: false, configured: false, authenticated: false })
   const [adminPassword, setAdminPassword] = useState('')
 
-  const [projectForm, setProjectForm] = useState({ title: '', description: '', category: 'residencial', location: '', year: '', area: '', images: '' })
-  const [publicationForm, setPublicationForm] = useState({ title: '', slug: '', excerpt: '', content: '', image: '', category: 'noticias' })
+  const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
+  const [publicationForm, setPublicationForm] = useState<PublicationFormState>(emptyPublicationForm)
   const [aiForm, setAiForm] = useState({
     enabled: false, provider: 'default', apiKey: '', apiBaseUrl: '', model: '',
     systemPrompt: '', systemPromptEn: '', systemPromptPt: '',
@@ -197,6 +275,84 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     }
   }, [isOpen, session.authenticated])
 
+  const buildSlug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+
+  const parseGalleryUrls = (value: string) =>
+    value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+  const uploadFile = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch('/api/media/upload', {
+      method: 'POST',
+      body: formData,
+    })
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok || !data.url) {
+      throw new Error(data.error || 'No se pudo subir el archivo')
+    }
+
+    return data.url as string
+  }
+
+  const handleProjectUpload = async (files: FileList | null, target: 'mainImage' | 'gallery' | 'videoUrl') => {
+    if (!files || files.length === 0) return
+
+    setUploadingField(target)
+
+    try {
+      if (target === 'gallery') {
+        const uploadedUrls = []
+
+        for (const file of Array.from(files)) {
+          uploadedUrls.push(await uploadFile(file))
+        }
+
+        setProjectForm((current) => ({
+          ...current,
+          gallery: [current.gallery.trim(), ...uploadedUrls].filter(Boolean).join('\n'),
+        }))
+      } else if (target === 'mainImage') {
+        const [file] = Array.from(files)
+        const uploadedUrl = await uploadFile(file)
+        setProjectForm((current) => ({ ...current, mainImage: uploadedUrl }))
+      } else {
+        const [file] = Array.from(files)
+        const uploadedUrl = await uploadFile(file)
+        setProjectForm((current) => ({ ...current, videoUrl: uploadedUrl }))
+      }
+
+      toast.success('Archivo subido correctamente')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
+    } finally {
+      setUploadingField(null)
+    }
+  }
+
+  const handlePublicationImageUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    setUploadingField('publicationImage')
+
+    try {
+      const [file] = Array.from(files)
+      const uploadedUrl = await uploadFile(file)
+      setPublicationForm((current) => ({ ...current, image: uploadedUrl }))
+      toast.success('Imagen subida correctamente')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
+    } finally {
+      setUploadingField(null)
+    }
+  }
+
   const handleLogin = async () => {
     setAuthLoading(true)
 
@@ -233,14 +389,32 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       const url = editingProject ? `/api/projects/${editingProject.id}` : '/api/projects'
       const method = editingProject ? 'PUT' : 'POST'
       const res = await fetch(url, {
-        method, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...projectForm, year: projectForm.year ? parseInt(projectForm.year) : null })
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: projectForm.title,
+          description: projectForm.description,
+          fullDescription: projectForm.fullDescription,
+          category: projectForm.category,
+          location: projectForm.location,
+          year: projectForm.year ? parseInt(projectForm.year, 10) : null,
+          area: projectForm.area,
+          mainImage: projectForm.mainImage,
+          gallery: parseGalleryUrls(projectForm.gallery),
+          videoUrl: projectForm.videoUrl,
+          client: projectForm.client,
+          status: projectForm.status,
+          featured: projectForm.featured,
+        }),
       })
       if (res.ok) {
         toast.success(editingProject ? 'Proyecto actualizado' : 'Proyecto creado')
         setShowProjectDialog(false); setEditingProject(null)
-        setProjectForm({ title: '', description: '', category: 'residencial', location: '', year: '', area: '', images: '' })
+        setProjectForm(emptyProjectForm)
         void loadAdminData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'Error al guardar el proyecto')
       }
     } catch { toast.error('Error al guardar') }
     finally { setLoading(false) }
@@ -256,7 +430,31 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   const openEditProject = (project: Project) => {
     setEditingProject(project)
-    setProjectForm({ title: project.title, description: project.description || '', category: project.category, location: project.location || '', year: project.year?.toString() || '', area: project.area || '', images: project.mainImage || project.images || '' })
+    let gallery = ''
+
+    if (project.gallery) {
+      try {
+        gallery = JSON.parse(project.gallery).join('\n')
+      } catch {
+        gallery = project.gallery
+      }
+    }
+
+    setProjectForm({
+      title: project.title,
+      description: project.description || '',
+      fullDescription: project.fullDescription || '',
+      category: project.category,
+      location: project.location || '',
+      year: project.year?.toString() || '',
+      area: project.area || '',
+      mainImage: project.mainImage || project.images || '',
+      gallery,
+      videoUrl: project.videoUrl || '',
+      client: project.client || '',
+      status: project.status || 'completed',
+      featured: Boolean(project.featured),
+    })
     setShowProjectDialog(true)
   }
 
@@ -265,13 +463,25 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     try {
       const url = editingPublication ? `/api/publications/${editingPublication.id}` : '/api/publications'
       const method = editingPublication ? 'PUT' : 'POST'
-      const slug = publicationForm.slug || publicationForm.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...publicationForm, slug, published: true }) })
+      const slug = publicationForm.slug || buildSlug(publicationForm.title)
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...publicationForm,
+          slug,
+          published: true,
+          menuOrder: parseInt(publicationForm.menuOrder, 10) || 0,
+        }),
+      })
       if (res.ok) {
         toast.success(editingPublication ? 'Actualizado' : 'Publicado')
         setShowPublicationDialog(false); setEditingPublication(null)
-        setPublicationForm({ title: '', slug: '', excerpt: '', content: '', image: '', category: 'noticias' })
+        setPublicationForm(emptyPublicationForm)
         void loadAdminData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'No se pudo guardar la página')
       }
     } catch { toast.error('Error') }
     finally { setLoading(false) }
@@ -284,7 +494,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   const openEditPublication = (pub: Publication) => {
     setEditingPublication(pub)
-    setPublicationForm({ title: pub.title, slug: pub.slug, excerpt: pub.excerpt || '', content: pub.content || '', image: pub.image || '', category: pub.category || 'noticias' })
+    setPublicationForm({
+      title: pub.title,
+      slug: pub.slug,
+      excerpt: pub.excerpt || '',
+      content: pub.content || '',
+      image: pub.image || '',
+      category: pub.category || 'informacion',
+      showInMenu: Boolean(pub.showInMenu),
+      menuOrder: String(pub.menuOrder ?? 0),
+    })
     setShowPublicationDialog(true)
   }
 
@@ -299,7 +518,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   const tabs = [
     { key: 'projects' as TabType, label: t.admin.projects, icon: Building2 },
-    { key: 'publications' as TabType, label: t.admin.publications, icon: FileText },
+    { key: 'publications' as TabType, label: 'Paginas/Menu', icon: FileText },
     { key: 'contacts' as TabType, label: t.admin.contacts, icon: Mail },
     { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot }
   ]
@@ -383,7 +602,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <h2 className="text-base font-light">{t.admin.projects} ({projects.length})</h2>
-                        <Button onClick={() => { setEditingProject(null); setProjectForm({ title: '', description: '', category: 'residencial', location: '', year: '', area: '', images: '' }); setShowProjectDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />{t.admin.newProject}</Button>
+                        <Button onClick={() => { setEditingProject(null); setProjectForm(emptyProjectForm); setShowProjectDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />{t.admin.newProject}</Button>
                       </div>
                       <div className="grid gap-3">
                         {projects.map(p => (
@@ -391,10 +610,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                             <div className="flex justify-between">
                               <div className="flex-1 min-w-0">
                                 <h3 className="font-medium text-sm truncate">{p.title}</h3>
-                                <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
+                              <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
                                   <span>{p.category}</span>
                                   {p.location && <><span>•</span><span>{p.location}</span></>}
                                   {p.year && <><span>•</span><span>{p.year}</span></>}
+                                  {p.videoUrl && <><span>•</span><span>Video</span></>}
                                 </div>
                               </div>
                               <div className="flex gap-1 ml-2">
@@ -413,19 +633,24 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                   {activeTab === 'publications' && (
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <h2 className="text-base font-light">{t.admin.publications} ({publications.length})</h2>
-                        <Button onClick={() => { setEditingPublication(null); setPublicationForm({ title: '', slug: '', excerpt: '', content: '', image: '', category: 'noticias' }); setShowPublicationDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />{t.admin.newPublication}</Button>
+                        <h2 className="text-base font-light">Páginas y menú ({publications.length})</h2>
+                        <Button onClick={() => { setEditingPublication(null); setPublicationForm(emptyPublicationForm); setShowPublicationDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />Nueva página</Button>
                       </div>
                       <div className="grid gap-3">
                         {publications.map(p => (
                           <div key={p.id} className="border rounded-lg p-3 sm:p-4 hover:border-zinc-300">
                             <div className="flex justify-between">
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center flex-wrap gap-2">
                                   <h3 className="font-medium text-sm truncate">{p.title}</h3>
                                   <span className={`text-xs px-2 py-0.5 rounded ${p.published ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.published ? t.admin.published : t.admin.draft}</span>
+                                  {p.showInMenu && <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Menú</span>}
                                 </div>
-                                <p className="text-xs text-zinc-400 mt-1 truncate">/{p.slug}</p>
+                                <p className="text-xs text-zinc-400 mt-1 truncate">/info/{p.slug}</p>
+                                <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
+                                  <span>{p.category || 'informacion'}</span>
+                                  {p.showInMenu && <><span>•</span><span>Orden {p.menuOrder ?? 0}</span></>}
+                                </div>
                               </div>
                               <div className="flex gap-1 ml-2">
                                 <button onClick={() => openEditPublication(p)} className="p-1.5 hover:bg-zinc-100 rounded"><Pencil className="w-4 h-4 text-zinc-500" /></button>
@@ -622,9 +847,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
       {/* Project Dialog */}
       <Dialog open={showProjectDialog} onOpenChange={setShowProjectDialog}>
-        <DialogContent className="max-w-md sm:max-w-lg">
+        <DialogContent className="max-w-md sm:max-w-2xl">
           <DialogHeader><DialogTitle>{editingProject ? t.admin.editProject : t.admin.newProject}</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-4">
+          <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Título *</label>
               <Input value={projectForm.title} onChange={e => setProjectForm({ ...projectForm, title: e.target.value })} className="text-sm" />
@@ -654,51 +879,130 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                 <Input value={projectForm.area} onChange={e => setProjectForm({ ...projectForm, area: e.target.value })} placeholder="320 m²" className="text-sm" />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Cliente</label>
+                <Input value={projectForm.client} onChange={e => setProjectForm({ ...projectForm, client: e.target.value })} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Estado</label>
+                <select value={projectForm.status} onChange={e => setProjectForm({ ...projectForm, status: e.target.value })} className="w-full h-9 px-3 border rounded-md text-sm">
+                  <option value="completed">Completado</option>
+                  <option value="in-progress">En ejecucion</option>
+                  <option value="concept">Concepto</option>
+                </select>
+              </div>
+            </div>
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Descripción</label>
               <Textarea value={projectForm.description} onChange={e => setProjectForm({ ...projectForm, description: e.target.value })} rows={2} className="text-sm" />
             </div>
             <div>
-              <label className="text-xs font-medium text-zinc-700 mb-1 block flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Imagen URL</label>
-              <Input value={projectForm.images} onChange={e => setProjectForm({ ...projectForm, images: e.target.value })} placeholder="/images/projects/..." className="text-sm" />
+              <label className="text-xs font-medium text-zinc-700 mb-1 block">Descripcion completa</label>
+              <Textarea value={projectForm.fullDescription} onChange={e => setProjectForm({ ...projectForm, fullDescription: e.target.value })} rows={5} className="text-sm" />
             </div>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Imagen principal</label>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                  {uploadingField === 'mainImage' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Subir imagen
+                  <input type="file" accept="image/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'mainImage')} />
+                </label>
+              </div>
+              <Input value={projectForm.mainImage} onChange={e => setProjectForm({ ...projectForm, mainImage: e.target.value })} placeholder="/api/media/archivo.jpg o https://..." className="text-sm" />
+            </div>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Galeria</label>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                  {uploadingField === 'gallery' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Subir varias imagenes
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'gallery')} />
+                </label>
+              </div>
+              <Textarea value={projectForm.gallery} onChange={e => setProjectForm({ ...projectForm, gallery: e.target.value })} rows={4} placeholder="Una URL por linea" className="text-sm" />
+            </div>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><Video className="w-3 h-3" /> Video del proyecto</label>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                  {uploadingField === 'videoUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Subir video
+                  <input type="file" accept="video/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'videoUrl')} />
+                </label>
+              </div>
+              <Input value={projectForm.videoUrl} onChange={e => setProjectForm({ ...projectForm, videoUrl: e.target.value })} placeholder="/api/media/archivo.mp4 o https://..." className="text-sm" />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-zinc-700">
+              <input type="checkbox" checked={projectForm.featured} onChange={e => setProjectForm({ ...projectForm, featured: e.target.checked })} />
+              Mostrar como destacado
+            </label>
+            <p className="text-xs text-zinc-500">Puedes pegar URLs externas o subir archivos. Las subidas quedan guardadas en el volumen del servidor.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowProjectDialog(false)} className="text-sm">{t.admin.cancel}</Button>
-            <Button onClick={handleSaveProject} disabled={!projectForm.title || loading} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : t.admin.save}</Button>
+            <Button onClick={handleSaveProject} disabled={!projectForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : t.admin.save}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Publication Dialog */}
       <Dialog open={showPublicationDialog} onOpenChange={setShowPublicationDialog}>
-        <DialogContent className="max-w-md sm:max-w-lg">
-          <DialogHeader><DialogTitle>{editingPublication ? t.admin.editPublication : t.admin.newPublication}</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-4">
+        <DialogContent className="max-w-md sm:max-w-xl">
+          <DialogHeader><DialogTitle>{editingPublication ? 'Editar pagina' : 'Nueva pagina'}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Título *</label>
-              <Input value={publicationForm.title} onChange={e => setPublicationForm({ ...publicationForm, title: e.target.value, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') })} className="text-sm" />
+              <Input value={publicationForm.title} onChange={e => setPublicationForm({ ...publicationForm, title: e.target.value, slug: buildSlug(e.target.value) })} className="text-sm" />
             </div>
-            <div>
-              <label className="text-xs font-medium text-zinc-700 mb-1 block">Slug</label>
-              <Input value={publicationForm.slug} onChange={e => setPublicationForm({ ...publicationForm, slug: e.target.value })} className="text-sm" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Slug</label>
+                <Input value={publicationForm.slug} onChange={e => setPublicationForm({ ...publicationForm, slug: buildSlug(e.target.value) })} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Tipo</label>
+                <select value={publicationForm.category} onChange={e => setPublicationForm({ ...publicationForm, category: e.target.value })} className="w-full h-9 px-3 border rounded-md text-sm">
+                  <option value="informacion">Informacion</option>
+                  <option value="noticias">Noticias</option>
+                  <option value="servicio">Servicio</option>
+                </select>
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Resumen</label>
               <Textarea value={publicationForm.excerpt} onChange={e => setPublicationForm({ ...publicationForm, excerpt: e.target.value })} rows={2} className="text-sm" />
             </div>
-            <div>
-              <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen</label>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen</label>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                  {uploadingField === 'publicationImage' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Subir imagen
+                  <input type="file" accept="image/*" className="hidden" onChange={e => void handlePublicationImageUpload(e.target.files)} />
+                </label>
+              </div>
               <Input value={publicationForm.image} onChange={e => setPublicationForm({ ...publicationForm, image: e.target.value })} className="text-sm" />
             </div>
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido</label>
-              <Textarea value={publicationForm.content} onChange={e => setPublicationForm({ ...publicationForm, content: e.target.value })} rows={4} className="text-sm" />
+              <Textarea value={publicationForm.content} onChange={e => setPublicationForm({ ...publicationForm, content: e.target.value })} rows={7} className="text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 text-sm text-zinc-700">
+                <input type="checkbox" checked={publicationForm.showInMenu} onChange={e => setPublicationForm({ ...publicationForm, showInMenu: e.target.checked })} />
+                Mostrar en menu
+              </label>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Orden en menu</label>
+                <Input value={publicationForm.menuOrder} onChange={e => setPublicationForm({ ...publicationForm, menuOrder: e.target.value })} type="number" className="text-sm" />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPublicationDialog(false)} className="text-sm">{t.admin.cancel}</Button>
-            <Button onClick={handleSavePublication} disabled={!publicationForm.title || loading} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : t.admin.publish}</Button>
+            <Button onClick={handleSavePublication} disabled={!publicationForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar pagina'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

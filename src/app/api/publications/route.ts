@@ -8,10 +8,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const isAdmin = isAdminAuthenticated(request)
     const publishedOnly = isAdmin ? searchParams.get('published') === 'true' : true
+    const menuOnly = searchParams.get('menu') === 'true'
     
     const publications = await db.publication.findMany({
-      where: publishedOnly ? { published: true } : undefined,
-      orderBy: { createdAt: 'desc' }
+      where: {
+        ...(publishedOnly ? { published: true } : {}),
+        ...(menuOnly ? { showInMenu: true } : {}),
+      },
+      orderBy: menuOnly ? [{ menuOrder: 'asc' }, { createdAt: 'asc' }] : [{ createdAt: 'desc' }]
     })
     
     return NextResponse.json(publications)
@@ -34,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, slug, excerpt, content, image, published, category } = body
+    const { title, slug, excerpt, content, image, published, category, showInMenu, menuOrder } = body
 
     const publication = await db.publication.create({
       data: {
@@ -44,7 +48,9 @@ export async function POST(request: Request) {
         content,
         image,
         published: published || false,
-        category
+        category,
+        showInMenu: showInMenu || false,
+        menuOrder: typeof menuOrder === 'number' ? menuOrder : parseInt(menuOrder, 10) || 0,
       }
     })
 

@@ -29,6 +29,7 @@ model Project {
   featured      Boolean  @default(false)
   mainImage     String?  // Imagen principal
   gallery       String?  // JSON array de URLs de imágenes adicionales
+  videoUrl      String?  // Video principal del proyecto
   client        String?  // Nombre del cliente
   status        String?  // Estado del proyecto (completado, en construcción, etc.)
   createdAt     DateTime @default(now())
@@ -50,6 +51,8 @@ model Publication {
   contentPt   String?
   image       String?
   published   Boolean  @default(false)
+  showInMenu  Boolean  @default(false)
+  menuOrder   Int      @default(0)
   category    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

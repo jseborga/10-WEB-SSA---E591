@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, ArrowRight, MapPin, Instagram, Linkedin, Facebook, ExternalLink, Building2, Briefcase } from 'lucide-react'
+import { Menu, X, ArrowRight, MapPin, Instagram, Linkedin, Facebook } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LanguageSelector } from '@/components/language-selector'
 import { useLanguage } from '@/lib/language-context'
@@ -26,12 +27,20 @@ interface Project {
   area: string | null
   mainImage?: string | null
   gallery?: string | null
+  videoUrl?: string | null
   client?: string | null
   status?: string | null
 }
 
 interface HomePageClientProps {
   initialProjects?: Project[]
+  menuPages?: MenuPage[]
+}
+
+interface MenuPage {
+  id: string
+  title: string
+  slug: string
 }
 
 const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) => mod.ChatWidget), {
@@ -187,7 +196,7 @@ const services = {
   ]
 }
 
-export default function HomePageClient({ initialProjects = defaultProjects }: HomePageClientProps) {
+export default function HomePageClient({ initialProjects = defaultProjects, menuPages = [] }: HomePageClientProps) {
   const { t, language } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
@@ -241,32 +250,13 @@ export default function HomePageClient({ initialProjects = defaultProjects }: Ho
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
             <a href="#inicio" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.home}</a>
-            
-            {/* aula591 Dropdown */}
-            <div className="relative group">
-              <button className="flex items-center gap-1 text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">
-                <Briefcase className="w-3.5 h-3.5" />
-                aula591
-              </button>
-              <div className="absolute top-full left-0 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                <div className="bg-white border border-zinc-200 rounded-lg shadow-lg py-2 min-w-[180px]">
-                  <a href="#proyectos" className="block px-4 py-2 text-xs text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 transition-colors">
-                    <Building2 className="w-3.5 h-3.5 inline mr-2" />
-                    Proyectos
-                  </a>
-                  <a href="#servicios" className="block px-4 py-2 text-xs text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 transition-colors">
-                    <ExternalLink className="w-3.5 h-3.5 inline mr-2" />
-                    Servicios
-                  </a>
-                  <div className="border-t border-zinc-100 my-1" />
-                  <a href="#estudio" className="block px-4 py-2 text-xs text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 transition-colors">
-                    Nuestro estudio
-                  </a>
-                </div>
-              </div>
-            </div>
-
+            <a href="#proyectos" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.projects}</a>
             <a href="#servicios" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.services}</a>
+            {menuPages.map((page) => (
+              <Link key={page.id} href={`/info/${page.slug}`} className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">
+                {page.title}
+              </Link>
+            ))}
             <a href="#estudio" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.studio}</a>
             <LanguageSelector />
           </div>
@@ -285,10 +275,13 @@ export default function HomePageClient({ initialProjects = defaultProjects }: Ho
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="md:hidden bg-white border-b border-zinc-100">
               <div className="px-4 py-4 space-y-3">
                 <a href="#inicio" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.home}</a>
-                <a href="#proyectos" className="flex items-center gap-2 text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>
-                  <Briefcase className="w-4 h-4" />aula591 (Portafolio)
-                </a>
+                <a href="#proyectos" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.projects}</a>
                 <a href="#servicios" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.services}</a>
+                {menuPages.map((page) => (
+                  <Link key={page.id} href={`/info/${page.slug}`} className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>
+                    {page.title}
+                  </Link>
+                ))}
                 <a href="#estudio" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.studio}</a>
               </div>
             </motion.div>
