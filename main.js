@@ -1,25 +1,50 @@
 const rootNode = document.documentElement;
 const yearNode = document.querySelector("#year");
-const revealNodes = document.querySelectorAll(".reveal");
 const headerNode = document.querySelector(".site-header");
+const menuToggleNode = document.querySelector(".menu-toggle");
+const navNode = document.querySelector(".site-nav");
+const revealNodes = document.querySelectorAll(".reveal");
 const parallaxNodes = [...document.querySelectorAll("[data-parallax]")];
 
 if (yearNode) {
   yearNode.textContent = new Date().getFullYear();
 }
 
+const closeMenu = () => {
+  if (!menuToggleNode || !navNode) {
+    return;
+  }
+
+  menuToggleNode.setAttribute("aria-expanded", "false");
+  navNode.classList.remove("is-open");
+};
+
+if (menuToggleNode && navNode) {
+  menuToggleNode.addEventListener("click", () => {
+    const isOpen = navNode.classList.toggle("is-open");
+    menuToggleNode.setAttribute("aria-expanded", String(isOpen));
+  });
+
+  navNode.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", closeMenu);
+  });
+}
+
 let rafId = 0;
 
 const updateHeaderState = () => {
   if (headerNode) {
-    headerNode.classList.toggle("is-scrolled", window.scrollY > 12);
+    headerNode.classList.toggle("is-scrolled", window.scrollY > 18);
   }
 };
 
 const updateParallax = () => {
+  const viewportHeight = window.innerHeight || 1;
+
   parallaxNodes.forEach((node) => {
     const rect = node.getBoundingClientRect();
-    const offset = (window.innerHeight / 2 - (rect.top + rect.height / 2)) * 0.12;
+    const midpoint = rect.top + rect.height / 2;
+    const offset = ((viewportHeight / 2 - midpoint) / viewportHeight) * 42;
     node.style.setProperty("--parallax-offset", `${offset.toFixed(2)}px`);
   });
 };
@@ -51,6 +76,7 @@ if ("IntersectionObserver" in window) {
       });
     },
     {
+      rootMargin: "0px 0px -10% 0px",
       threshold: 0.16,
     },
   );
@@ -63,3 +89,23 @@ if ("IntersectionObserver" in window) {
 } else {
   revealNodes.forEach((node) => node.classList.add("is-visible"));
 }
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeMenu();
+  }
+});
+
+window.addEventListener("click", (event) => {
+  if (
+    navNode &&
+    menuToggleNode &&
+    navNode.classList.contains("is-open") &&
+    !navNode.contains(event.target) &&
+    !menuToggleNode.contains(event.target)
+  ) {
+    closeMenu();
+  }
+});
+
+rootNode.style.setProperty("--app-ready", "1");

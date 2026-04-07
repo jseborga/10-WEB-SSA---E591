@@ -1,280 +1,312 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SSA Ingenieria | Construyendo el futuro</title>
     <meta
       name="description"
-      content="SSA Ingenieria integra construccion, diseno, supervision, asesoria tecnica especializada, software a medida y ERP para el sector construccion."
+      content="SSA Ingenieria desarrolla construccion, diseno, supervision, asesoria tecnica especializada, software a medida y ERP para el sector construccion."
     />
-    <meta
-      name="theme-color"
-      content="#f5f5f7"
-    />
+    <meta name="theme-color" content="#0f1013" />
+    <link rel="preload" href="./media/workspace-hero-bg.png" as="image" />
+    <link rel="preload" href="./media/workspace-house1.png" as="image" />
+    <link rel="stylesheet" href="./styles.css" />
     <script>
       document.documentElement.classList.add("js");
     </script>
-    <link
-      rel="preload"
-      href="./styles.css"
-      as="style"
-    />
-    <link
-      rel="stylesheet"
-      href="./styles.css"
-    />
-    <script
-      src="./main.js"
-      defer
-    ></script>
   </head>
   <body>
     <header class="site-header">
       <div class="header-shell">
-        <a
-          class="brand"
-          href="#inicio"
-          aria-label="Ir al inicio"
-        >
-          SSA Ingenieria
+        <a class="brand-mark" href="#inicio" aria-label="SSA Ingenieria">
+          <span class="brand-mark__name">SSA</span>
+          <span class="brand-mark__divider">/</span>
+          <span class="brand-mark__label">Ingenieria</span>
         </a>
 
-        <nav
-          class="site-nav"
-          aria-label="Principal"
+        <button
+          class="menu-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
         >
+          Menu
+        </button>
+
+        <nav class="site-nav" id="site-nav" aria-label="Principal">
+          <a href="#proyectos">Proyectos</a>
           <a href="#servicios">Servicios</a>
-          <a href="#digital">Digital</a>
-          <a href="#capacidad">Capacidades</a>
+          <a href="#software">ERP y Software</a>
           <a href="#contacto">Contacto</a>
         </nav>
       </div>
     </header>
 
     <main>
-      <section
-        class="hero-section hero-section-light"
-        id="inicio"
-      >
+      <section class="hero-section" id="inicio">
+        <div class="hero-media" data-parallax>
+          <img
+            src="./media/workspace-hero-bg.png"
+            alt="Visual referencial de arquitectura contemporanea"
+          />
+        </div>
+        <div class="hero-scrim"></div>
         <div class="hero-shell">
           <div class="hero-copy reveal is-visible">
-            <p class="eyebrow">SSA Ingenieria</p>
+            <p class="eyebrow">Construccion . Diseno . Supervision</p>
             <h1>Construyendo el futuro</h1>
-            <p class="hero-subtitle">
-              Construccion, diseno, supervision, asesoria tecnica especializada
-              y tecnologia aplicada a la gestion de obra.
+            <p class="hero-lead">
+              SSA Ingenieria articula ejecucion de obra, criterio tecnico y
+              desarrollo digital para proyectos de arquitectura, construccion y
+              gestion.
             </p>
-            <div class="hero-links">
-              <a
-                class="link-cta"
-                href="#contacto"
-              >
+
+            <div class="hero-actions">
+              <a class="button button-primary" href="#proyectos">
+                Ver presentacion
+              </a>
+              <a class="button button-secondary" href="#contacto">
                 Contactar
               </a>
-              <a
-                class="link-cta"
-                href="#capacidad"
-              >
-                Explorar capacidades
-              </a>
             </div>
-          </div>
 
-          <div
-            class="hero-media hero-video reveal"
-            data-parallax
-          >
-            <img
-              src="./media/hero-video-poster.jpg"
-              alt="Escena de obra de referencia para SSA Ingenieria"
-              loading="eager"
-            />
+            <ul class="hero-tags" aria-label="Areas de trabajo">
+              <li>Construccion</li>
+              <li>Diseno</li>
+              <li>Supervision</li>
+              <li>Asesoria tecnica</li>
+              <li>Software a medida</li>
+              <li>ERP para construccion</li>
+            </ul>
           </div>
         </div>
       </section>
 
-      <section
-        class="hero-section hero-section-dark"
-        id="digital"
-      >
-        <div class="hero-shell">
-          <div class="hero-copy reveal">
-            <p class="eyebrow">Digital</p>
-            <h2>Software a medida y ERP para construccion</h2>
-            <p class="hero-subtitle">
-              Herramientas digitales para documentos, control de avance,
-              operacion y seguimiento centralizado.
+      <section class="intro-section section-shell reveal">
+        <div class="section-heading">
+          <p class="section-kicker">Direccion</p>
+          <h2>Una presencia mas clara, visual y util para presentar SSA.</h2>
+        </div>
+        <div class="intro-grid">
+          <p>
+            La estructura toma lo mejor del workspace analizado: una narrativa
+            limpia, una galeria real de referencia y una capa tecnologica
+            visible, sin cargar el sitio con complejidad innecesaria.
+          </p>
+          <p>
+            Esta version esta pensada para desplegarse rapido en Easypanel y
+            luego reemplazar los medios referenciales por proyectos reales de
+            SSA Ingenieria.
+          </p>
+        </div>
+      </section>
+
+      <section class="projects-section section-shell" id="proyectos">
+        <div class="section-heading reveal">
+          <p class="section-kicker">Galeria</p>
+          <h2>Proyectos referenciales para cerrar la presentacion visual.</h2>
+          <p class="section-note">
+            Estas imagenes son referenciales para maquetacion y luego pueden
+            sustituirse por obras reales de SSA.
+          </p>
+        </div>
+
+        <div class="projects-grid">
+          <article class="project-card project-card-feature reveal">
+            <figure class="project-card__media">
+              <img
+                src="./media/workspace-house1.png"
+                alt="Proyecto residencial contemporaneo"
+              />
+            </figure>
+            <div class="project-card__body">
+              <p class="project-card__meta">Residencial / Diseno y obra</p>
+              <h3>Arquitectura residencial contemporanea</h3>
+              <p>
+                Desarrollo integral con lenguaje sobrio, relacion interior
+                exterior y foco en ejecucion precisa.
+              </p>
+            </div>
+          </article>
+
+          <article class="project-card reveal">
+            <figure class="project-card__media">
+              <img
+                src="./media/workspace-house2.png"
+                alt="Vivienda urbana minimalista"
+              />
+            </figure>
+            <div class="project-card__body">
+              <p class="project-card__meta">Vivienda / Planificacion</p>
+              <h3>Vivienda urbana compacta</h3>
+              <p>Distribucion eficiente, imagen limpia y supervision tecnica.</p>
+            </div>
+          </article>
+
+          <article class="project-card reveal">
+            <figure class="project-card__media">
+              <img
+                src="./media/workspace-commercial1.png"
+                alt="Espacio comercial referencial"
+              />
+            </figure>
+            <div class="project-card__body">
+              <p class="project-card__meta">Comercial / Imagen de marca</p>
+              <h3>Espacios comerciales con lectura clara</h3>
+              <p>Diseño funcional, circulacion ordenada y experiencia coherente.</p>
+            </div>
+          </article>
+
+          <article class="project-card reveal">
+            <figure class="project-card__media">
+              <img
+                src="./media/workspace-industrial1.png"
+                alt="Infraestructura industrial referencial"
+              />
+            </figure>
+            <div class="project-card__body">
+              <p class="project-card__meta">Industrial / Coordinacion</p>
+              <h3>Infraestructura para operacion y crecimiento</h3>
+              <p>
+                Ejecucion controlada, criterios tecnicos y soporte a decisiones
+                de obra.
+              </p>
+            </div>
+          </article>
+
+          <article class="project-card reveal">
+            <figure class="project-card__media">
+              <img
+                src="./media/workspace-renovation1.png"
+                alt="Remodelacion arquitectonica referencial"
+              />
+            </figure>
+            <div class="project-card__body">
+              <p class="project-card__meta">Renovacion / Revalorizacion</p>
+              <h3>Actualizacion de espacios existentes</h3>
+              <p>
+                Mejora funcional, modernizacion y acompañamiento tecnico en cada
+                etapa.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="software-section" id="software">
+        <div class="section-shell software-shell">
+          <div class="software-copy reveal">
+            <p class="section-kicker">Capa digital</p>
+            <h2>ERP y software a medida para construir con mejor informacion.</h2>
+            <p>
+              SSA Ingenieria no solo diseña y ejecuta. Tambien puede estructurar
+              herramientas para control de obra, seguimiento, reportes,
+              productividad y gestion tecnica.
             </p>
-            <div class="hero-links">
-              <a
-                class="link-cta link-cta-light"
-                href="#contacto"
-              >
-                Solicitar informacion
-              </a>
-              <a
-                class="link-cta link-cta-light"
-                href="#servicios"
-              >
-                Ver servicios
-              </a>
-            </div>
+
+            <ul class="feature-list">
+              <li>Tableros de control para seguimiento de obra</li>
+              <li>Flujos internos para aprobaciones, compras y reportes</li>
+              <li>ERP enfocado en procesos constructivos y supervision</li>
+              <li>Software a medida para operaciones tecnicas especializadas</li>
+            </ul>
           </div>
 
-          <div
-            class="hero-media hero-media-dashboard reveal"
-            data-parallax
-          >
-            <img
-              src="./media/dashboard-demo.svg"
-              alt="Interfaz de referencia para software y ERP"
-              loading="lazy"
-            />
+          <div class="software-visual reveal" data-parallax>
+            <div class="device-frame">
+              <div class="device-frame__bar">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <img
+                src="./media/dashboard-demo.svg"
+                alt="Vista referencial de tablero ERP para construccion"
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      <section
-        class="hero-section hero-section-light hero-section-alt"
-        id="servicios"
-      >
-        <div class="hero-shell">
-          <div class="hero-copy reveal">
-            <p class="eyebrow">Servicios</p>
-            <h2>Construccion, diseno, supervision y asesoria tecnica</h2>
-            <p class="hero-subtitle">
-              Una presentacion sobria y visual para mostrar lo esencial de SSA
-              con mejores proporciones y una grafica mas real.
-            </p>
-            <div class="hero-links">
-              <a
-                class="link-cta"
-                href="#contacto"
-              >
-                Iniciar conversacion
-              </a>
-              <a
-                class="link-cta"
-                href="#capacidad"
-              >
-                Ver detalle
-              </a>
-            </div>
-          </div>
-
-          <div
-            class="hero-media reveal"
-            data-parallax
-          >
-            <img
-              src="./media/hero-house.jpg"
-              alt="Referencia arquitectonica para servicios de SSA Ingenieria"
-              loading="lazy"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="promo-section"
-        id="capacidad"
-      >
-        <div class="promo-intro reveal">
-          <p class="eyebrow">Capacidades</p>
-          <h2>Una estructura modular para explicar mejor la empresa.</h2>
+      <section class="services-section section-shell" id="servicios">
+        <div class="section-heading reveal">
+          <p class="section-kicker">Servicios</p>
+          <h2>Capacidades principales de SSA Ingenieria.</h2>
         </div>
 
-        <div class="promo-grid">
-          <article class="promo-card promo-card-light reveal">
-            <div class="promo-copy">
-              <p class="promo-kicker">Construccion</p>
-              <h3>Ejecucion con control real de obra.</h3>
-              <p>Planificacion, coordinacion, calidad y continuidad del proyecto.</p>
-            </div>
-            <img
-              class="promo-art"
-              src="./media/architecture-01.jpg"
-              alt="Referencia visual de construccion"
-              loading="lazy"
-            />
+        <div class="services-grid">
+          <article class="service-card reveal">
+            <h3>Construccion</h3>
+            <p>Ejecucion con control, coordinacion y lectura tecnica del proyecto.</p>
           </article>
-
-          <article class="promo-card promo-card-dark reveal">
-            <div class="promo-copy">
-              <p class="promo-kicker">Supervision</p>
-              <h3>Criterio tecnico para decisiones mejor informadas.</h3>
-              <p>Seguimiento, verificacion y trazabilidad para proteger plazo y calidad.</p>
-            </div>
-            <img
-              class="promo-art"
-              src="./media/architecture-02.jpg"
-              alt="Referencia visual de supervision"
-              loading="lazy"
-            />
+          <article class="service-card reveal">
+            <h3>Diseno</h3>
+            <p>Concepto, espacialidad, funcionalidad y claridad constructiva.</p>
           </article>
-
-          <article class="promo-card promo-card-light reveal">
-            <div class="promo-copy">
-              <p class="promo-kicker">Diseno y asesoria</p>
-              <h3>Una lectura espacial y tecnica mas precisa.</h3>
-              <p>Soluciones arquitectonicas, criterio formal y soporte especializado.</p>
-            </div>
-            <img
-              class="promo-art"
-              src="./media/architecture-03.jpg"
-              alt="Referencia visual de diseno y asesoria"
-              loading="lazy"
-            />
+          <article class="service-card reveal">
+            <h3>Supervision</h3>
+            <p>Seguimiento de obra, verificacion tecnica y control de calidad.</p>
           </article>
-
-          <article class="promo-card promo-card-accent reveal">
-            <div class="promo-copy">
-              <p class="promo-kicker">ERP y software</p>
-              <h3>Operacion digital pensada para construccion.</h3>
-              <p>Gestion documental, seguimiento y visibilidad operativa desde un solo sistema.</p>
-            </div>
-            <img
-              class="promo-art promo-art-dashboard"
-              src="./media/dashboard-demo.svg"
-              alt="Demo visual para ERP y software"
-              loading="lazy"
-            />
+          <article class="service-card reveal">
+            <h3>Asesoria tecnica especializada</h3>
+            <p>Soporte para decisiones criticas, diagnosticos y mejoras de proceso.</p>
+          </article>
+          <article class="service-card reveal">
+            <h3>Software a medida</h3>
+            <p>Soluciones digitales especificas para operaciones del sector construccion.</p>
+          </article>
+          <article class="service-card reveal">
+            <h3>ERP</h3>
+            <p>Gestion integrada para obras, seguimiento, recursos y reportes.</p>
           </article>
         </div>
       </section>
 
-      <section
-        class="contact-section"
-        id="contacto"
-      >
-        <div class="contact-shell reveal">
-          <p class="eyebrow">Contacto</p>
-          <h2>SSA Ingenieria. Construccion, tecnica y tecnologia en una sola conversacion.</h2>
-          <div class="contact-links">
+      <section class="contact-section section-shell" id="contacto">
+        <div class="section-heading reveal">
+          <p class="section-kicker">Contacto</p>
+          <h2>Conversemos sobre el siguiente proyecto.</h2>
+        </div>
+
+        <div class="contact-grid">
+          <div class="contact-card reveal">
+            <p class="contact-label">Correo</p>
             <a href="mailto:admin@ingenieria.com.bo">admin@ingenieria.com.bo</a>
-            <a href="https://wa.me/59176205333">+591 76205333</a>
-            <p>Calle Lucas Jaimes # 76, Miraflores Â· Tel. +591 2241146</p>
+          </div>
+          <div class="contact-card reveal">
+            <p class="contact-label">WhatsApp</p>
+            <a href="https://wa.me/59176205333" target="_blank" rel="noreferrer">
+              +591 76205333
+            </a>
+          </div>
+          <div class="contact-card reveal">
+            <p class="contact-label">Telefono</p>
+            <a href="tel:+5912241146">+591 2241146</a>
+          </div>
+          <div class="contact-card reveal">
+            <p class="contact-label">Direccion</p>
+            <span>Calle Lucas Jaimes # 76, Miraflores</span>
           </div>
         </div>
       </section>
     </main>
 
+    <footer class="site-footer">
+      <p>SSA Ingenieria</p>
+      <p><span id="year"></span> . Presentacion corporativa para Easypanel</p>
+    </footer>
+
     <a
       class="floating-chat"
       href="https://wa.me/59176205333"
-      aria-label="Contactar por WhatsApp"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="WhatsApp"
     >
-      <span class="floating-chat-label">Conversemos ahora</span>
-      <span class="floating-chat-badge">wa</span>
+      WhatsApp
     </a>
 
-    <footer class="site-footer">
-      <p>SSA Ingenieria</p>
-      <p><span id="year"></span></p>
-    </footer>
+    <script src="./main.js"></script>
   </body>
 </html>
