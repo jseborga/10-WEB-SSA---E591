@@ -49,6 +49,8 @@ interface SiteSettings {
   companyName?: string | null
   legalName?: string | null
   tagline?: string | null
+  logoUrl?: string | null
+  faviconUrl?: string | null
   email?: string | null
   phone?: string | null
   whatsapp?: string | null
@@ -235,6 +237,7 @@ export default function HomePageClient({
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const projects = initialProjects ?? defaultProjects
   const companyName = siteSettings?.companyName?.trim() || 'SSA Ingenieria'
+  const logoUrl = siteSettings?.logoUrl?.trim() || ''
   const contactEmail = siteSettings?.email?.trim() || t.studio.email
   const contactPhone = siteSettings?.phone?.trim() || t.studio.phone
   const contactWhatsapp = siteSettings?.whatsapp?.trim() || ''
@@ -298,7 +301,11 @@ export default function HomePageClient({
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-zinc-100">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <a href="#" className="text-xl sm:text-2xl font-normal tracking-tight text-zinc-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-            {companyName}
+            {logoUrl ? (
+              <img src={logoUrl} alt={companyName} className="h-9 sm:h-10 w-auto object-contain" />
+            ) : (
+              companyName
+            )}
           </a>
           
           {/* Desktop Nav */}

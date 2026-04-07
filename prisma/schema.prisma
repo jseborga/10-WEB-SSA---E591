@@ -94,6 +94,8 @@ model SiteSettings {
   companyName  String   @default("SSA Ingenieria")
   legalName    String?
   tagline      String?
+  logoUrl      String?
+  faviconUrl   String?
   email        String?
   phone        String?
   whatsapp     String?

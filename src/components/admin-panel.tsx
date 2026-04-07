@@ -74,6 +74,8 @@ interface SiteSettings {
   companyName: string
   legalName: string
   tagline: string
+  logoUrl: string
+  faviconUrl: string
   email: string
   phone: string
   whatsapp: string
@@ -168,6 +170,8 @@ const emptySiteForm: SiteFormState = {
   companyName: '',
   legalName: '',
   tagline: '',
+  logoUrl: '',
+  faviconUrl: '',
   email: '',
   phone: '',
   whatsapp: '',
@@ -339,6 +343,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         companyName: siteData.companyName || '',
         legalName: siteData.legalName || '',
         tagline: siteData.tagline || '',
+        logoUrl: siteData.logoUrl || '',
+        faviconUrl: siteData.faviconUrl || '',
         email: siteData.email || '',
         phone: siteData.phone || '',
         whatsapp: siteData.whatsapp || '',
@@ -467,6 +473,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       const [file] = Array.from(files)
       const uploadedUrl = await uploadFile(file)
       setPublicationForm((current) => ({ ...current, image: uploadedUrl }))
+      toast.success('Imagen subida correctamente')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
+    } finally {
+      setUploadingField(null)
+    }
+  }
+
+  const handleSiteAssetUpload = async (files: FileList | null, target: 'logoUrl' | 'faviconUrl') => {
+    if (!files || files.length === 0) return
+
+    setUploadingField(target)
+
+    try {
+      const [file] = Array.from(files)
+      const uploadedUrl = await uploadFile(file)
+      setSiteForm((current) => ({ ...current, [target]: uploadedUrl }))
       toast.success('Imagen subida correctamente')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
@@ -926,6 +949,31 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <div>
                         <label className="text-xs font-medium text-zinc-700 mb-1 block">Eslogan</label>
                         <Input value={siteForm.tagline} onChange={e => setSiteForm({ ...siteForm, tagline: e.target.value })} className="text-sm" />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Logo cabecera</label>
+                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                              {uploadingField === 'logoUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              Subir imagen
+                              <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'logoUrl')} />
+                            </label>
+                          </div>
+                          <Input value={siteForm.logoUrl} onChange={e => setSiteForm({ ...siteForm, logoUrl: e.target.value })} placeholder="/api/media/logo.png o https://..." className="text-sm" />
+                        </div>
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Favicon / icono</label>
+                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                              {uploadingField === 'faviconUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              Subir icono
+                              <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'faviconUrl')} />
+                            </label>
+                          </div>
+                          <Input value={siteForm.faviconUrl} onChange={e => setSiteForm({ ...siteForm, faviconUrl: e.target.value })} placeholder="/api/media/favicon.png o https://..." className="text-sm" />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

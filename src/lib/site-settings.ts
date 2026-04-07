@@ -5,6 +5,8 @@ export function getDefaultSiteSettings() {
     companyName: 'SSA Ingenieria',
     legalName: 'SSA Ingenieria SRL',
     tagline: 'Construyendo el futuro',
+    logoUrl: '',
+    faviconUrl: '',
     email: 'admin@ingenieria.com.bo',
     phone: '+591 2241146',
     whatsapp: '+591 76205333',
