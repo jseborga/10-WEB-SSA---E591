@@ -1,48 +1,89 @@
-# SSA Ingenieria SRL
+# SSA Ingenieria | Next.js + Easypanel
 
-Landing estatica ultraligera para presentar servicios de construccion, arquitectura, supervision y diseno.
+Sitio web corporativo con:
+- Next.js en modo `standalone`
+- Prisma + SQLite
+- Panel admin protegido por password
+- Chat configurable con IA o WebSocket
+- Soporte multiidioma
 
-## Estructura
+## Deploy recomendado
 
-- `index.html`: contenido principal
-- `styles.css`: estilos y responsive
-- `main.js`: animaciones suaves e insercion del anio actual
-- `Dockerfile`: despliegue con `nginx:alpine`
-- `nginx.conf`: configuracion minima para servir la web
+La forma correcta de desplegar este proyecto es:
+- fuente `Git`
+- build `Dockerfile`
+- volumen persistente para `/app/data`
 
-## Uso local
+No hace falta instalar dependencias manualmente en el servidor.
+El `Dockerfile` ya hace esto durante el build:
+- instala `bun`
+- instala dependencias principales
+- instala dependencias del `chat-service`
+- genera cliente Prisma
+- compila Next.js
 
-Como es una web estatica, puedes abrir `index.html` directamente o servirla con cualquier servidor simple.
+## Easypanel
 
-## Publicar en GitHub
+En Easypanel crea un servicio `App` desde tu repositorio Git y usa:
+- `Build Type`: `Dockerfile`
+- `Dockerfile Path`: `Dockerfile`
+- `Port`: `3000`
 
-```bash
-git init
-git add .
-git commit -m "Initial ultra-light SSA website"
-git branch -M main
-git remote add origin https://github.com/TU-USUARIO/TU-REPO.git
-git push -u origin main
+Agrega un volumen:
+- `Mount Path`: `/app/data`
+
+Variables obligatorias:
+
+```env
+DATABASE_URL=file:/app/data/custom.db
+NODE_ENV=production
+ADMIN_PASSWORD=TU_PASSWORD_ADMIN
+ADMIN_SESSION_SECRET=TU_SECRETO_LARGO
 ```
 
-## Desplegar en Easypanel
+Variables opcionales para chat IA:
 
-1. Crea un nuevo proyecto en Easypanel.
-2. Elige **App** y conecta tu repositorio de GitHub.
-3. Selecciona despliegue por **Dockerfile**.
-4. Usa la rama `main`.
-5. Expone el puerto `80`.
-6. Agrega tu dominio y activa HTTPS desde Easypanel.
+```env
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GEMINI_API_KEY=
+OPENAI_COMPAT_API_KEY=
+OPENAI_COMPAT_BASE_URL=
+NEXT_PUBLIC_CHAT_SOCKET_URL=
+NEXT_PUBLIC_CHAT_SOCKET_PATH=
+```
 
-## Personalizacion rapida
+Notas:
+- si activas IA desde el panel admin, configura proveedor, modelo y clave
+- si no activas IA, el widget puede usar WebSocket si defines `NEXT_PUBLIC_CHAT_SOCKET_URL`
+- si no defines socket y tampoco IA, el chat no tendrá backend conversacional real
 
-Antes de publicar, conviene reemplazar estos datos:
+## Primer arranque
 
-- Correo: `tu-correo@ssa.com.bo`
-- WhatsApp: `+591 70000000`
-- Textos de servicios y tipos de proyecto
-- Titulo y descripcion SEO en `index.html`
+Al iniciar el contenedor:
+- se ejecuta `prisma db push`
+- se crea o actualiza la base SQLite en `/app/data/custom.db`
+- se levanta Next.js
+- se intenta levantar el mini servicio de chat en segundo plano
 
-## Referencia visual
+## Desarrollo local
 
-La propuesta toma como punto de partida una presencia editorial y sobria, inspirada en estudios como `sommet.com.bo`, pero reducida a una sola pagina y sin dependencias para priorizar velocidad de carga.
+```bash
+bun install
+bun run db:generate
+bun run db:push
+bun run dev
+```
+
+## Build local
+
+```bash
+bun run build
+bun run lint
+```
+
+## Seguridad
+
+- el panel admin ya no es publico sin password
+- las rutas de escritura y lectura sensible requieren sesion admin
+- define siempre `ADMIN_PASSWORD` y `ADMIN_SESSION_SECRET` en produccion

@@ -1,3 +1,57 @@
-.git
-.gitignore
-README.md
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Next.js
+.next/
+out/
+
+# Production
+build
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env
+.env*.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Development files
+dev.log
+server.log
+*.log
+.accesslog
+.stats
+.config
+worklog.md
+sommet-reference.json
+
+# IDE
+.idea
+.vscode
+
+# Prisma
+db/*.db
+db/*.db-journal
+
+# Download folder
+download/
+examples/
+.zscripts/

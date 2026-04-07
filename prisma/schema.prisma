@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Proyectos de construcción
+model Project {
+  id            String   @id @default(cuid())
+  title         String
+  titleEn       String?
+  titlePt       String?
+  description   String?
+  descriptionEn String?
+  descriptionPt String?
+  fullDescription   String?  // Descripción completa
+  fullDescriptionEn String?
+  fullDescriptionPt String?
+  category      String
+  location      String?
+  year          Int?
+  area          String?
+  featured      Boolean  @default(false)
+  mainImage     String?  // Imagen principal
+  gallery       String?  // JSON array de URLs de imágenes adicionales
+  client        String?  // Nombre del cliente
+  status        String?  // Estado del proyecto (completado, en construcción, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Publicaciones/Noticias del blog
+model Publication {
+  id          String   @id @default(cuid())
+  title       String
+  titleEn     String?
+  titlePt     String?
+  slug        String   @unique
+  excerpt     String?
+  excerptEn   String?
+  excerptPt   String?
+  content     String?
+  contentEn   String?
+  contentPt   String?
+  image       String?
+  published   Boolean  @default(false)
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Mensajes del chat
+model ChatMessage {
+  id          String   @id @default(cuid())
+  sessionId   String
+  name        String
+  email       String?
+  message     String
+  isFromAdmin Boolean  @default(false)
+  isFromAI    Boolean  @default(false)
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// Contactos recibidos
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// Configuración del chatbot con IA
+model ChatConfig {
+  id              String   @id @default(cuid())
+  enabled         Boolean  @default(false)
+  provider        String   @default("default")
+  apiKey          String?
+  apiBaseUrl      String?
+  model           String?
+  systemPrompt    String
+  systemPromptEn  String?
+  systemPromptPt  String?
+  welcomeMessage  String?
+  welcomeMessageEn String?
+  welcomeMessagePt String?
+  fallbackMessage  String?
+  fallbackMessageEn String?
+  fallbackMessagePt String?
+  companyName     String   @default("estudio591")
+  companyInfo     String?
+  companyInfoEn   String?
+  companyInfoPt   String?
+  temperature     Float    @default(0.7)
+  maxTokens       Int      @default(1000)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

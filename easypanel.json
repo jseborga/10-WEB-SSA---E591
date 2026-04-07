@@ -1,0 +1,36 @@
+{
+  "$schema": "https://easypanel.io/schema.json",
+  "name": "ssa-ingenieria",
+  "services": [
+    {
+      "name": "web",
+      "type": "app",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/jseborga/10-WEB-SSA---E591.git"
+      },
+      "build": {
+        "type": "dockerfile",
+        "dockerfile": "Dockerfile"
+      },
+      "env": {
+        "DATABASE_URL": "file:/app/data/custom.db",
+        "NODE_ENV": "production",
+        "ADMIN_PASSWORD": "CAMBIAR_ESTE_PASSWORD",
+        "ADMIN_SESSION_SECRET": "CAMBIAR_ESTE_SECRETO"
+      },
+      "ports": [3000],
+      "volumes": [
+        {
+          "name": "data",
+          "mountPath": "/app/data"
+        }
+      ],
+      "domains": [
+        {
+          "host": "TU_DOMINIO.com"
+        }
+      ]
+    }
+  ]
+}
