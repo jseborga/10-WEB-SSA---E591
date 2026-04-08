@@ -101,8 +101,8 @@ model SiteSettings {
   heroImageSaturation Int      @default(90)
   heroImageBrightness Int      @default(100)
   heroImageContrast   Int      @default(105)
-  heroImageFit        String   @default("cover")
-  heroImageTreatment  String   @default("editorial")
+  heroImageFit        String   @default("contain")
+  heroImageTreatment  String   @default("original")
   heroShowCompanyName Boolean  @default(false)
   heroTextTone        String   @default("dark")
   email        String?

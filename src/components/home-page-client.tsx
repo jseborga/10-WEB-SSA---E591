@@ -333,19 +333,19 @@ export default function HomePageClient({
   const activeHeroOpacity = heroImageTreatment === 'original' ? 1 : heroImageOpacity / 100
   const accentHeroOpacity = heroImageTreatment === 'original' ? 0 : Math.max(0.08, Math.min(0.28, activeHeroOpacity * 0.46))
   const heroWashOpacity = heroImageTreatment === 'original'
-    ? heroTextTone === 'dark' ? 0.18 : 0.08
+    ? heroTextTone === 'dark' ? 0.06 : 0.02
     : Math.max(0.16, Math.min(0.56, 0.58 - activeHeroOpacity * 0.45))
   const activeHeroGrayscale = Math.max(0, Math.round(100 - heroImageSaturation * 0.38))
   const activeHeroSaturation = Math.max(0, heroImageSaturation / 100)
-  const heroTitleColorClass = heroTextTone === 'light' ? 'text-white' : 'text-zinc-900'
-  const heroSubtitleColorClass = heroTextTone === 'light' ? 'text-white/88' : 'text-zinc-700'
+  const heroTitleColorClass = heroTextTone === 'light' ? 'text-white' : 'text-black'
+  const heroSubtitleColorClass = heroTextTone === 'light' ? 'text-white/88' : 'text-zinc-800'
   const heroNameColorClass = heroTextTone === 'light' ? 'text-white/70' : 'text-zinc-500'
   const heroCtaClass = heroTextTone === 'light'
     ? 'border-white text-white hover:bg-white hover:text-zinc-900'
     : 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'
   const heroTextShadow = heroTextTone === 'light'
     ? '0 1px 20px rgba(0,0,0,0.28)'
-    : '0 1px 20px rgba(255,255,255,0.42)'
+    : '0 1px 18px rgba(255,255,255,0.34)'
 
   useEffect(() => {
     const configuredImages = parseUrlList(siteSettings?.heroImages)
@@ -440,7 +440,7 @@ export default function HomePageClient({
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-zinc-100">
+      <header className="fixed top-0 left-0 right-0 z-40 border-b border-zinc-100/80 bg-white/92 backdrop-blur-sm">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <a href="#" className="text-xl sm:text-2xl font-normal tracking-tight text-zinc-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
             {logoUrl ? (
@@ -449,43 +449,30 @@ export default function HomePageClient({
               companyName
             )}
           </a>
-          
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-6">
-            <a href="#inicio" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.home}</a>
-            <a href="#proyectos" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.projects}</a>
-            <a href="#servicios" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.services}</a>
-            {menuPages.map((page) => (
-              <Link key={page.id} href={`/info/${page.slug}`} className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">
-                {page.title}
-              </Link>
-            ))}
-            <a href="#estudio" className="text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors">{t.nav.studio}</a>
-            <LanguageSelector />
-          </div>
 
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-2">
             <LanguageSelector />
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2">
-              {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/80 px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-zinc-700 transition-colors hover:border-zinc-900 hover:text-zinc-900"
+            >
+              <span>Menu</span>
+              {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
           </div>
         </nav>
 
-        {/* Mobile Menu */}
         <AnimatePresence>
           {isMenuOpen && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="md:hidden bg-white border-b border-zinc-100">
-              <div className="px-4 py-4 space-y-3">
-                <a href="#inicio" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.home}</a>
-                <a href="#proyectos" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.projects}</a>
-                <a href="#servicios" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.services}</a>
-                {menuPages.map((page) => (
-                  <Link key={page.id} href={`/info/${page.slug}`} className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>
-                    {page.title}
-                  </Link>
-                ))}
-                <a href="#estudio" className="block text-sm text-zinc-600" onClick={() => setIsMenuOpen(false)}>{t.nav.studio}</a>
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="border-t border-zinc-100/80 bg-white/96 backdrop-blur-sm"
+            >
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <a href="#proyectos" className="text-sm text-zinc-700 hover:text-zinc-900 transition-colors" onClick={() => setIsMenuOpen(false)}>{t.nav.projects}</a>
+                <a href="#servicios" className="text-sm text-zinc-700 hover:text-zinc-900 transition-colors" onClick={() => setIsMenuOpen(false)}>{t.nav.services}</a>
               </div>
             </motion.div>
           )}
@@ -535,8 +522,24 @@ export default function HomePageClient({
           ) : (
             <Image src="/images/hero-bg.png" alt="" fill className="object-cover opacity-15" priority />
           )}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.05),_rgba(255,255,255,0.64)_72%)]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-white/38 via-white/14 to-white/74" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                heroImageTreatment === 'original'
+                  ? 'radial-gradient(circle at center, rgba(255,255,255,0.02), rgba(255,255,255,0.14) 72%)'
+                  : 'radial-gradient(circle at center, rgba(255,255,255,0.05), rgba(255,255,255,0.64) 72%)',
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                heroImageTreatment === 'original'
+                  ? 'linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.16))'
+                  : 'linear-gradient(to bottom, rgba(255,255,255,0.38), rgba(255,255,255,0.14) 40%, rgba(255,255,255,0.74))',
+            }}
+          />
         </div>
         
         <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-20 text-center">
