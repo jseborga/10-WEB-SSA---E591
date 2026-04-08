@@ -3,44 +3,82 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider } from "@/lib/language-context";
 import { ensureSiteSettings, getDefaultSiteSettings } from "@/lib/site-settings";
+import { getOrganizationJsonLd, getSeoDescription, getSeoImage, getSeoKeywords, getSeoTitle, getSiteUrl, getWebsiteJsonLd } from "@/lib/seo";
 
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteSettings = await ensureSiteSettings().catch(() => getDefaultSiteSettings())
   const companyName = siteSettings.companyName || 'SSA Ingenieria'
-  const title = siteSettings.tagline
-    ? `${companyName} | ${siteSettings.tagline}`
-    : companyName
-  const description =
-    siteSettings.footerText ||
-    siteSettings.tagline ||
-    'Construccion, diseno, supervision, asesoria tecnica y soluciones digitales para proyectos.'
+  const title = getSeoTitle(siteSettings)
+  const description = getSeoDescription(siteSettings)
   const iconUrl = siteSettings.faviconUrl || siteSettings.logoUrl || '/logo.svg'
+  const siteUrl = getSiteUrl(siteSettings)
+  const seoImage = getSeoImage(siteSettings)
+  const keywords = getSeoKeywords(siteSettings)
 
   return {
+    metadataBase: new URL(siteUrl),
     title,
     description,
+    keywords,
     authors: [{ name: companyName }],
+    creator: companyName,
+    publisher: companyName,
+    category: 'engineering',
+    alternates: {
+      canonical: '/',
+    },
     icons: {
       icon: iconUrl,
       shortcut: iconUrl,
       apple: iconUrl,
     },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+        'max-video-preview': -1,
+      },
+    },
     openGraph: {
       title,
       description,
       type: 'website',
-      images: siteSettings.logoUrl ? [siteSettings.logoUrl] : undefined,
+      url: siteUrl,
+      siteName: companyName,
+      locale: 'es_BO',
+      images: seoImage
+        ? [
+            {
+              url: seoImage,
+              alt: title,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: seoImage ? [seoImage] : undefined,
     },
   }
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const siteSettings = await ensureSiteSettings().catch(() => getDefaultSiteSettings())
+  const organizationJsonLd = getOrganizationJsonLd(siteSettings)
+  const websiteJsonLd = getWebsiteJsonLd(siteSettings)
+
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
@@ -65,6 +103,14 @@ export default function RootLayout({
             font-style: normal;
           }
         `}} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
       </head>
       <body
         className="antialiased bg-white text-zinc-900"

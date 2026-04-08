@@ -94,8 +94,13 @@ model SiteSettings {
   companyName  String   @default("SSA Ingenieria")
   legalName    String?
   tagline      String?
+  siteUrl      String?
+  seoTitle     String?
+  seoDescription String?
+  seoKeywords  String?
   logoUrl      String?
   faviconUrl   String?
+  socialShareImageUrl String?
   heroImages   String?
   heroImageOpacity    Int      @default(34)
   heroImageSaturation Int      @default(90)

@@ -1,7 +1,7 @@
 import { AdminPanel } from '@/components/admin-panel'
 
 export const metadata = {
-  title: 'Admin | estudio591',
+  title: 'Admin | SSA Ingenieria',
   robots: {
     index: false,
     follow: false,

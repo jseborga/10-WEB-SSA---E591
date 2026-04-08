@@ -74,8 +74,13 @@ interface SiteSettings {
   companyName: string
   legalName: string
   tagline: string
+  siteUrl: string
+  seoTitle: string
+  seoDescription: string
+  seoKeywords: string
   logoUrl: string
   faviconUrl: string
+  socialShareImageUrl: string
   heroImages: string
   heroImageOpacity: string
   heroImageSaturation: string
@@ -179,8 +184,13 @@ const emptySiteForm: SiteFormState = {
   companyName: '',
   legalName: '',
   tagline: '',
+  siteUrl: '',
+  seoTitle: '',
+  seoDescription: '',
+  seoKeywords: '',
   logoUrl: '',
   faviconUrl: '',
+  socialShareImageUrl: '',
   heroImages: '',
   heroImageOpacity: '34',
   heroImageSaturation: '90',
@@ -375,8 +385,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         companyName: siteData.companyName || '',
         legalName: siteData.legalName || '',
         tagline: siteData.tagline || '',
+        siteUrl: siteData.siteUrl || '',
+        seoTitle: siteData.seoTitle || '',
+        seoDescription: siteData.seoDescription || '',
+        seoKeywords: siteData.seoKeywords || '',
         logoUrl: siteData.logoUrl || '',
         faviconUrl: siteData.faviconUrl || '',
+        socialShareImageUrl: siteData.socialShareImageUrl || '',
         heroImages: siteData.heroImages || '',
         heroImageOpacity: String(siteData.heroImageOpacity ?? 34),
         heroImageSaturation: String(siteData.heroImageSaturation ?? 90),
@@ -522,7 +537,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     }
   }
 
-  const handleSiteAssetUpload = async (files: FileList | null, target: 'logoUrl' | 'faviconUrl') => {
+  const handleSiteAssetUpload = async (files: FileList | null, target: 'logoUrl' | 'faviconUrl' | 'socialShareImageUrl') => {
     if (!files || files.length === 0) return
 
     setUploadingField(target)
@@ -1005,7 +1020,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <h2 className="text-base font-light">Configuracion del sitio</h2>
-                          <p className="text-xs text-zinc-500 mt-1">Edita nombre de empresa, contacto, redes sociales y pie de pagina.</p>
+                          <p className="text-xs text-zinc-500 mt-1">Edita marca, SEO, contacto, redes sociales, imagen de compartir y pie de pagina.</p>
                         </div>
                         <Button onClick={handleSaveSiteConfig} disabled={loading} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm">
                           <Save className="w-4 h-4 mr-1" />
@@ -1027,6 +1042,33 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <div>
                         <label className="text-xs font-medium text-zinc-700 mb-1 block">Eslogan</label>
                         <Input value={siteForm.tagline} onChange={e => setSiteForm({ ...siteForm, tagline: e.target.value })} className="text-sm" />
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                        <div>
+                          <h3 className="text-sm font-medium text-zinc-900">SEO y redes sociales</h3>
+                          <p className="text-xs text-zinc-500 mt-1">Estos campos controlan Google, Facebook, WhatsApp, LinkedIn y otros robots.</p>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">URL del sitio</label>
+                          <Input value={siteForm.siteUrl} onChange={e => setSiteForm({ ...siteForm, siteUrl: e.target.value })} placeholder="https://tudominio.com" className="text-sm" />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Titulo SEO</label>
+                          <Input value={siteForm.seoTitle} onChange={e => setSiteForm({ ...siteForm, seoTitle: e.target.value })} placeholder="SSA Ingenieria | Construccion, supervision y software para el sector" className="text-sm" />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Descripcion SEO</label>
+                          <Textarea value={siteForm.seoDescription} onChange={e => setSiteForm({ ...siteForm, seoDescription: e.target.value })} rows={3} className="text-sm" />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Palabras clave SEO</label>
+                          <Input value={siteForm.seoKeywords} onChange={e => setSiteForm({ ...siteForm, seoKeywords: e.target.value })} placeholder="ingenieria, construccion, supervision, arquitectura, software, ERP" className="text-sm" />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1052,6 +1094,19 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           </div>
                           <Input value={siteForm.faviconUrl} onChange={e => setSiteForm({ ...siteForm, faviconUrl: e.target.value })} placeholder="/api/media/favicon.png o https://..." className="text-sm" />
                         </div>
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen para compartir enlaces</label>
+                          <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                            {uploadingField === 'socialShareImageUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                            Subir imagen
+                            <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'socialShareImageUrl')} />
+                          </label>
+                        </div>
+                        <Input value={siteForm.socialShareImageUrl} onChange={e => setSiteForm({ ...siteForm, socialShareImageUrl: e.target.value })} placeholder="/api/media/seo-share.jpg o https://..." className="text-sm" />
+                        <p className="text-xs text-zinc-500">Se usa al compartir el link en Facebook, WhatsApp, LinkedIn y otras plataformas. Recomendado: 1200 x 630 px.</p>
                       </div>
 
                       <div className="rounded-xl border border-zinc-200 p-4 space-y-3">

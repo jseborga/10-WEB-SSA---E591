@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
+import { getSeoDescription, getSeoImage, getSiteUrl, toAbsoluteUrl } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,13 +21,34 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   if (!page) {
     return {
-      title: 'Página no encontrada',
+      title: 'Pagina no encontrada',
     }
   }
 
+  const title = `${page.title} | ${siteSettings.companyName}`
+  const description = page.excerpt || page.title
+  const pageUrl = `${getSiteUrl(siteSettings)}/info/${page.slug}`
+  const shareImage = toAbsoluteUrl(page.image, siteSettings) || getSeoImage(siteSettings)
+
   return {
-    title: `${page.title} | ${siteSettings.companyName}`,
-    description: page.excerpt || page.title,
+    title,
+    description,
+    alternates: {
+      canonical: pageUrl,
+    },
+    openGraph: {
+      title,
+      description,
+      type: 'article',
+      url: pageUrl,
+      images: shareImage ? [{ url: shareImage, alt: page.title }] : undefined,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: shareImage ? [shareImage] : undefined,
+    },
   }
 }
 
@@ -51,8 +73,37 @@ export default async function InfoPage({ params }: { params: Promise<{ slug: str
     .map((block) => block.trim())
     .filter(Boolean)
 
+  const pageJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: page.title,
+    description: page.excerpt || getSeoDescription(siteSettings),
+    image: toAbsoluteUrl(page.image, siteSettings) || getSeoImage(siteSettings),
+    author: {
+      '@type': 'Organization',
+      name: siteSettings.companyName,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: siteSettings.companyName,
+      logo: getSeoImage(siteSettings)
+        ? {
+            '@type': 'ImageObject',
+            url: getSeoImage(siteSettings),
+          }
+        : undefined,
+    },
+    datePublished: page.createdAt.toISOString(),
+    dateModified: page.updatedAt.toISOString(),
+    mainEntityOfPage: `${getSiteUrl(siteSettings)}/info/${page.slug}`,
+  }
+
   return (
     <main className="min-h-screen bg-white text-zinc-900">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(pageJsonLd) }}
+      />
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         <div className="flex items-center justify-between gap-4 border-b border-zinc-200 pb-6">
           <div>
@@ -75,7 +126,7 @@ export default async function InfoPage({ params }: { params: Promise<{ slug: str
           {contentBlocks.length > 0 ? (
             contentBlocks.map((block, index) => <p key={`${page.id}-${index}`}>{block}</p>)
           ) : (
-            <p>No hay contenido todavía para esta página.</p>
+            <p>No hay contenido todavia para esta pagina.</p>
           )}
         </article>
       </div>
