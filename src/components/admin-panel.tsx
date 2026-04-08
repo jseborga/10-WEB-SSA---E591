@@ -141,6 +141,7 @@ interface ApprovalItemType {
   rejectedAt: string | null
   rejectionReason: string | null
   createdAt: string
+  previewAssets?: MediaPreviewItem[]
 }
 
 interface AutomationLogEntry {
@@ -207,6 +208,14 @@ type UserFormState = {
   password: string
   role: 'admin' | 'editor'
   active: boolean
+}
+
+type MediaPreviewItem = {
+  id?: string
+  url: string
+  kind?: string | null
+  fileName?: string | null
+  label?: string
 }
 
 const emptyProjectForm: ProjectFormState = {
@@ -356,6 +365,68 @@ function getHeroPreviewStyles(siteForm: SiteFormState) {
     overlayOpacity,
     textTone,
   }
+}
+
+function removeUrlFromList(value: string | null | undefined, urlToRemove: string) {
+  return parseUrlList(value).filter((item) => item !== urlToRemove).join('\n')
+}
+
+function getPreviewItemTitle(item: MediaPreviewItem) {
+  if (item.label?.trim()) {
+    return item.label.trim()
+  }
+
+  if (item.fileName?.trim()) {
+    return item.fileName.trim()
+  }
+
+  const parts = item.url.split('/')
+  return parts[parts.length - 1] || item.url
+}
+
+function isPreviewVideo(item: MediaPreviewItem) {
+  return item.kind === 'video' || isVideoUrl(item.url)
+}
+
+function MediaPreviewGrid({
+  items,
+  emptyLabel,
+  onRemove,
+}: {
+  items: MediaPreviewItem[]
+  emptyLabel?: string
+  onRemove?: (item: MediaPreviewItem) => void
+}) {
+  if (items.length === 0) {
+    return emptyLabel ? <p className="text-xs text-zinc-500">{emptyLabel}</p> : null
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {items.map((item, index) => (
+        <div key={item.id || `${item.url}-${index}`} className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+          <div className="relative aspect-[4/3] bg-zinc-100">
+            {isPreviewVideo(item) ? (
+              <video src={item.url} className="h-full w-full object-cover" controls muted playsInline preload="metadata" />
+            ) : (
+              <img src={item.url} alt={getPreviewItemTitle(item)} className="h-full w-full object-cover" loading="lazy" />
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-3 py-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium text-zinc-800">{getPreviewItemTitle(item)}</p>
+              <p className="text-[11px] text-zinc-500">{isPreviewVideo(item) ? 'Video' : 'Imagen'}</p>
+            </div>
+            {onRemove ? (
+              <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onRemove(item)}>
+                Quitar
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 interface AdminPanelProps {
@@ -1405,6 +1476,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                             placeholder="Una URL por linea. Acepta imagenes o videos. Si esta vacio, se usan las imagenes principales de proyectos publicados."
                             className="text-sm"
                           />
+                          <MediaPreviewGrid
+                            items={parseUrlList(siteForm.heroImages).map((url) => ({ url }))}
+                            emptyLabel="Aun no hay medios desktop cargados."
+                            onRemove={(item) => setSiteForm((current) => ({ ...current, heroImages: removeUrlFromList(current.heroImages, item.url) }))}
+                          />
                         </div>
 
                         <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
@@ -1422,6 +1498,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                             rows={5}
                             placeholder="Opcional. Acepta imagenes o videos. Si esta vacio, mobile reutiliza los medios desktop."
                             className="text-sm"
+                          />
+                          <MediaPreviewGrid
+                            items={parseUrlList(siteForm.heroImagesMobile).map((url) => ({ url }))}
+                            emptyLabel="Si no cargas medios mobile, la web reutiliza los desktop."
+                            onRemove={(item) =>
+                              setSiteForm((current) => ({ ...current, heroImagesMobile: removeUrlFromList(current.heroImagesMobile, item.url) }))
+                            }
                           />
                         </div>
                       </div>
@@ -2038,7 +2121,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                         </div>
 
                         <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
-                          Endpoint esperado: <span className="font-mono">/api/telegram/webhook</span>. Usa user ID o chat ID, no contraseña de Telegram.
+                          Endpoint esperado: <span className="font-mono">/api/telegram/webhook</span>. Usa user ID o chat ID, no contraseña de Telegram. Para imagenes en maxima calidad, envialas al bot como archivo/documento.
                         </div>
                       </div>
 
@@ -2068,6 +2151,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                                     {review.requestedById ? <><span>•</span><span>{review.requestedById}</span></> : null}
                                   </div>
                                   {review.details ? <p className="mt-3 text-xs text-zinc-600 whitespace-pre-wrap">{review.details}</p> : null}
+                                  {review.previewAssets?.length ? (
+                                    <div className="mt-3">
+                                      <MediaPreviewGrid items={review.previewAssets} />
+                                    </div>
+                                  ) : null}
                                 </div>
                                 {review.status === 'pending' ? (
                                   <div className="flex items-center gap-2">
@@ -2309,6 +2397,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                 </label>
               </div>
               <Input value={projectForm.mainImage} onChange={e => setProjectForm({ ...projectForm, mainImage: e.target.value })} placeholder="/api/media/archivo.jpg o https://..." className="text-sm" />
+              <MediaPreviewGrid
+                items={projectForm.mainImage ? [{ url: projectForm.mainImage, label: 'Imagen principal' }] : []}
+                emptyLabel="Aun no hay imagen principal."
+                onRemove={() => setProjectForm((current) => ({ ...current, mainImage: '' }))}
+              />
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -2320,6 +2413,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                 </label>
               </div>
               <Input value={projectForm.mainImageMobile} onChange={e => setProjectForm({ ...projectForm, mainImageMobile: e.target.value })} placeholder="/api/media/archivo-mobile.jpg o https://..." className="text-sm" />
+              <MediaPreviewGrid
+                items={projectForm.mainImageMobile ? [{ url: projectForm.mainImageMobile, label: 'Imagen principal mobile' }] : []}
+                emptyLabel="Sin imagen mobile especifica."
+                onRemove={() => setProjectForm((current) => ({ ...current, mainImageMobile: '' }))}
+              />
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -2331,6 +2429,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                 </label>
               </div>
               <Textarea value={projectForm.gallery} onChange={e => setProjectForm({ ...projectForm, gallery: e.target.value })} rows={4} placeholder="Una URL por linea" className="text-sm" />
+              <MediaPreviewGrid
+                items={parseUrlList(projectForm.gallery).map((url, index) => ({ url, label: `Galeria ${index + 1}` }))}
+                emptyLabel="Aun no hay imagenes en la galeria."
+                onRemove={(item) => setProjectForm((current) => ({ ...current, gallery: removeUrlFromList(current.gallery, item.url) }))}
+              />
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -2342,6 +2445,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                 </label>
               </div>
               <Textarea value={projectForm.galleryMobile} onChange={e => setProjectForm({ ...projectForm, galleryMobile: e.target.value })} rows={4} placeholder="Opcional. Una URL por linea para movil" className="text-sm" />
+              <MediaPreviewGrid
+                items={parseUrlList(projectForm.galleryMobile).map((url, index) => ({ url, label: `Mobile ${index + 1}` }))}
+                emptyLabel="Sin galeria mobile dedicada."
+                onRemove={(item) => setProjectForm((current) => ({ ...current, galleryMobile: removeUrlFromList(current.galleryMobile, item.url) }))}
+              />
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -2353,6 +2461,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                 </label>
               </div>
               <Input value={projectForm.videoUrl} onChange={e => setProjectForm({ ...projectForm, videoUrl: e.target.value })} placeholder="/api/media/archivo.mp4 o https://..." className="text-sm" />
+              <MediaPreviewGrid
+                items={projectForm.videoUrl ? [{ url: projectForm.videoUrl, kind: 'video', label: 'Video principal' }] : []}
+                emptyLabel="Aun no hay video."
+                onRemove={() => setProjectForm((current) => ({ ...current, videoUrl: '' }))}
+              />
             </div>
             <label className="flex items-center gap-2 text-sm text-zinc-700">
               <input type="checkbox" checked={projectForm.featured} onChange={e => setProjectForm({ ...projectForm, featured: e.target.checked })} />

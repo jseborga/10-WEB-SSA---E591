@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { createAutomationLog, parseStoredJson } from '@/lib/automation-log'
 import { createStoredFileName, saveUploadedFile } from '@/lib/media-storage'
 import { parseUrlList } from '@/lib/public-site'
+import { getSiteUrl } from '@/lib/seo'
 import { ensureSiteSettings } from '@/lib/site-settings'
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org'
@@ -39,6 +40,12 @@ const YES_LABELS = {
   send: 'Enviar',
 } as const
 
+const SUBMISSION_MODE_LABELS = {
+  review: 'Enviar a revision',
+  publish: 'Publicar ahora',
+  back: 'Seguir editando',
+} as const
+
 const PROJECT_CATEGORY_OPTIONS = ['construccion', 'diseno', 'supervision', 'asesoria', 'software', 'erp']
 
 type TelegramPhoto = {
@@ -47,6 +54,13 @@ type TelegramPhoto = {
 }
 
 type TelegramVideo = {
+  file_id: string
+  file_name?: string
+  mime_type?: string
+  file_size?: number
+}
+
+type TelegramDocument = {
   file_id: string
   file_name?: string
   mime_type?: string
@@ -72,6 +86,7 @@ type TelegramMessage = {
   caption?: string
   photo?: TelegramPhoto[]
   video?: TelegramVideo
+  document?: TelegramDocument
 }
 
 type TelegramUpdate = {
@@ -103,6 +118,7 @@ type ConversationDraft = {
   targetProjectTitle?: string
   targetMediaRole?: 'primary' | 'mobile' | 'gallery' | 'video'
   mediaAssetIds?: string[]
+  publishMode?: 'review' | 'publish'
 }
 
 type MediaAssetRecord = {
@@ -189,11 +205,33 @@ function extractMessage(update: TelegramUpdate) {
 }
 
 function isMediaMessage(message: TelegramMessage) {
-  return Boolean((message.photo && message.photo.length > 0) || message.video?.file_id)
+  return Boolean((message.photo && message.photo.length > 0) || message.video?.file_id || message.document?.file_id)
 }
 
 function getConversationDraft(value: string | null | undefined) {
   return parseStoredJson<ConversationDraft>(value, {})
+}
+
+function isVideoDocument(document: TelegramDocument | undefined) {
+  if (!document) {
+    return false
+  }
+
+  const mime = normalizeText(document.mime_type)
+  const fileName = normalizeText(document.file_name)
+
+  return mime.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(fileName)
+}
+
+function isImageDocument(document: TelegramDocument | undefined) {
+  if (!document) {
+    return false
+  }
+
+  const mime = normalizeText(document.mime_type)
+  const fileName = normalizeText(document.file_name)
+
+  return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)$/i.test(fileName)
 }
 
 async function updateConversation(
@@ -320,6 +358,22 @@ function buildMediaJobs(message: TelegramMessage) {
       fileId: message.video.file_id,
       fileNameHint: message.video.file_name || `telegram-video-${message.video.file_id}.mp4`,
       mimeType: message.video.mime_type || 'video/mp4',
+    })
+  }
+
+  if (isImageDocument(message.document)) {
+    jobs.push({
+      kind: 'image',
+      fileId: message.document!.file_id,
+      fileNameHint: message.document!.file_name || `telegram-document-${message.document!.file_id}.jpg`,
+      mimeType: message.document!.mime_type || 'image/jpeg',
+    })
+  } else if (isVideoDocument(message.document)) {
+    jobs.push({
+      kind: 'video',
+      fileId: message.document!.file_id,
+      fileNameHint: message.document!.file_name || `telegram-document-${message.document!.file_id}.mp4`,
+      mimeType: message.document!.mime_type || 'video/mp4',
     })
   }
 
@@ -520,7 +574,7 @@ async function appendConversationMedia(
 }
 
 async function createWorkflowReview(
-  config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
+  _config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
   message: TelegramMessage,
   workflowTitle: string,
   workflowSummary: string,
@@ -541,10 +595,6 @@ async function createWorkflowReview(
     },
   })
 
-  if (!config.autoCreateReviews || config.autoApproveKnownUsers) {
-    await approveTelegramReview(approval.id, config.autoApproveKnownUsers ? 'telegram-auto' : 'telegram-direct')
-  }
-
   return approval
 }
 
@@ -562,6 +612,7 @@ async function finalizeConversation(
 ) {
   const draft = getConversationDraft(conversation.draftData)
   const mediaAssetIds = draft.mediaAssetIds || []
+  const publishDirect = draft.publishMode === 'publish' || !config.autoCreateReviews || config.autoApproveKnownUsers
 
   if (mediaAssetIds.length === 0) {
     await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Todavia no has enviado archivos. Envia una foto o video primero.')
@@ -569,6 +620,7 @@ async function finalizeConversation(
   }
 
   let approval = null as Awaited<ReturnType<typeof createWorkflowReview>> | null
+  let appliedEntity: Awaited<ReturnType<typeof approveTelegramReview>> | null = null
 
   if (draft.workflowType === 'hero') {
     approval = await createWorkflowReview(
@@ -583,6 +635,7 @@ async function finalizeConversation(
         heroDevice: draft.heroDevice || 'desktop',
         note: draft.note || '',
         mediaAssetIds,
+        publishNow: publishDirect,
       },
     )
   } else if (draft.workflowType === 'project') {
@@ -603,6 +656,7 @@ async function finalizeConversation(
         fullDescription: draft.fullDescription || '',
         showOnHomepage: Boolean(draft.showOnHomepage),
         mediaAssetIds,
+        publishNow: publishDirect,
       },
     )
   } else if (draft.workflowType === 'project-media') {
@@ -619,14 +673,22 @@ async function finalizeConversation(
         targetMediaRole: draft.targetMediaRole || 'gallery',
         note: draft.note || '',
         mediaAssetIds,
+        publishNow: publishDirect,
       },
+    )
+  }
+
+  if (approval && publishDirect) {
+    appliedEntity = await approveTelegramReview(
+      approval.id,
+      draft.publishMode === 'publish' ? 'telegram-user' : config.autoApproveKnownUsers ? 'telegram-auto' : 'telegram-direct',
     )
   }
 
   await createAutomationLog({
     source: 'telegram',
     eventType: 'workflow.submitted',
-    status: config.autoCreateReviews ? 'pending' : 'approved',
+    status: publishDirect ? 'approved' : 'pending',
     actorType: 'telegram-user',
     actorId: message.from?.id != null ? String(message.from.id) : null,
     entityType: 'approval',
@@ -635,21 +697,27 @@ async function finalizeConversation(
     payload: {
       workflowType: draft.workflowType,
       mediaAssetIds,
+      publishMode: draft.publishMode || 'review',
     },
   })
 
   await resetConversation(conversation.telegramUserId, conversation.chatId)
 
+  const siteSettings = await ensureSiteSettings()
+  const baseUrl = getSiteUrl(siteSettings)
+  const previewUrl = draft.workflowType === 'hero' ? baseUrl : `${baseUrl}/proyectos`
+  const completionMessage = publishDirect
+    ? `Listo. El contenido ya fue publicado.\nRevisa: ${previewUrl}`
+    : 'Listo. El contenido fue enviado a revision en el panel admin.'
+
   await sendTelegramMessage(
     config.botToken || '',
     conversation.chatId,
-    config.autoCreateReviews
-      ? 'Listo. El contenido fue enviado a revision en el panel admin.'
-      : 'Listo. El contenido fue procesado directamente.',
+    completionMessage,
     mainMenuKeyboard(),
   )
 
-  return { status: 'submitted' as const, approvalId: approval?.id || null }
+  return { status: 'submitted' as const, approvalId: approval?.id || null, entity: appliedEntity }
 }
 
 async function handleCommand(
@@ -715,6 +783,64 @@ async function handleCommand(
   }
 
   return { handled: false as const }
+}
+
+function getUploadStepForDraft(draft: ConversationDraft) {
+  if (draft.workflowType === 'hero') {
+    return 'hero-media'
+  }
+
+  if (draft.workflowType === 'project') {
+    return 'project-media'
+  }
+
+  return 'project-media-upload'
+}
+
+function buildDraftReviewText(draft: ConversationDraft) {
+  const mediaCount = draft.mediaAssetIds?.length || 0
+
+  if (draft.workflowType === 'hero') {
+    return [
+      'Resumen de portada:',
+      `- Slot: ${draft.heroSlot || 'primary'}`,
+      `- Dispositivo: ${draft.heroDevice || 'desktop'}`,
+      `- Archivos: ${mediaCount}`,
+      draft.note ? `- Nota: ${draft.note}` : null,
+      '',
+      '¿Confirmas el envio a revision?',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  if (draft.workflowType === 'project') {
+    return [
+      'Resumen del proyecto:',
+      `- Titulo: ${draft.title || 'Sin titulo'}`,
+      `- Categoria: ${draft.category || 'sin categoria'}`,
+      draft.location ? `- Ubicacion: ${draft.location}` : null,
+      draft.client ? `- Cliente: ${draft.client}` : null,
+      draft.year ? `- Año: ${draft.year}` : null,
+      `- Archivos: ${mediaCount}`,
+      '',
+      '¿Confirmas el envio a revision?',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  return [
+    'Resumen del material adicional:',
+    `- Proyecto: ${draft.targetProjectTitle || 'sin proyecto'}`,
+    `- Rol: ${draft.targetMediaRole || 'gallery'}`,
+    `- Archivos: ${mediaCount}`,
+    draft.note ? `- Nota: ${draft.note}` : null,
+    '',
+    '¿Confirmas el envio a revision?',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 async function handleConversationStep(
@@ -808,7 +934,7 @@ async function handleConversationStep(
     await sendTelegramMessage(
       config.botToken || '',
       conversation.chatId,
-      'Ahora envia una o varias fotos o videos para la portada. Cuando termines, escribe Enviar.',
+      'Ahora envia una o varias fotos o videos para la portada. Si quieres la maxima calidad, envia la imagen como archivo/documento. Cuando termines, escribe Enviar.',
       replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
     )
 
@@ -926,7 +1052,7 @@ async function handleConversationStep(
     await sendTelegramMessage(
       config.botToken || '',
       conversation.chatId,
-      'Ahora envia fotos o videos del proyecto. La primera imagen quedara como principal, las siguientes iran a galeria y el primer video quedara como video principal. Cuando termines, escribe Enviar.',
+      'Ahora envia fotos o videos del proyecto. La primera imagen quedara como principal, las siguientes iran a galeria y el primer video quedara como video principal. Si quieres maxima calidad, envia imagenes como archivo/documento. Cuando termines, escribe Enviar.',
       replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
     )
 
@@ -1003,15 +1129,130 @@ async function handleConversationStep(
     await sendTelegramMessage(
       config.botToken || '',
       conversation.chatId,
-      'Ahora envia los archivos para ese proyecto. Cuando termines, escribe Enviar.',
+      'Ahora envia los archivos para ese proyecto. Si quieres maxima calidad, envia imagenes como archivo/documento. Cuando termines, escribe Enviar.',
       replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
     )
     return { handled: true as const }
   }
 
+  if (conversation.step === 'confirm-submit') {
+    if (normalizedText === normalizeText(YES_LABELS.yes)) {
+      if (config.autoCreateReviews && !config.autoApproveKnownUsers) {
+        await updateConversation(conversation.telegramUserId, {
+          chatId: conversation.chatId,
+          step: 'confirm-publish-mode',
+        })
+
+        await sendTelegramMessage(
+          config.botToken || '',
+          conversation.chatId,
+          'Elige si quieres enviar a revision o publicar ahora para verlo en la web.',
+          replyKeyboard(
+            [[SUBMISSION_MODE_LABELS.review, SUBMISSION_MODE_LABELS.publish], [SUBMISSION_MODE_LABELS.back, MAIN_MENU_LABELS.cancel]],
+            true,
+          ),
+        )
+        return { handled: true as const }
+      }
+
+      await finalizeConversation(config, conversation, message)
+      return { handled: true as const }
+    }
+
+    if (normalizedText === normalizeText(YES_LABELS.no)) {
+      await updateConversation(conversation.telegramUserId, {
+        chatId: conversation.chatId,
+        step: getUploadStepForDraft(draft),
+      })
+
+      await sendTelegramMessage(
+        config.botToken || '',
+        conversation.chatId,
+        'Volvemos al borrador. Puedes seguir enviando archivos o ajustar el flujo.',
+        replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
+      )
+      return { handled: true as const }
+    }
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      'Responde Si para enviar a revision o No para seguir editando.',
+      replyKeyboard([[YES_LABELS.yes, YES_LABELS.no], [MAIN_MENU_LABELS.cancel]], true),
+    )
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'confirm-publish-mode') {
+    if (normalizedText === normalizeText(SUBMISSION_MODE_LABELS.back) || normalizedText === normalizeText(YES_LABELS.no)) {
+      await updateConversation(conversation.telegramUserId, {
+        chatId: conversation.chatId,
+        step: getUploadStepForDraft(draft),
+      })
+
+      await sendTelegramMessage(
+        config.botToken || '',
+        conversation.chatId,
+        'Volvemos al borrador. Puedes seguir enviando archivos o ajustar el flujo.',
+        replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
+      )
+      return { handled: true as const }
+    }
+
+    const publishMode =
+      normalizedText === normalizeText(SUBMISSION_MODE_LABELS.publish)
+        ? 'publish'
+        : normalizedText === normalizeText(SUBMISSION_MODE_LABELS.review)
+          ? 'review'
+          : null
+
+    if (!publishMode) {
+      await sendTelegramMessage(
+        config.botToken || '',
+        conversation.chatId,
+        'Responde con Enviar a revision, Publicar ahora o Seguir editando.',
+        replyKeyboard(
+          [[SUBMISSION_MODE_LABELS.review, SUBMISSION_MODE_LABELS.publish], [SUBMISSION_MODE_LABELS.back, MAIN_MENU_LABELS.cancel]],
+          true,
+        ),
+      )
+      return { handled: true as const }
+    }
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'submitting',
+      draftData: {
+        ...draft,
+        publishMode,
+      },
+    })
+
+    const refreshedConversation = await getOrCreateConversation(conversation.telegramUserId, conversation.chatId)
+    await finalizeConversation(config, refreshedConversation, message)
+    return { handled: true as const }
+  }
+
   if (['hero-media', 'project-media', 'project-media-upload'].includes(conversation.step)) {
     if (normalizedText === normalizeText(YES_LABELS.send) || normalizedText === '/enviar') {
-      await finalizeConversation(config, conversation, message)
+      const mediaCount = draft.mediaAssetIds?.length || 0
+
+      if (mediaCount === 0) {
+        await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Todavia no has enviado archivos. Envia una foto, video o archivo primero.')
+        return { handled: true as const }
+      }
+
+      await updateConversation(conversation.telegramUserId, {
+        chatId: conversation.chatId,
+        step: 'confirm-submit',
+      })
+
+      await sendTelegramMessage(
+        config.botToken || '',
+        conversation.chatId,
+        buildDraftReviewText(draft),
+        replyKeyboard([[YES_LABELS.yes, YES_LABELS.no], [MAIN_MENU_LABELS.cancel]], true),
+      )
       return { handled: true as const }
     }
 
@@ -1096,6 +1337,7 @@ async function applyProjectApproval(
     description?: string
     fullDescription?: string
     showOnHomepage?: boolean
+    publishNow?: boolean
     mediaAssetIds?: string[]
   },
 ) {
@@ -1125,7 +1367,8 @@ async function applyProjectApproval(
       mainImage,
       gallery: gallery.length > 0 ? JSON.stringify(gallery) : null,
       videoUrl,
-      published: false,
+      published: Boolean(payload.publishNow),
+      publishedAt: payload.publishNow ? new Date() : null,
       featured: false,
     },
   })
@@ -1136,6 +1379,7 @@ async function applyProjectApproval(
 async function applyProjectMediaApproval(payload: {
   targetProjectId?: string
   targetMediaRole?: 'primary' | 'mobile' | 'gallery' | 'video'
+  publishNow?: boolean
   mediaAssetIds?: string[]
 }) {
   if (!payload.targetProjectId) {
@@ -1159,7 +1403,7 @@ async function applyProjectMediaApproval(payload: {
   const firstImage = assets.find((asset) => asset.kind === 'image') || null
   const galleryImages = assets.filter((asset) => asset.kind === 'image').map((asset) => asset.url)
   const firstVideo = assets.find((asset) => asset.kind === 'video') || null
-  const updateData: Record<string, string | null> = {}
+  const updateData: Record<string, string | boolean | Date | null> = {}
 
   switch (payload.targetMediaRole) {
     case 'primary':
@@ -1175,6 +1419,11 @@ async function applyProjectMediaApproval(payload: {
     default:
       updateData.gallery = mergeMediaList(project.gallery, galleryImages, 'append')
       break
+  }
+
+  if (payload.publishNow) {
+    updateData.published = true
+    updateData.publishedAt = new Date()
   }
 
   const updated = await db.project.update({
@@ -1406,12 +1655,14 @@ export async function approveTelegramReview(reviewId: string, approvedBy: string
       description: typeof payload.description === 'string' ? payload.description : '',
       fullDescription: typeof payload.fullDescription === 'string' ? payload.fullDescription : '',
       showOnHomepage: Boolean(payload.showOnHomepage),
+      publishNow: Boolean(payload.publishNow),
       mediaAssetIds: Array.isArray(payload.mediaAssetIds) ? (payload.mediaAssetIds as string[]) : [],
     })
   } else if (workflowType === 'project-media') {
     appliedEntity = await applyProjectMediaApproval({
       targetProjectId: typeof payload.targetProjectId === 'string' ? payload.targetProjectId : '',
       targetMediaRole: payload.targetMediaRole as 'primary' | 'mobile' | 'gallery' | 'video' | undefined,
+      publishNow: Boolean(payload.publishNow),
       mediaAssetIds: Array.isArray(payload.mediaAssetIds) ? (payload.mediaAssetIds as string[]) : [],
     })
   } else {
@@ -1420,6 +1671,7 @@ export async function approveTelegramReview(reviewId: string, approvedBy: string
       category: config.defaultProjectCategory || 'telegram',
       description: review.details || review.summary || 'Material recibido por Telegram.',
       fullDescription: review.details || review.summary || 'Material recibido por Telegram.',
+      publishNow: Boolean(payload.publishNow),
       mediaAssetIds: Array.isArray(payload.mediaAssetIds) ? (payload.mediaAssetIds as string[]) : [],
     })
   }
