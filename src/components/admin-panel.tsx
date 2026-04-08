@@ -30,6 +30,7 @@ interface Project {
   client?: string | null
   status?: string | null
   featured?: boolean
+  showOnHomepage?: boolean
   published?: boolean
   publishedAt?: string | null
   createdAt: string
@@ -135,6 +136,7 @@ type ProjectFormState = {
   client: string
   status: string
   featured: boolean
+  showOnHomepage: boolean
   published: boolean
 }
 
@@ -175,6 +177,7 @@ const emptyProjectForm: ProjectFormState = {
   client: '',
   status: 'completed',
   featured: false,
+  showOnHomepage: false,
   published: false,
 }
 
@@ -702,6 +705,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
           client: projectForm.client,
           status: projectForm.status,
           featured: projectForm.featured,
+          showOnHomepage: projectForm.showOnHomepage,
           published,
         }),
       })
@@ -767,6 +771,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       client: project.client || '',
       status: project.status || 'completed',
       featured: Boolean(project.featured),
+      showOnHomepage: Boolean(project.showOnHomepage),
       published: Boolean(project.published),
     })
     setShowProjectDialog(true)
@@ -1999,6 +2004,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
             <label className="flex items-center gap-2 text-sm text-zinc-700">
               <input type="checkbox" checked={projectForm.featured} onChange={e => setProjectForm({ ...projectForm, featured: e.target.checked })} />
               Mostrar como destacado
+            </label>
+            <label className="flex items-center gap-2 text-sm text-zinc-700">
+              <input type="checkbox" checked={projectForm.showOnHomepage} onChange={e => setProjectForm({ ...projectForm, showOnHomepage: e.target.checked })} />
+              Mostrar imagen en la portada principal
             </label>
             <div className="text-xs text-zinc-500">
               Estado de publicacion actual: <span className="font-medium text-zinc-700">{projectForm.published ? 'Publicado' : 'Borrador'}</span>

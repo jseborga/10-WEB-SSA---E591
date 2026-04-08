@@ -20,6 +20,7 @@ export interface PublicProject {
   videoUrl?: string | null
   client?: string | null
   status?: string | null
+  showOnHomepage?: boolean
   published?: boolean
 }
 

@@ -38,6 +38,9 @@ export default function HomePageClient({
 }: HomePageClientProps) {
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
+  const advanceHero = () => {
+    setActiveHeroIndex((current) => (current + 1) % Math.max(heroImages.length, 1))
+  }
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)')
@@ -52,6 +55,7 @@ export default function HomePageClient({
   const desktopImages = useMemo(() => {
     const configuredDesktop = parseUrlList(siteSettings?.heroImages)
     const projectImages = initialProjects
+      .filter((project) => project.showOnHomepage)
       .map((project) => project.mainImage?.trim() || '')
       .filter((value) => value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://'))
 
@@ -61,31 +65,37 @@ export default function HomePageClient({
 
   const mobileImages = useMemo(() => {
     const configuredMobile = parseUrlList(siteSettings?.heroImagesMobile)
+    const projectImagesMobile = initialProjects
+      .filter((project) => project.showOnHomepage)
+      .map((project) => (project.mainImageMobile || project.mainImage || '').trim())
+      .filter((value) => value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://'))
 
     if (configuredMobile.length > 0) {
-      return shuffleItems(configuredMobile)
+      const uniqueProjectImages = projectImagesMobile.filter((image, index) => projectImagesMobile.indexOf(image) === index && !configuredMobile.includes(image))
+      return shuffleItems([...configuredMobile, ...uniqueProjectImages])
     }
 
-    return desktopImages
-  }, [desktopImages, siteSettings?.heroImagesMobile])
+    return projectImagesMobile.length > 0 ? shuffleItems(projectImagesMobile) : desktopImages
+  }, [desktopImages, initialProjects, siteSettings?.heroImagesMobile])
 
   const heroImages = isMobile ? mobileImages : desktopImages
+  const activeHeroItem = heroImages[activeHeroIndex] || ''
 
   useEffect(() => {
     setActiveHeroIndex(0)
-  }, [isMobile])
+  }, [isMobile, heroImages.length])
 
   useEffect(() => {
-    if (heroImages.length <= 1) {
+    if (heroImages.length <= 1 || !activeHeroItem || isVideoUrl(activeHeroItem)) {
       return
     }
 
-    const interval = window.setInterval(() => {
-      setActiveHeroIndex((current) => (current + 1) % heroImages.length)
-    }, 5600)
+    const timeout = window.setTimeout(() => {
+      advanceHero()
+    }, 8600)
 
-    return () => window.clearInterval(interval)
-  }, [heroImages.length])
+    return () => window.clearTimeout(timeout)
+  }, [activeHeroItem, heroImages.length])
 
   const heroImageFit: 'cover' | 'contain' = siteSettings?.heroImageFit === 'contain' ? 'contain' : 'cover'
   const heroImageTreatment: 'editorial' | 'original' | 'enhanced' | 'monochrome' =
@@ -118,8 +128,12 @@ export default function HomePageClient({
                       src={imageUrl}
                       autoPlay
                       muted
-                      loop
                       playsInline
+                      onEnded={() => {
+                        if (heroImages.length > 1) {
+                          advanceHero()
+                        }
+                      }}
                       initial={{ opacity: 0, scale: 1.08 }}
                       animate={{ opacity: activeHeroOpacity, scale: 1 }}
                       exit={{ opacity: 0, scale: 1.03 }}

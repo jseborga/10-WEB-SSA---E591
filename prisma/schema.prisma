@@ -23,6 +23,7 @@ model Project {
   year              Int?
   area              String?
   featured          Boolean  @default(false)
+  showOnHomepage    Boolean  @default(false)
   published         Boolean  @default(false)
   publishedAt       DateTime?
   mainImage         String?
