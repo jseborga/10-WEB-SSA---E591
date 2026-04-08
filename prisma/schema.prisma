@@ -106,7 +106,7 @@ model SiteSettings {
   heroImageSaturation Int      @default(90)
   heroImageBrightness Int      @default(100)
   heroImageContrast   Int      @default(105)
-  heroImageFit        String   @default("contain")
+  heroImageFit        String   @default("cover")
   heroImageTreatment  String   @default("original")
   heroShowCompanyName Boolean  @default(false)
   heroTextTone        String   @default("dark")

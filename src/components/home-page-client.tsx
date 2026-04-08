@@ -316,24 +316,33 @@ export default function HomePageClient({
     { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
   ].filter((item) => item.href)
   const heroTitle = siteSettings?.tagline?.trim() || t.hero.subtitle
+  const heroImageFit: 'cover' | 'contain' = siteSettings?.heroImageFit === 'contain' ? 'contain' : 'cover'
   const heroImageTreatment: 'editorial' | 'original' | 'enhanced' | 'monochrome' =
+    siteSettings?.heroImageTreatment === 'original' ||
     siteSettings?.heroImageTreatment === 'enhanced' ||
     siteSettings?.heroImageTreatment === 'monochrome'
       ? siteSettings.heroImageTreatment
       : 'original'
-  const heroShowCompanyName = false
+  const heroShowCompanyName = Boolean(siteSettings?.heroShowCompanyName)
+  const heroTextTone = siteSettings?.heroTextTone === 'light' ? 'light' : 'dark'
+  const heroImageOpacity = clampNumber(siteSettings?.heroImageOpacity, 34, 5, 70)
   const heroImageSaturation = clampNumber(siteSettings?.heroImageSaturation, 100, 0, 160)
   const heroImageBrightness = clampNumber(siteSettings?.heroImageBrightness, 100, 70, 150)
   const heroImageContrast = clampNumber(siteSettings?.heroImageContrast, 105, 80, 160)
-  const activeHeroOpacity = 1
-  const accentHeroOpacity = 0
-  const activeHeroGrayscale = 0
+  const activeHeroOpacity = heroImageTreatment === 'original' ? 1 : heroImageOpacity / 100
+  const accentHeroOpacity = heroImageTreatment === 'original' ? 0 : Math.max(0.08, Math.min(0.28, activeHeroOpacity * 0.46))
+  const heroWashOpacity = heroImageTreatment === 'original' ? 0 : Math.max(0.16, Math.min(0.56, 0.58 - activeHeroOpacity * 0.45))
+  const activeHeroGrayscale = heroImageTreatment === 'monochrome' ? 100 : Math.max(0, Math.round(100 - heroImageSaturation * 0.38))
   const activeHeroSaturation = Math.max(0.9, heroImageSaturation / 100)
-  const heroTitleColorClass = 'text-black'
-  const heroSubtitleColorClass = 'text-zinc-900'
-  const heroNameColorClass = 'text-zinc-500'
-  const heroCtaClass = 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'
-  const heroTextShadow = '0 2px 18px rgba(255,255,255,0.85), 0 0 2px rgba(255,255,255,0.95)'
+  const heroTitleColorClass = heroTextTone === 'light' ? 'text-white' : 'text-black'
+  const heroSubtitleColorClass = heroTextTone === 'light' ? 'text-white/88' : 'text-zinc-900'
+  const heroNameColorClass = heroTextTone === 'light' ? 'text-white/72' : 'text-zinc-500'
+  const heroCtaClass = heroTextTone === 'light'
+    ? 'border-white text-white hover:bg-white hover:text-zinc-900'
+    : 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'
+  const heroTextShadow = heroTextTone === 'light'
+    ? '0 1px 16px rgba(0,0,0,0.34)'
+    : '0 2px 18px rgba(255,255,255,0.85), 0 0 2px rgba(255,255,255,0.95)'
 
   useEffect(() => {
     const configuredImages = parseUrlList(siteSettings?.heroImages)
@@ -478,7 +487,7 @@ export default function HomePageClient({
                         : `grayscale(${activeHeroGrayscale}%) saturate(${activeHeroSaturation}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
                   : isAccent
                     ? heroImageTreatment === 'original'
-                      ? 'none'
+                      ? `brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
                       : 'grayscale(100%) contrast(0.92)'
                     : 'grayscale(100%)'
 
@@ -487,7 +496,7 @@ export default function HomePageClient({
                     key={`${imageUrl}-${index}`}
                     src={imageUrl}
                     alt=""
-                    className="absolute inset-0 h-full w-full object-cover transition-all duration-[1800ms] ease-out"
+                    className={`absolute inset-0 h-full w-full ${heroImageFit === 'contain' ? 'object-contain' : 'object-cover'} transition-all duration-[1800ms] ease-out`}
                     style={{
                       opacity,
                       filter,
@@ -496,6 +505,9 @@ export default function HomePageClient({
                   />
                 )
               })}
+              {heroWashOpacity > 0 ? (
+                <div className="absolute inset-0" style={{ backgroundColor: `rgba(255,255,255,${heroWashOpacity})` }} />
+              ) : null}
             </div>
           ) : (
             <Image src="/images/hero-bg.png" alt="" fill className="object-cover" priority />

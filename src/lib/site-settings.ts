@@ -17,7 +17,7 @@ export function getDefaultSiteSettings() {
     heroImageSaturation: 90,
     heroImageBrightness: 100,
     heroImageContrast: 105,
-    heroImageFit: 'contain',
+    heroImageFit: 'cover',
     heroImageTreatment: 'original',
     heroShowCompanyName: false,
     heroTextTone: 'dark',

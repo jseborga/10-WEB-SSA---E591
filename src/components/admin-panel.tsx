@@ -197,7 +197,7 @@ const emptySiteForm: SiteFormState = {
   heroImageBrightness: '100',
   heroImageContrast: '105',
   heroImageFit: 'cover',
-  heroImageTreatment: 'editorial',
+  heroImageTreatment: 'original',
   heroShowCompanyName: false,
   heroTextTone: 'dark',
   email: '',
@@ -242,6 +242,68 @@ function clampIntegerString(value: string, fallback: number, min: number, max: n
 
 function normalizeChoice<T extends string>(value: string, fallback: T, options: readonly T[]): T {
   return options.includes(value as T) ? (value as T) : fallback
+}
+
+function parseUrlList(value: string | null | undefined) {
+  const rawValue = (value || '').trim()
+
+  if (!rawValue) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue)
+
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+    }
+  } catch {
+    // Fall back to line-based parsing from the admin textarea.
+  }
+
+  return rawValue
+    .split('\n')
+    .map((line) => line.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean)
+}
+
+function clampPreviewNumber(value: string, fallback: number, min: number, max: number) {
+  const parsed = Number(value)
+
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function getHeroPreviewStyles(siteForm: SiteFormState) {
+  const treatment = normalizeChoice(siteForm.heroImageTreatment, 'original', ['editorial', 'original', 'enhanced', 'monochrome'] as const)
+  const fit = normalizeChoice(siteForm.heroImageFit, 'cover', ['cover', 'contain'] as const)
+  const brightness = clampPreviewNumber(siteForm.heroImageBrightness, 100, 70, 150)
+  const contrast = clampPreviewNumber(siteForm.heroImageContrast, 105, 80, 160)
+  const saturation = clampPreviewNumber(siteForm.heroImageSaturation, 90, 0, 160)
+  const opacity = treatment === 'original' ? 1 : clampPreviewNumber(siteForm.heroImageOpacity, 34, 5, 70) / 100
+  const overlayOpacity = treatment === 'original' ? 0 : Math.max(0.16, Math.min(0.56, 0.58 - opacity * 0.45))
+  const grayscale = treatment === 'monochrome' ? 100 : Math.max(0, Math.round(100 - saturation * 0.38))
+  const textTone = siteForm.heroTextTone === 'light' ? 'light' : 'dark'
+
+  const filter =
+    treatment === 'original'
+      ? `brightness(${brightness / 100}) contrast(${contrast / 100})`
+      : treatment === 'enhanced'
+        ? `grayscale(8%) saturate(${Math.max(1, saturation / 100 * 1.08)}) brightness(${brightness / 100}) contrast(${contrast / 100})`
+        : `grayscale(${grayscale}%) saturate(${Math.max(0, saturation / 100)}) brightness(${brightness / 100}) contrast(${contrast / 100})`
+
+  return {
+    fit,
+    opacity,
+    filter,
+    overlayOpacity,
+    textTone,
+  }
 }
 
 interface AdminPanelProps {
@@ -291,6 +353,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [showProjectDialog, setShowProjectDialog] = useState(false)
   const [showPublicationDialog, setShowPublicationDialog] = useState(false)
+  const heroPreviewImage = useMemo(() => parseUrlList(siteForm.heroImages)[0] || '', [siteForm.heroImages])
+  const heroPreviewStyles = useMemo(() => getHeroPreviewStyles(siteForm), [siteForm])
 
   const authCopy = useMemo(() => {
     if (language === 'en') {
@@ -568,7 +632,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
       setSiteForm((current) => ({
         ...current,
-        heroImages: [current.heroImages.trim(), ...uploadedUrls].filter(Boolean).join('\n'),
+        heroImages: [...uploadedUrls, current.heroImages.trim()].filter(Boolean).join('\n'),
       }))
 
       toast.success('Imagenes del hero subidas correctamente')
@@ -1125,6 +1189,90 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           placeholder="Una URL por linea. Se mezclaran con las imagenes principales de proyectos publicados."
                           className="text-sm"
                         />
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Vista previa del hero</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Desktop y mobile usando la primera imagen de la lista.</p>
+                          </div>
+                          {!heroPreviewImage && <span className="text-xs text-zinc-500">Sube una imagen para ver la previsualizacion</span>}
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <span className="text-xs uppercase tracking-[0.22em] text-zinc-500">Desktop</span>
+                            <div className="rounded-[28px] border border-zinc-200 bg-zinc-100 p-3">
+                              <div className="relative aspect-[16/9] overflow-hidden rounded-[22px] bg-zinc-100">
+                                {heroPreviewImage ? (
+                                  <>
+                                    <img
+                                      src={heroPreviewImage}
+                                      alt=""
+                                      className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                      style={{
+                                        opacity: heroPreviewStyles.opacity,
+                                        filter: heroPreviewStyles.filter,
+                                      }}
+                                    />
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
+                                    />
+                                    <div className="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
+                                      <span>Menu</span>
+                                    </div>
+                                    <div className="absolute inset-x-6 bottom-8 text-center">
+                                      <div className={`inline-flex items-end gap-1 text-2xl font-light ${heroPreviewStyles.textTone === 'light' ? 'text-white' : 'text-black'}`} style={{ textShadow: heroPreviewStyles.textTone === 'light' ? '0 1px 16px rgba(0,0,0,0.28)' : '0 2px 18px rgba(255,255,255,0.85)' }}>
+                                        <span>{siteForm.tagline?.trim() || 'Construyendo el futuro'}</span>
+                                        <span className="inline-flex opacity-80">...</span>
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-400">Sin imagen</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <span className="text-xs uppercase tracking-[0.22em] text-zinc-500">Mobile</span>
+                            <div className="rounded-[28px] border border-zinc-200 bg-zinc-100 p-3 max-w-[280px]">
+                              <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-zinc-100">
+                                {heroPreviewImage ? (
+                                  <>
+                                    <img
+                                      src={heroPreviewImage}
+                                      alt=""
+                                      className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                      style={{
+                                        opacity: heroPreviewStyles.opacity,
+                                        filter: heroPreviewStyles.filter,
+                                      }}
+                                    />
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
+                                    />
+                                    <div className="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
+                                      <span>Menu</span>
+                                    </div>
+                                    <div className="absolute inset-x-5 bottom-10 text-center">
+                                      <div className={`inline-flex items-end gap-1 text-xl font-light leading-tight ${heroPreviewStyles.textTone === 'light' ? 'text-white' : 'text-black'}`} style={{ textShadow: heroPreviewStyles.textTone === 'light' ? '0 1px 16px rgba(0,0,0,0.28)' : '0 2px 18px rgba(255,255,255,0.85)' }}>
+                                        <span>{siteForm.tagline?.trim() || 'Construyendo el futuro'}</span>
+                                        <span className="inline-flex opacity-80">...</span>
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-400">Sin imagen</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
