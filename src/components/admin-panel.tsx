@@ -448,6 +448,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [loading, setLoading] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
+  const [projectAiLoading, setProjectAiLoading] = useState(false)
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
   const [automationActionId, setAutomationActionId] = useState<string | null>(null)
   const [session, setSession] = useState<SessionState>({
@@ -898,6 +899,54 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       }
     } catch { toast.error('Error al guardar') }
     finally { setLoading(false) }
+  }
+
+  const handleAssistProjectWithAi = async () => {
+    setProjectAiLoading(true)
+    try {
+      const response = await fetch('/api/ai/project-copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: projectForm.title,
+          description: projectForm.description,
+          fullDescription: projectForm.fullDescription,
+          category: projectForm.category,
+          location: projectForm.location,
+          year: projectForm.year,
+          area: projectForm.area,
+          client: projectForm.client,
+          status: projectForm.status,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo generar la sugerencia con IA')
+        return
+      }
+
+      const suggestion = data.suggestion || {}
+
+      setProjectForm((current) => ({
+        ...current,
+        title: typeof suggestion.title === 'string' && suggestion.title.trim() ? suggestion.title.trim() : current.title,
+        description:
+          typeof suggestion.description === 'string' && suggestion.description.trim() ? suggestion.description.trim() : current.description,
+        fullDescription:
+          typeof suggestion.fullDescription === 'string' && suggestion.fullDescription.trim()
+            ? suggestion.fullDescription.trim()
+            : current.fullDescription,
+        category: typeof suggestion.category === 'string' && suggestion.category.trim() ? suggestion.category.trim() : current.category,
+      }))
+
+      toast.success('La IA actualizó el texto del proyecto')
+    } catch {
+      toast.error('No se pudo generar la sugerencia con IA')
+    } finally {
+      setProjectAiLoading(false)
+    }
   }
 
   const handleDeleteProject = async (id: string) => {
@@ -2312,6 +2361,26 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         <DialogContent className="max-w-md sm:max-w-2xl">
           <DialogHeader><DialogTitle>{editingProject ? t.admin.editProject : t.admin.newProject}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-sky-950">Asistencia con IA</p>
+                  <p className="mt-1 text-xs text-sky-800">
+                    Usa los datos actuales del proyecto para sugerir mejor titulo, descripcion corta, descripcion completa y categoria.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleAssistProjectWithAi()}
+                  disabled={projectAiLoading}
+                  className="border-sky-200 bg-white text-sky-900 hover:bg-sky-100"
+                >
+                  {projectAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}
+                  Asistir con IA
+                </Button>
+              </div>
+            </div>
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Título *</label>
               <Input value={projectForm.title} onChange={e => setProjectForm({ ...projectForm, title: e.target.value })} className="text-sm" />
