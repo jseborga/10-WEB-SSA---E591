@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Menu, X } from 'lucide-react'
+import { Home, Menu, X } from 'lucide-react'
 import { LanguageSelector } from '@/components/language-selector'
 import { useLanguage } from '@/lib/language-context'
 
@@ -37,15 +37,20 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
     <header className="fixed inset-x-0 top-0 z-50">
       <nav className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-2">
-          <LanguageSelector iconOnly blinking tone={tone} />
+          <LanguageSelector blinking tone={tone} />
         </div>
         <div className="flex items-center gap-2">
           <Link
             href="/"
             aria-label="Inicio"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-transparent"
+            className={[
+              'hidden h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md transition-colors md:inline-flex',
+              isLight
+                ? 'border-white/35 bg-black/14 text-white hover:border-white/70 hover:bg-white hover:text-zinc-900'
+                : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-zinc-900 hover:text-white',
+            ].join(' ')}
           >
-            <span className="h-3.5 w-3.5 rounded-full bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.08)]" />
+            <Home className="h-4 w-4" />
           </Link>
           <button
             onClick={() => setIsMenuOpen((current) => !current)}
@@ -81,6 +86,13 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
         )}
       </AnimatePresence>
     </header>
+    <Link
+      href="/"
+      aria-label="Inicio"
+      className="fixed bottom-5 left-1/2 z-50 inline-flex h-14 min-w-[76px] -translate-x-1/2 items-center justify-center rounded-full bg-black px-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.28)] transition-all duration-300 hover:bg-white hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 md:hidden"
+    >
+      <span className="h-3.5 w-3.5 rounded-full bg-current" />
+    </Link>
     <ChatWidget />
     </>
   )

@@ -6,9 +6,9 @@ import { motion } from 'framer-motion'
 import { useState, useRef, useEffect } from 'react'
 
 const languages = [
-  { code: 'es' as const, name: 'ES', full: 'Espanol' },
+  { code: 'es' as const, name: 'ES', full: 'Español' },
   { code: 'en' as const, name: 'EN', full: 'English' },
-  { code: 'pt' as const, name: 'PT', full: 'Portugues' },
+  { code: 'pt' as const, name: 'PT', full: 'Português' },
 ]
 
 interface LanguageSelectorProps {
@@ -26,6 +26,7 @@ export function LanguageSelector({
   const [isOpen, setIsOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const isLight = tone === 'light'
+  const currentLanguage = languages.find((item) => item.code === language) || languages[0]
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -43,11 +44,12 @@ export function LanguageSelector({
       <button
         onClick={() => setIsOpen((current) => !current)}
         className={[
-          'inline-flex items-center justify-center rounded-full border px-3 py-2 text-xs tracking-[0.24em] transition-colors backdrop-blur-md',
+          'inline-flex items-center justify-center rounded-full border px-3.5 py-2 text-[11px] font-medium tracking-[0.24em] transition-colors backdrop-blur-md',
           isLight
             ? 'border-white/40 bg-black/12 text-white hover:border-white/70 hover:bg-black/24'
-            : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
-          iconOnly ? 'h-11 w-11 px-0 py-0' : 'gap-2',
+            : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white'
+          ,
+          iconOnly ? 'h-11 w-11 px-0 py-0' : 'gap-2.5',
         ].join(' ')}
         aria-label="Select language"
       >
@@ -63,13 +65,13 @@ export function LanguageSelector({
           transition={blinking ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } : undefined}
           className="inline-flex"
         >
-          <Globe className="h-4 w-4" />
+          <Globe className="h-4 w-4 text-sky-400" />
         </motion.span>
-        {!iconOnly ? <span className="uppercase">{language}</span> : null}
+        {!iconOnly ? <span className="uppercase">{currentLanguage.name}</span> : null}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 min-w-[132px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 min-w-[168px] overflow-hidden rounded-2xl border border-zinc-200 bg-white/96 p-1.5 shadow-[0_24px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl">
           {languages.map((lang) => (
             <button
               key={lang.code}
@@ -77,11 +79,18 @@ export function LanguageSelector({
                 setLanguage(lang.code)
                 setIsOpen(false)
               }}
-              className={`w-full px-4 py-3 text-left text-sm transition-colors ${
-                language === lang.code ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+                language === lang.code ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-sky-50 hover:text-zinc-900'
               }`}
             >
-              {lang.full}
+              <span>{lang.full}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-[0.18em] ${
+                  language === lang.code ? 'bg-white/14 text-white' : 'bg-sky-100 text-sky-700'
+                }`}
+              >
+                {lang.name}
+              </span>
             </button>
           ))}
         </div>
