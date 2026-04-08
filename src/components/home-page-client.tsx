@@ -294,7 +294,6 @@ export default function HomePageClient({
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const projects = initialProjects ?? defaultProjects
   const companyName = siteSettings?.companyName?.trim() || 'SSA Ingenieria'
-  const logoUrl = siteSettings?.logoUrl?.trim() || ''
   const contactEmail = siteSettings?.email?.trim() || t.studio.email
   const contactPhone = siteSettings?.phone?.trim() || t.studio.phone
   const contactWhatsapp = siteSettings?.whatsapp?.trim() || ''
@@ -317,35 +316,24 @@ export default function HomePageClient({
     { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
   ].filter((item) => item.href)
   const heroTitle = siteSettings?.tagline?.trim() || t.hero.subtitle
-  const heroImageFit: 'cover' | 'contain' = siteSettings?.heroImageFit === 'contain' ? 'contain' : 'cover'
   const heroImageTreatment: 'editorial' | 'original' | 'enhanced' | 'monochrome' =
-    siteSettings?.heroImageTreatment === 'original' ||
     siteSettings?.heroImageTreatment === 'enhanced' ||
     siteSettings?.heroImageTreatment === 'monochrome'
       ? siteSettings.heroImageTreatment
-      : 'editorial'
-  const heroShowCompanyName = Boolean(siteSettings?.heroShowCompanyName)
-  const heroTextTone = siteSettings?.heroTextTone === 'light' ? 'light' : 'dark'
-  const heroImageOpacity = clampNumber(siteSettings?.heroImageOpacity, 34, 5, 70)
-  const heroImageSaturation = clampNumber(siteSettings?.heroImageSaturation, 90, 0, 160)
+      : 'original'
+  const heroShowCompanyName = false
+  const heroImageSaturation = clampNumber(siteSettings?.heroImageSaturation, 100, 0, 160)
   const heroImageBrightness = clampNumber(siteSettings?.heroImageBrightness, 100, 70, 150)
   const heroImageContrast = clampNumber(siteSettings?.heroImageContrast, 105, 80, 160)
-  const activeHeroOpacity = heroImageTreatment === 'original' ? 1 : heroImageOpacity / 100
-  const accentHeroOpacity = heroImageTreatment === 'original' ? 0 : Math.max(0.08, Math.min(0.28, activeHeroOpacity * 0.46))
-  const heroWashOpacity = heroImageTreatment === 'original'
-    ? heroTextTone === 'dark' ? 0.06 : 0.02
-    : Math.max(0.16, Math.min(0.56, 0.58 - activeHeroOpacity * 0.45))
-  const activeHeroGrayscale = Math.max(0, Math.round(100 - heroImageSaturation * 0.38))
-  const activeHeroSaturation = Math.max(0, heroImageSaturation / 100)
-  const heroTitleColorClass = heroTextTone === 'light' ? 'text-white' : 'text-black'
-  const heroSubtitleColorClass = heroTextTone === 'light' ? 'text-white/88' : 'text-zinc-800'
-  const heroNameColorClass = heroTextTone === 'light' ? 'text-white/70' : 'text-zinc-500'
-  const heroCtaClass = heroTextTone === 'light'
-    ? 'border-white text-white hover:bg-white hover:text-zinc-900'
-    : 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'
-  const heroTextShadow = heroTextTone === 'light'
-    ? '0 1px 20px rgba(0,0,0,0.28)'
-    : '0 1px 18px rgba(255,255,255,0.34)'
+  const activeHeroOpacity = 1
+  const accentHeroOpacity = 0
+  const activeHeroGrayscale = 0
+  const activeHeroSaturation = Math.max(0.9, heroImageSaturation / 100)
+  const heroTitleColorClass = 'text-black'
+  const heroSubtitleColorClass = 'text-zinc-900'
+  const heroNameColorClass = 'text-zinc-500'
+  const heroCtaClass = 'border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white'
+  const heroTextShadow = '0 2px 18px rgba(255,255,255,0.85), 0 0 2px rgba(255,255,255,0.95)'
 
   useEffect(() => {
     const configuredImages = parseUrlList(siteSettings?.heroImages)
@@ -440,21 +428,13 @@ export default function HomePageClient({
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 border-b border-zinc-100/80 bg-white/92 backdrop-blur-sm">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
-          <a href="#" className="text-xl sm:text-2xl font-normal tracking-tight text-zinc-900" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
-            {logoUrl ? (
-              <img src={logoUrl} alt={companyName} className="h-9 sm:h-10 w-auto object-contain" />
-            ) : (
-              companyName
-            )}
-          </a>
-
-          <div className="flex items-center gap-2">
+      <header className="fixed top-0 left-0 right-0 z-40 pointer-events-none">
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-end">
+          <div className="flex items-center gap-2 pointer-events-auto">
             <LanguageSelector />
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/80 px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-zinc-700 transition-colors hover:border-zinc-900 hover:text-zinc-900"
+              className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/12 px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-white backdrop-blur-md transition-colors hover:border-white/70 hover:bg-black/24"
             >
               <span>Menu</span>
               {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -468,11 +448,11 @@ export default function HomePageClient({
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="border-t border-zinc-100/80 bg-white/96 backdrop-blur-sm"
+              className="pointer-events-auto bg-black/20 backdrop-blur-xl"
             >
               <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                <a href="#proyectos" className="text-sm text-zinc-700 hover:text-zinc-900 transition-colors" onClick={() => setIsMenuOpen(false)}>{t.nav.projects}</a>
-                <a href="#servicios" className="text-sm text-zinc-700 hover:text-zinc-900 transition-colors" onClick={() => setIsMenuOpen(false)}>{t.nav.services}</a>
+                <a href="#proyectos" className="text-sm text-white/92 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>{t.nav.projects}</a>
+                <a href="#servicios" className="text-sm text-white/92 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>{t.nav.services}</a>
               </div>
             </motion.div>
           )}
@@ -480,7 +460,7 @@ export default function HomePageClient({
       </header>
 
       {/* Hero */}
-      <section id="inicio" className="relative min-h-screen flex items-center justify-center pt-16">
+      <section id="inicio" className="relative min-h-screen flex items-center justify-center">
         <div className="absolute inset-0 z-0">
           {heroCarouselImages.length > 0 ? (
             <div className="absolute inset-0 overflow-hidden">
@@ -488,7 +468,6 @@ export default function HomePageClient({
                 const isActive = index === activeHeroIndex
                 const isAccent = heroCarouselImages.length > 0 && index === (activeHeroIndex + heroCarouselImages.length - 1) % heroCarouselImages.length
                 const opacity = isActive ? activeHeroOpacity : isAccent ? accentHeroOpacity : 0
-                const scale = isActive ? 1 : isAccent ? 1.02 : 1.05
                 const filter = isActive
                   ? heroImageTreatment === 'original'
                     ? `brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
@@ -508,44 +487,25 @@ export default function HomePageClient({
                     key={`${imageUrl}-${index}`}
                     src={imageUrl}
                     alt=""
-                    className={`absolute inset-0 h-full w-full ${heroImageFit === 'contain' ? 'object-contain' : 'object-cover'} transition-all duration-[1800ms] ease-out`}
+                    className="absolute inset-0 h-full w-full object-cover transition-all duration-[1800ms] ease-out"
                     style={{
                       opacity,
                       filter,
-                      transform: `scale(${scale})`,
+                      transform: `scale(${isActive ? 1 : 1.015})`,
                     }}
                   />
                 )
               })}
-              <div className="absolute inset-0" style={{ backgroundColor: `rgba(255, 255, 255, ${heroWashOpacity})` }} />
             </div>
           ) : (
-            <Image src="/images/hero-bg.png" alt="" fill className="object-cover opacity-15" priority />
+            <Image src="/images/hero-bg.png" alt="" fill className="object-cover" priority />
           )}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                heroImageTreatment === 'original'
-                  ? 'radial-gradient(circle at center, rgba(255,255,255,0.02), rgba(255,255,255,0.14) 72%)'
-                  : 'radial-gradient(circle at center, rgba(255,255,255,0.05), rgba(255,255,255,0.64) 72%)',
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                heroImageTreatment === 'original'
-                  ? 'linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.16))'
-                  : 'linear-gradient(to bottom, rgba(255,255,255,0.38), rgba(255,255,255,0.14) 40%, rgba(255,255,255,0.74))',
-            }}
-          />
         </div>
         
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-20 text-center">
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-20 sm:py-24 text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <h1
-              className={`text-3xl sm:text-5xl md:text-6xl font-light tracking-tight mb-3 ${heroTitleColorClass}`}
+              className={`text-4xl sm:text-6xl md:text-7xl font-light tracking-tight mb-4 ${heroTitleColorClass}`}
               style={{ textShadow: heroTextShadow }}
             >
               {heroShowCompanyName ? (
@@ -584,7 +544,7 @@ export default function HomePageClient({
         </div>
 
         <motion.div animate={{ y: [0, 8, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute bottom-6 left-1/2 -translate-x-1/2">
-          <div className="w-px h-12 bg-gradient-to-b from-transparent to-zinc-400" />
+          <div className="w-px h-14 bg-gradient-to-b from-transparent via-white/70 to-white/15" />
         </motion.div>
       </section>
 
@@ -765,7 +725,7 @@ export default function HomePageClient({
       </section>
 
       {/* Footer */}
-      <footer className="bg-zinc-950 text-white py-6">
+      <footer className="hidden bg-zinc-950 text-white py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <span className="text-base sm:text-lg font-normal tracking-tight" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
@@ -788,6 +748,46 @@ export default function HomePageClient({
               </div>
             )}
           </div>
+        </div>
+      </footer>
+
+      <footer className="bg-white py-12 sm:py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="flex flex-col items-center justify-center gap-5"
+          >
+            <div className="w-full max-w-md overflow-hidden">
+              <motion.div
+                animate={{ width: ['0%', '100%', '72%', '100%'] }}
+                transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
+                className="h-px bg-zinc-900/70"
+              />
+            </div>
+            <div className="text-center">
+              <span className="inline-flex items-end justify-center gap-1 text-2xl sm:text-4xl md:text-5xl font-light tracking-tight text-zinc-900">
+                <motion.span
+                  animate={{ letterSpacing: ['0em', '0.022em', '0em'] }}
+                  transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  {heroTitle}
+                </motion.span>
+                <span className="inline-flex" aria-hidden="true">
+                  {[0, 1, 2].map((dot) => (
+                    <motion.span
+                      key={`footer-dot-${dot}`}
+                      animate={{ opacity: [0.16, 1, 0.16], y: [0, -2, 0] }}
+                      transition={{ duration: 1.3, repeat: Infinity, delay: dot * 0.2, ease: 'easeInOut' }}
+                    >
+                      .
+                    </motion.span>
+                  ))}
+                </span>
+              </span>
+            </div>
+          </motion.div>
         </div>
       </footer>
 
