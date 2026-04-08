@@ -68,6 +68,13 @@ interface ChatLead {
   projectIdea: string | null
   summary: string | null
   lastVisitorMessage: string | null
+  leadStatus: string
+  priority: string
+  ownerName: string | null
+  nextAction: string | null
+  nextFollowUpAt: string | null
+  lastContactedAt: string | null
+  internalNotes: string | null
   needsHuman: boolean
   qualified: boolean
   telegramNotified: boolean
@@ -471,6 +478,46 @@ interface AdminPanelProps {
   hideLauncher?: boolean
 }
 
+const leadStatusOptions = [
+  { value: 'new', label: 'Nuevo', tone: 'bg-zinc-100 text-zinc-700' },
+  { value: 'contacted', label: 'Contactado', tone: 'bg-sky-100 text-sky-700' },
+  { value: 'proposal', label: 'Cotizacion', tone: 'bg-violet-100 text-violet-700' },
+  { value: 'won', label: 'Ganado', tone: 'bg-emerald-100 text-emerald-700' },
+  { value: 'lost', label: 'Perdido', tone: 'bg-rose-100 text-rose-700' },
+  { value: 'archived', label: 'Archivado', tone: 'bg-zinc-200 text-zinc-700' },
+] as const
+
+const leadPriorityOptions = [
+  { value: 'low', label: 'Baja', tone: 'bg-zinc-100 text-zinc-700' },
+  { value: 'normal', label: 'Normal', tone: 'bg-sky-100 text-sky-700' },
+  { value: 'high', label: 'Alta', tone: 'bg-amber-100 text-amber-700' },
+  { value: 'urgent', label: 'Urgente', tone: 'bg-rose-100 text-rose-700' },
+] as const
+
+function formatDateTimeLocalValue(value: string | null | undefined) {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return adjusted.toISOString().slice(0, 16)
+}
+
+function isLeadFollowUpDue(value: string | null | undefined) {
+  if (!value) {
+    return false
+  }
+
+  const date = new Date(value)
+  return !Number.isNaN(date.getTime()) && date.getTime() <= Date.now()
+}
+
 export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminPanelProps) {
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(initialOpen)
@@ -486,6 +533,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [chatConfig, setChatConfig] = useState<ChatConfigType | null>(null)
   const [loading, setLoading] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
+  const [leadFilter, setLeadFilter] = useState<'all' | 'attention' | 'new' | 'contacted' | 'proposal' | 'won' | 'lost' | 'archived'>('all')
+  const [leadSavingId, setLeadSavingId] = useState<string | null>(null)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [projectAiLoading, setProjectAiLoading] = useState(false)
   const [salesPromptLoading, setSalesPromptLoading] = useState(false)
@@ -532,6 +581,43 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   )
   const heroPreviewStyles = useMemo(() => getHeroPreviewStyles(siteForm), [siteForm])
   const pendingReviews = useMemo(() => reviews.filter((review) => review.status === 'pending'), [reviews])
+  const leadSummary = useMemo(() => {
+    const dueToday = chatLeads.filter((lead) => isLeadFollowUpDue(lead.nextFollowUpAt) && !['won', 'lost', 'archived'].includes(lead.leadStatus)).length
+
+    return {
+      total: chatLeads.length,
+      new: chatLeads.filter((lead) => lead.leadStatus === 'new').length,
+      proposal: chatLeads.filter((lead) => lead.leadStatus === 'proposal').length,
+      dueToday,
+      needsHuman: chatLeads.filter((lead) => lead.needsHuman).length,
+    }
+  }, [chatLeads])
+  const visibleChatLeads = useMemo(() => {
+    return [...chatLeads]
+      .filter((lead) => {
+        if (leadFilter === 'all') return true
+        if (leadFilter === 'attention') {
+          return lead.needsHuman || isLeadFollowUpDue(lead.nextFollowUpAt)
+        }
+
+        return lead.leadStatus === leadFilter
+      })
+      .sort((a, b) => {
+        const aDue = isLeadFollowUpDue(a.nextFollowUpAt)
+        const bDue = isLeadFollowUpDue(b.nextFollowUpAt)
+        if (aDue !== bDue) {
+          return aDue ? -1 : 1
+        }
+
+        const aNext = a.nextFollowUpAt ? new Date(a.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+        const bNext = b.nextFollowUpAt ? new Date(b.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+        if (aNext !== bNext) {
+          return aNext - bNext
+        }
+
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      })
+  }, [chatLeads, leadFilter])
 
   const authCopy = useMemo(() => {
     if (language === 'en') {
@@ -1244,6 +1330,63 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     } finally {
       setSalesPromptLoading(false)
     }
+  }
+
+  const updateLeadLocally = (leadId: string, patch: Partial<ChatLead>) => {
+    setChatLeads((current) => current.map((lead) => (lead.id === leadId ? { ...lead, ...patch } : lead)))
+  }
+
+  const handleSaveLead = async (lead: ChatLead) => {
+    setLeadSavingId(lead.id)
+    try {
+      const response = await fetch(`/api/admin/chat-leads/${lead.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          serviceType: lead.serviceType,
+          projectType: lead.projectType,
+          projectLocation: lead.projectLocation,
+          projectIdea: lead.projectIdea,
+          summary: lead.summary,
+          leadStatus: lead.leadStatus,
+          priority: lead.priority,
+          ownerName: lead.ownerName,
+          nextAction: lead.nextAction,
+          nextFollowUpAt: lead.nextFollowUpAt || null,
+          lastContactedAt: lead.lastContactedAt || null,
+          internalNotes: lead.internalNotes,
+          needsHuman: lead.needsHuman,
+          qualified: lead.qualified,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo guardar el seguimiento')
+        return
+      }
+
+      updateLeadLocally(lead.id, data)
+      toast.success('Seguimiento actualizado')
+    } catch {
+      toast.error('No se pudo guardar el seguimiento')
+    } finally {
+      setLeadSavingId(null)
+    }
+  }
+
+  const handleMarkLeadContactedNow = async (lead: ChatLead) => {
+    const nextLead = {
+      ...lead,
+      leadStatus: lead.leadStatus === 'new' ? 'contacted' : lead.leadStatus,
+      lastContactedAt: new Date().toISOString(),
+    }
+    updateLeadLocally(lead.id, nextLead)
+    await handleSaveLead(nextLead)
   }
 
   const handleSaveTelegramConfig = async () => {
@@ -2027,68 +2170,188 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                         {contacts.length === 0 && <p className="text-center text-zinc-500 py-6 text-sm">{t.admin.noContacts}</p>}
                       </div>
                       <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div>
-                            <h3 className="text-sm font-medium text-zinc-900">Leads capturados por IA</h3>
-                            <p className="text-xs text-zinc-500 mt-1">Datos estructurados del chat para cotizaciones, seguimiento y traspaso a humano.</p>
+                            <h3 className="text-sm font-medium text-zinc-900">Bandeja comercial del chat</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Gestiona cotizaciones y seguimientos desde una sola vista: estado, prioridad, proximo contacto y notas internas.</p>
                           </div>
-                          <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-700">{chatLeads.length} leads</span>
+                          <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-700">{visibleChatLeads.length} visibles / {leadSummary.total} totales</span>
                         </div>
-                        <div className="grid gap-3">
-                          {chatLeads.map((lead) => (
-                            <div key={lead.id} className="rounded-xl border border-zinc-200 p-4">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <h4 className="text-sm font-medium text-zinc-900">{lead.name || 'Lead sin nombre'}</h4>
-                                    {lead.qualified ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">Calificado</span> : null}
-                                    {lead.needsHuman ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">Requiere humano</span> : null}
-                                    {lead.telegramNotified ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-700">Avisado por Telegram</span> : null}
-                                  </div>
-                                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">
-                                    {lead.email ? <span>{lead.email}</span> : null}
-                                    {lead.phone ? <span>{lead.phone}</span> : null}
-                                    <span>{lead.source}</span>
-                                  </div>
-                                </div>
-                                <div className="text-xs text-zinc-400">
-                                  {new Date(lead.updatedAt).toLocaleString()}
-                                </div>
-                              </div>
-                              <div className="mt-3 grid gap-2 sm:grid-cols-2 text-xs text-zinc-600">
-                                <div>
-                                  <span className="font-medium text-zinc-800">Servicio:</span> {lead.serviceType || 'Sin definir'}
-                                </div>
-                                <div>
-                                  <span className="font-medium text-zinc-800">Tipo:</span> {lead.projectType || 'Sin definir'}
-                                </div>
-                                <div>
-                                  <span className="font-medium text-zinc-800">Ubicacion:</span> {lead.projectLocation || 'Sin definir'}
-                                </div>
-                                <div>
-                                  <span className="font-medium text-zinc-800">Sesion:</span> {lead.sessionId}
-                                </div>
-                              </div>
-                              {lead.projectIdea ? (
-                                <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-700">
-                                  <p className="font-medium text-zinc-800">Idea del proyecto</p>
-                                  <p className="mt-1 whitespace-pre-wrap">{lead.projectIdea}</p>
-                                </div>
-                              ) : null}
-                              {lead.summary ? (
-                                <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-700">
-                                  <p className="font-medium text-zinc-800">Resumen IA</p>
-                                  <p className="mt-1 whitespace-pre-wrap">{lead.summary}</p>
-                                </div>
-                              ) : null}
-                              {lead.lastVisitorMessage ? (
-                                <div className="mt-3 text-xs text-zinc-500">
-                                  <span className="font-medium text-zinc-700">Ultimo mensaje:</span> {lead.lastVisitorMessage}
-                                </div>
-                              ) : null}
-                            </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Nuevos</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{leadSummary.new}</p>
+                            <p className="mt-1 text-xs text-zinc-500">Sin trabajar o recien capturados</p>
+                          </div>
+                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Por atender</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{leadSummary.dueToday}</p>
+                            <p className="mt-1 text-xs text-zinc-500">Seguimientos vencidos o para hoy</p>
+                          </div>
+                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Cotizacion</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{leadSummary.proposal}</p>
+                            <p className="mt-1 text-xs text-zinc-500">En propuesta o evaluacion comercial</p>
+                          </div>
+                          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                            <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Humano</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{leadSummary.needsHuman}</p>
+                            <p className="mt-1 text-xs text-zinc-500">Conversaciones que requieren atencion directa</p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { value: 'all', label: 'Todos' },
+                            { value: 'attention', label: 'Atencion' },
+                            { value: 'new', label: 'Nuevos' },
+                            { value: 'contacted', label: 'Contactados' },
+                            { value: 'proposal', label: 'Cotizacion' },
+                            { value: 'won', label: 'Ganados' },
+                            { value: 'lost', label: 'Perdidos' },
+                            { value: 'archived', label: 'Archivados' },
+                          ].map((item) => (
+                            <button
+                              key={item.value}
+                              type="button"
+                              onClick={() => setLeadFilter(item.value as typeof leadFilter)}
+                              className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                                leadFilter === item.value ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
                           ))}
-                          {chatLeads.length === 0 ? <p className="text-center text-zinc-500 py-6 text-sm">Todavia no hay leads capturados por el chat.</p> : null}
+                        </div>
+
+                        <div className="grid gap-4">
+                          {visibleChatLeads.map((lead) => {
+                            const statusMeta = leadStatusOptions.find((item) => item.value === lead.leadStatus) || leadStatusOptions[0]
+                            const priorityMeta = leadPriorityOptions.find((item) => item.value === lead.priority) || leadPriorityOptions[1]
+                            const followUpDue = isLeadFollowUpDue(lead.nextFollowUpAt)
+
+                            return (
+                              <div key={lead.id} className={`rounded-2xl border p-4 ${followUpDue ? 'border-amber-300 bg-amber-50/40' : 'border-zinc-200 bg-white'}`}>
+                                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="text-base font-medium text-zinc-900">{lead.name || 'Lead sin nombre'}</h4>
+                                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusMeta.tone}`}>{statusMeta.label}</span>
+                                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${priorityMeta.tone}`}>{priorityMeta.label}</span>
+                                      {lead.qualified ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">Calificado</span> : null}
+                                      {lead.needsHuman ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">Requiere humano</span> : null}
+                                      {lead.telegramNotified ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-700">Telegram enviado</span> : null}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                                      {lead.email ? <span>{lead.email}</span> : <span>Sin correo</span>}
+                                      {lead.phone ? <span>{lead.phone}</span> : <span>Sin telefono</span>}
+                                      <span>{lead.source}</span>
+                                      <span>Sesion: {lead.sessionId}</span>
+                                    </div>
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2 text-xs text-zinc-600">
+                                      <div><span className="font-medium text-zinc-800">Servicio:</span> {lead.serviceType || 'Sin definir'}</div>
+                                      <div><span className="font-medium text-zinc-800">Tipo:</span> {lead.projectType || 'Sin definir'}</div>
+                                      <div><span className="font-medium text-zinc-800">Ubicacion:</span> {lead.projectLocation || 'Sin definir'}</div>
+                                      <div><span className="font-medium text-zinc-800">Ultimo contacto:</span> {lead.lastContactedAt ? new Date(lead.lastContactedAt).toLocaleString() : 'Aun no registrado'}</div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button type="button" variant="outline" className="text-xs" onClick={() => void handleMarkLeadContactedNow(lead)} disabled={leadSavingId === lead.id}>
+                                      {leadSavingId === lead.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                                      Marcar contacto
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="text-xs"
+                                      onClick={() => {
+                                        const nextLead = { ...lead, leadStatus: 'proposal', qualified: true }
+                                        updateLeadLocally(lead.id, nextLead)
+                                        void handleSaveLead(nextLead)
+                                      }}
+                                      disabled={leadSavingId === lead.id}
+                                    >
+                                      Pasar a cotizacion
+                                    </Button>
+                                    <Button type="button" className="bg-zinc-900 hover:bg-zinc-800 text-xs" onClick={() => void handleSaveLead(lead)} disabled={leadSavingId === lead.id}>
+                                      {leadSavingId === lead.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                                      Guardar seguimiento
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Estado</label>
+                                    <select
+                                      value={lead.leadStatus}
+                                      onChange={(e) => updateLeadLocally(lead.id, { leadStatus: e.target.value })}
+                                      className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                                    >
+                                      {leadStatusOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Prioridad</label>
+                                    <select
+                                      value={lead.priority}
+                                      onChange={(e) => updateLeadLocally(lead.id, { priority: e.target.value })}
+                                      className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                                    >
+                                      {leadPriorityOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Responsable</label>
+                                    <Input value={lead.ownerName || ''} onChange={(e) => updateLeadLocally(lead.id, { ownerName: e.target.value })} placeholder="Ej. Ventas / Gerencia" className="text-sm" />
+                                  </div>
+                                  <div className="xl:col-span-2">
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Siguiente accion</label>
+                                    <Input value={lead.nextAction || ''} onChange={(e) => updateLeadLocally(lead.id, { nextAction: e.target.value })} placeholder="Ej. Enviar cotizacion, llamar, pedir planos" className="text-sm" />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Proximo contacto</label>
+                                    <Input type="datetime-local" value={formatDateTimeLocalValue(lead.nextFollowUpAt)} onChange={(e) => updateLeadLocally(lead.id, { nextFollowUpAt: e.target.value ? new Date(e.target.value).toISOString() : null })} className="text-sm" />
+                                  </div>
+                                </div>
+
+                                {(lead.projectIdea || lead.summary || lead.lastVisitorMessage) ? (
+                                  <div className="mt-4 grid gap-3 xl:grid-cols-3">
+                                    {lead.projectIdea ? (
+                                      <div className="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-700 xl:col-span-1">
+                                        <p className="font-medium text-zinc-800">Idea del proyecto</p>
+                                        <p className="mt-1 whitespace-pre-wrap">{lead.projectIdea}</p>
+                                      </div>
+                                    ) : null}
+                                    {lead.summary ? (
+                                      <div className="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-700 xl:col-span-1">
+                                        <p className="font-medium text-zinc-800">Resumen IA</p>
+                                        <p className="mt-1 whitespace-pre-wrap">{lead.summary}</p>
+                                      </div>
+                                    ) : null}
+                                    {lead.lastVisitorMessage ? (
+                                      <div className="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-700 xl:col-span-1">
+                                        <p className="font-medium text-zinc-800">Ultimo mensaje</p>
+                                        <p className="mt-1 whitespace-pre-wrap">{lead.lastVisitorMessage}</p>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+
+                                <div className="mt-4">
+                                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Notas internas</label>
+                                  <Textarea value={lead.internalNotes || ''} onChange={(e) => updateLeadLocally(lead.id, { internalNotes: e.target.value })} rows={3} className="text-sm" placeholder="Anota acuerdos, proxima llamada, documentos pendientes o contexto comercial." />
+                                </div>
+                              </div>
+                            )
+                          })}
+                          {visibleChatLeads.length === 0 ? <p className="text-center text-zinc-500 py-8 text-sm">No hay leads en este filtro.</p> : null}
                         </div>
                       </div>
                       <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
