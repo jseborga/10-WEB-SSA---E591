@@ -55,6 +55,26 @@ interface Contact {
   subject: string | null; message: string; isRead: boolean; createdAt: string
 }
 
+interface ChatLead {
+  id: string
+  sessionId: string
+  source: string
+  name: string | null
+  email: string | null
+  phone: string | null
+  serviceType: string | null
+  projectType: string | null
+  projectLocation: string | null
+  projectIdea: string | null
+  summary: string | null
+  lastVisitorMessage: string | null
+  needsHuman: boolean
+  qualified: boolean
+  telegramNotified: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface ChatConversationLog {
   sessionId: string
   name: string
@@ -458,6 +478,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [projects, setProjects] = useState<Project[]>([])
   const [publications, setPublications] = useState<Publication[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [chatLeads, setChatLeads] = useState<ChatLead[]>([])
   const [chatConversations, setChatConversations] = useState<ChatConversationLog[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
   const [reviews, setReviews] = useState<ApprovalItemType[]>([])
@@ -467,6 +488,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [authLoading, setAuthLoading] = useState(false)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [projectAiLoading, setProjectAiLoading] = useState(false)
+  const [salesPromptLoading, setSalesPromptLoading] = useState(false)
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
   const [automationActionId, setAutomationActionId] = useState<string | null>(null)
   const [session, setSession] = useState<SessionState>({
@@ -572,10 +594,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const loadAdminData = async () => {
     try {
       const isAdminUser = session.role === 'admin'
-      const [projectsRes, publicationsRes, contactsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes] = await Promise.all([
+      const [projectsRes, publicationsRes, contactsRes, leadsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes] = await Promise.all([
         fetch('/api/projects', { cache: 'no-store' }),
         fetch('/api/publications', { cache: 'no-store' }),
         fetch('/api/contact', { cache: 'no-store' }),
+        fetch('/api/admin/chat-leads', { cache: 'no-store' }),
         fetch('/api/admin/chat-conversations', { cache: 'no-store' }),
         fetch('/api/chat-config', { cache: 'no-store' }),
         fetch('/api/site-settings', { cache: 'no-store' }),
@@ -585,15 +608,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         fetch('/api/automation/logs', { cache: 'no-store' }),
       ])
 
-      if ([projectsRes, publicationsRes, contactsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes].some(response => response?.status === 401)) {
+      if ([projectsRes, publicationsRes, contactsRes, leadsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes].some(response => response?.status === 401)) {
         setSession(current => ({ ...current, authenticated: false, role: null, username: null, root: false }))
         return
       }
 
-      const [projectsData, publicationsData, contactsData, conversationsData, configData, siteData, usersData, telegramData, reviewsData, logsData] = await Promise.all([
+      const [projectsData, publicationsData, contactsData, leadsData, conversationsData, configData, siteData, usersData, telegramData, reviewsData, logsData] = await Promise.all([
         projectsRes.json(),
         publicationsRes.json(),
         contactsRes.json(),
+        leadsRes.json(),
         conversationsRes.json(),
         configRes.json(),
         siteRes.json(),
@@ -606,6 +630,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       setProjects(Array.isArray(projectsData) ? projectsData : [])
       setPublications(Array.isArray(publicationsData) ? publicationsData : [])
       setContacts(Array.isArray(contactsData) ? contactsData : [])
+      setChatLeads(Array.isArray(leadsData) ? leadsData : [])
       setChatConversations(Array.isArray(conversationsData) ? conversationsData : [])
       setUsers(Array.isArray(usersData) ? usersData : [])
       setReviews(Array.isArray(reviewsData) ? reviewsData : [])
@@ -1170,6 +1195,55 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       if (res.ok) { toast.success(t.admin.saveAIConfig); void loadAdminData() }
     } catch { toast.error('Error') }
     finally { setLoading(false) }
+  }
+
+  const handleGenerateSalesPrompt = async () => {
+    setSalesPromptLoading(true)
+    try {
+      const response = await fetch('/api/ai/chat-sales-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: aiLangTab, draftConfig: aiForm }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data?.suggestion) {
+        toast.error(data.error || 'No se pudo generar el prompt comercial')
+        return
+      }
+
+      const suggestion = data.suggestion
+
+      if (aiLangTab === 'en') {
+        setAiForm((current) => ({
+          ...current,
+          systemPromptEn: suggestion.systemPrompt || current.systemPromptEn,
+          welcomeMessageEn: suggestion.welcomeMessage || current.welcomeMessageEn,
+          fallbackMessageEn: suggestion.fallbackMessage || current.fallbackMessageEn,
+        }))
+      } else if (aiLangTab === 'pt') {
+        setAiForm((current) => ({
+          ...current,
+          systemPromptPt: suggestion.systemPrompt || current.systemPromptPt,
+          welcomeMessagePt: suggestion.welcomeMessage || current.welcomeMessagePt,
+          fallbackMessagePt: suggestion.fallbackMessage || current.fallbackMessagePt,
+        }))
+      } else {
+        setAiForm((current) => ({
+          ...current,
+          systemPrompt: suggestion.systemPrompt || current.systemPrompt,
+          welcomeMessage: suggestion.welcomeMessage || current.welcomeMessage,
+          fallbackMessage: suggestion.fallbackMessage || current.fallbackMessage,
+        }))
+      }
+
+      toast.success('Prompt comercial generado con IA')
+    } catch {
+      toast.error('No se pudo generar el prompt comercial')
+    } finally {
+      setSalesPromptLoading(false)
+    }
   }
 
   const handleSaveTelegramConfig = async () => {
@@ -1955,6 +2029,71 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Leads capturados por IA</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Datos estructurados del chat para cotizaciones, seguimiento y traspaso a humano.</p>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-700">{chatLeads.length} leads</span>
+                        </div>
+                        <div className="grid gap-3">
+                          {chatLeads.map((lead) => (
+                            <div key={lead.id} className="rounded-xl border border-zinc-200 p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-sm font-medium text-zinc-900">{lead.name || 'Lead sin nombre'}</h4>
+                                    {lead.qualified ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">Calificado</span> : null}
+                                    {lead.needsHuman ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">Requiere humano</span> : null}
+                                    {lead.telegramNotified ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-700">Avisado por Telegram</span> : null}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">
+                                    {lead.email ? <span>{lead.email}</span> : null}
+                                    {lead.phone ? <span>{lead.phone}</span> : null}
+                                    <span>{lead.source}</span>
+                                  </div>
+                                </div>
+                                <div className="text-xs text-zinc-400">
+                                  {new Date(lead.updatedAt).toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2 text-xs text-zinc-600">
+                                <div>
+                                  <span className="font-medium text-zinc-800">Servicio:</span> {lead.serviceType || 'Sin definir'}
+                                </div>
+                                <div>
+                                  <span className="font-medium text-zinc-800">Tipo:</span> {lead.projectType || 'Sin definir'}
+                                </div>
+                                <div>
+                                  <span className="font-medium text-zinc-800">Ubicacion:</span> {lead.projectLocation || 'Sin definir'}
+                                </div>
+                                <div>
+                                  <span className="font-medium text-zinc-800">Sesion:</span> {lead.sessionId}
+                                </div>
+                              </div>
+                              {lead.projectIdea ? (
+                                <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-700">
+                                  <p className="font-medium text-zinc-800">Idea del proyecto</p>
+                                  <p className="mt-1 whitespace-pre-wrap">{lead.projectIdea}</p>
+                                </div>
+                              ) : null}
+                              {lead.summary ? (
+                                <div className="mt-3 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-700">
+                                  <p className="font-medium text-zinc-800">Resumen IA</p>
+                                  <p className="mt-1 whitespace-pre-wrap">{lead.summary}</p>
+                                </div>
+                              ) : null}
+                              {lead.lastVisitorMessage ? (
+                                <div className="mt-3 text-xs text-zinc-500">
+                                  <span className="font-medium text-zinc-700">Ultimo mensaje:</span> {lead.lastVisitorMessage}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                          {chatLeads.length === 0 ? <p className="text-center text-zinc-500 py-6 text-sm">Todavia no hay leads capturados por el chat.</p> : null}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
                             <h3 className="text-sm font-medium text-zinc-900">Conversaciones del chat</h3>
                             <p className="text-xs text-zinc-500 mt-1">Historial persistente del chat web con memoria por sesión.</p>
                           </div>
@@ -2063,6 +2202,19 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <div>
                         <label className="text-xs font-medium text-zinc-700 mb-1 block">{t.admin.companyName}</label>
                         <Input value={aiForm.companyName} onChange={e => setAiForm({ ...aiForm, companyName: e.target.value })} placeholder="ESTUDIO" className="text-sm" />
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Prompt comercial asistido</h3>
+                            <p className="mt-1 text-xs text-zinc-500">Genera un tono mas comercial con el contexto actual de la empresa, los contactos del sitio y los proyectos publicados.</p>
+                          </div>
+                          <Button type="button" variant="outline" onClick={() => void handleGenerateSalesPrompt()} disabled={salesPromptLoading} className="text-xs sm:text-sm">
+                            {salesPromptLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Bot className="w-4 h-4 mr-1" />}
+                            {salesPromptLoading ? 'Generando...' : 'Generar prompt comercial'}
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Language Tabs for Prompts */}

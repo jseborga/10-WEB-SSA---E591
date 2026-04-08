@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateChatResponse } from '@/lib/chat-provider'
 import { notifyTelegramHumanHandoff } from '@/lib/chat-handoff'
+import {
+  buildLeadSalesInstructions,
+  buildProjectsContext,
+  extractEmail,
+  extractLeadDataWithAi,
+  extractPhone,
+} from '@/lib/chat-sales'
 
 type HistoryMessage = {
   role: string
@@ -22,7 +29,9 @@ function shouldEscalateToHuman(message: string, fallbackUsed: boolean) {
   }
 
   const normalized = normalizeText(message)
-  return /(contacto|humano|asesor|agente|llamar|llamada|whatsapp|telefono|cotizacion|cotizacion|presupuesto|precio|reunion|visita|email|correo)/.test(normalized)
+  return /(contacto|humano|asesor|agente|llamar|llamada|whatsapp|telefono|cotizacion|presupuesto|precio|reunion|visita|email|correo)/.test(
+    normalized,
+  )
 }
 
 function getHandoffNote(language: string, delivered: boolean) {
@@ -62,7 +71,6 @@ function resolveFallback(
   return config.fallbackMessage || 'No puedo responder eso en este momento.'
 }
 
-// POST - Procesar mensaje con IA
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -72,14 +80,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Mensaje requerido' }, { status: 400 })
     }
 
-    // Obtener configuración
     const config = await db.chatConfig.findFirst()
-    
+
     if (!config || !config.enabled) {
       return NextResponse.json({ error: 'Chatbot no está habilitado' }, { status: 403 })
     }
 
-    // Seleccionar el system prompt según el idioma
+    const siteSettings = await db.siteSettings.findFirst({
+      orderBy: { createdAt: 'asc' },
+    })
+
+    const publishedProjects = await db.project.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: {
+        title: true,
+        category: true,
+        location: true,
+        description: true,
+      },
+    })
+
     let systemPrompt = config.systemPrompt
     if (language === 'en' && config.systemPromptEn) {
       systemPrompt = config.systemPromptEn
@@ -87,10 +109,33 @@ export async function POST(request: Request) {
       systemPrompt = config.systemPromptPt
     }
 
+    const projectsContext = buildProjectsContext(publishedProjects)
+    const enrichedSystemPrompt = [
+      systemPrompt,
+      '',
+      buildLeadSalesInstructions(language),
+      '',
+      'Datos actuales de la empresa y el sitio:',
+      `- Empresa: ${siteSettings?.companyName || config.companyName}`,
+      siteSettings?.tagline ? `- Eslogan: ${siteSettings.tagline}` : null,
+      siteSettings?.email ? `- Correo: ${siteSettings.email}` : null,
+      siteSettings?.phone ? `- Telefono: ${siteSettings.phone}` : null,
+      siteSettings?.whatsapp ? `- WhatsApp: ${siteSettings.whatsapp}` : null,
+      siteSettings?.addressLine ? `- Direccion: ${siteSettings.addressLine}` : null,
+      siteSettings?.city ? `- Ciudad: ${siteSettings.city}` : null,
+      siteSettings?.projectCategories ? `- Categorias y servicios clave: ${siteSettings.projectCategories}` : null,
+      config.companyInfo ? `- Perfil empresa: ${config.companyInfo}` : null,
+      '',
+      'Proyectos publicados o categorias de referencia:',
+      projectsContext,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
     const normalizedHistory = (history as HistoryMessage[])
       .filter((msg) => typeof msg?.content === 'string' && msg.content.trim())
       .map((msg) => ({
-        role: msg.role === 'assistant' ? 'assistant' as const : 'user' as const,
+        role: msg.role === 'assistant' ? ('assistant' as const) : ('user' as const),
         content: msg.content.trim(),
       }))
 
@@ -119,7 +164,7 @@ export async function POST(request: Request) {
           apiKey: config.apiKey,
           apiBaseUrl: config.apiBaseUrl,
           model: config.model,
-          systemPrompt,
+          systemPrompt: enrichedSystemPrompt,
           temperature: config.temperature,
           maxTokens: config.maxTokens,
         },
@@ -132,13 +177,11 @@ export async function POST(request: Request) {
       usedFallback = true
     }
 
-    // Usar fallback si no hay respuesta
     if (!aiResponse) {
       aiResponse = resolveFallback(config, language)
       usedFallback = true
     }
 
-    // Guardar mensaje en la base de datos
     if (sessionId) {
       await db.chatMessage.create({
         data: {
@@ -147,23 +190,109 @@ export async function POST(request: Request) {
           email: typeof email === 'string' && email.trim() ? email.trim() : null,
           message,
           isFromAdmin: false,
-          isFromAI: false
-        }
+          isFromAI: false,
+        },
       })
 
       await db.chatMessage.create({
         data: {
           sessionId,
-          name: config.companyName + ' AI',
+          name: `${config.companyName} AI`,
           email: typeof email === 'string' && email.trim() ? email.trim() : null,
           message: aiResponse,
           isFromAdmin: true,
-          isFromAI: true
-        }
+          isFromAI: true,
+        },
       })
     }
 
-    const needsHuman = shouldEscalateToHuman(message, usedFallback)
+    const transcript = [
+      ...effectiveHistory.map((item) => `${item.role === 'assistant' ? 'Asistente' : 'Visitante'}: ${item.content}`),
+      `Visitante: ${message}`,
+      `Asistente: ${aiResponse}`,
+    ].join('\n')
+
+    let leadSuggestion = {
+      name: typeof name === 'string' ? name.trim() : '',
+      email: typeof email === 'string' ? email.trim() : '',
+      phone: '',
+      serviceType: '',
+      projectType: '',
+      projectLocation: '',
+      projectIdea: '',
+      summary: '',
+      needsHuman: false,
+    }
+
+    try {
+      const extracted = await extractLeadDataWithAi({
+        config: {
+          provider: config.provider,
+          apiKey: config.apiKey,
+          apiBaseUrl: config.apiBaseUrl,
+          model: config.model,
+          systemPrompt: enrichedSystemPrompt,
+          temperature: config.temperature,
+          maxTokens: config.maxTokens,
+        },
+        language,
+        transcript,
+      })
+
+      leadSuggestion = {
+        ...leadSuggestion,
+        ...extracted,
+      }
+    } catch (leadError) {
+      console.error('Error extracting lead data:', leadError)
+    }
+
+    if (!leadSuggestion.email) {
+      leadSuggestion.email = extractEmail(`${message}\n${transcript}`) || leadSuggestion.email
+    }
+
+    if (!leadSuggestion.phone) {
+      leadSuggestion.phone = extractPhone(`${message}\n${transcript}`) || leadSuggestion.phone
+    }
+
+    const hasContactMethod = Boolean((leadSuggestion.email || '').trim() || (leadSuggestion.phone || '').trim())
+    const hasProjectIntent = Boolean((leadSuggestion.projectIdea || '').trim() || (leadSuggestion.serviceType || '').trim())
+    const needsHuman = shouldEscalateToHuman(message, usedFallback) || Boolean(leadSuggestion.needsHuman)
+    const qualified = hasContactMethod && hasProjectIntent
+
+    if (sessionId) {
+      await db.leadCapture.upsert({
+        where: { sessionId },
+        update: {
+          name: leadSuggestion.name || (typeof name === 'string' ? name.trim() : '') || undefined,
+          email: leadSuggestion.email || (typeof email === 'string' ? email.trim() : '') || undefined,
+          phone: leadSuggestion.phone || undefined,
+          serviceType: leadSuggestion.serviceType || undefined,
+          projectType: leadSuggestion.projectType || undefined,
+          projectLocation: leadSuggestion.projectLocation || undefined,
+          projectIdea: leadSuggestion.projectIdea || undefined,
+          summary: leadSuggestion.summary || undefined,
+          lastVisitorMessage: message,
+          needsHuman,
+          qualified,
+        },
+        create: {
+          sessionId,
+          name: leadSuggestion.name || (typeof name === 'string' ? name.trim() : '') || null,
+          email: leadSuggestion.email || (typeof email === 'string' ? email.trim() : '') || null,
+          phone: leadSuggestion.phone || null,
+          serviceType: leadSuggestion.serviceType || null,
+          projectType: leadSuggestion.projectType || null,
+          projectLocation: leadSuggestion.projectLocation || null,
+          projectIdea: leadSuggestion.projectIdea || null,
+          summary: leadSuggestion.summary || null,
+          lastVisitorMessage: message,
+          needsHuman,
+          qualified,
+        },
+      })
+    }
+
     let telegramNotified = false
 
     if (needsHuman && sessionId) {
@@ -171,12 +300,24 @@ export async function POST(request: Request) {
         const result = await notifyTelegramHumanHandoff({
           sessionId,
           visitorName: typeof name === 'string' && name.trim() ? name.trim() : 'Visitante',
-          visitorEmail: typeof email === 'string' && email.trim() ? email.trim() : null,
+          visitorEmail: leadSuggestion.email || (typeof email === 'string' && email.trim() ? email.trim() : null),
+          visitorPhone: leadSuggestion.phone || null,
+          serviceType: leadSuggestion.serviceType || leadSuggestion.projectType || null,
+          projectLocation: leadSuggestion.projectLocation || null,
+          projectIdea: leadSuggestion.projectIdea || null,
+          summary: leadSuggestion.summary || null,
           message,
           aiResponse,
           companyName: config.companyName,
         })
         telegramNotified = result.sent
+
+        if (result.sent) {
+          await db.leadCapture.updateMany({
+            where: { sessionId },
+            data: { telegramNotified: true },
+          })
+        }
       } catch (telegramError) {
         console.error('Error notifying Telegram handoff:', telegramError)
       }
@@ -194,6 +335,7 @@ export async function POST(request: Request) {
       fallbackUsed: usedFallback,
       needsHuman,
       telegramNotified,
+      qualifiedLead: qualified,
     })
   } catch (error) {
     console.error('Error processing AI message:', error)

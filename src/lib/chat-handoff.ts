@@ -32,6 +32,11 @@ export async function notifyTelegramHumanHandoff(input: {
   sessionId: string
   visitorName: string
   visitorEmail?: string | null
+  visitorPhone?: string | null
+  serviceType?: string | null
+  projectLocation?: string | null
+  projectIdea?: string | null
+  summary?: string | null
   message: string
   aiResponse?: string
   companyName: string
@@ -57,6 +62,11 @@ export async function notifyTelegramHumanHandoff(input: {
     `Sesion: ${input.sessionId}`,
     `Nombre: ${input.visitorName || 'Visitante'}`,
     input.visitorEmail ? `Email: ${input.visitorEmail}` : null,
+    input.visitorPhone ? `Telefono: ${input.visitorPhone}` : null,
+    input.serviceType ? `Servicio: ${input.serviceType}` : null,
+    input.projectLocation ? `Ubicacion: ${input.projectLocation}` : null,
+    input.projectIdea ? `Idea del proyecto: ${input.projectIdea}` : null,
+    input.summary ? `Resumen: ${input.summary}` : null,
     '',
     'Mensaje del visitante:',
     input.message,

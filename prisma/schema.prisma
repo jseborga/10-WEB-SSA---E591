@@ -70,6 +70,26 @@ model ChatMessage {
   createdAt   DateTime @default(now())
 }
 
+model LeadCapture {
+  id               String   @id @default(cuid())
+  sessionId        String   @unique
+  source           String   @default("chat-web")
+  name             String?
+  email            String?
+  phone            String?
+  serviceType      String?
+  projectType      String?
+  projectLocation  String?
+  projectIdea      String?
+  summary          String?
+  lastVisitorMessage String?
+  needsHuman       Boolean  @default(false)
+  qualified        Boolean  @default(false)
+  telegramNotified Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
 model Contact {
   id        String   @id @default(cuid())
   name      String
