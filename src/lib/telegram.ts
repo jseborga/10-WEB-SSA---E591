@@ -1,15 +1,48 @@
-import path from 'path'
 import { db } from '@/lib/db'
 import { createAutomationLog, parseStoredJson } from '@/lib/automation-log'
 import { createStoredFileName, saveUploadedFile } from '@/lib/media-storage'
+import { parseUrlList } from '@/lib/public-site'
+import { ensureSiteSettings } from '@/lib/site-settings'
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org'
 
+const MAIN_MENU_LABELS = {
+  hero: 'Portada',
+  project: 'Proyecto nuevo',
+  projectMedia: 'Agregar a proyecto',
+  status: 'Estado',
+  cancel: 'Cancelar',
+} as const
+
+const HERO_SLOT_LABELS = {
+  primary: 'Principal',
+  secondary: 'Secundario',
+} as const
+
+const HERO_DEVICE_LABELS = {
+  desktop: 'Desktop',
+  mobile: 'Mobile',
+  both: 'Ambos',
+} as const
+
+const PROJECT_MEDIA_ROLE_LABELS = {
+  primary: 'Principal',
+  mobile: 'Mobile',
+  gallery: 'Galeria',
+  video: 'Video',
+} as const
+
+const YES_LABELS = {
+  yes: 'Si',
+  no: 'No',
+  skip: 'Omitir',
+  send: 'Enviar',
+} as const
+
+const PROJECT_CATEGORY_OPTIONS = ['construccion', 'diseno', 'supervision', 'asesoria', 'software', 'erp']
+
 type TelegramPhoto = {
   file_id: string
-  file_unique_id?: string
-  width?: number
-  height?: number
   file_size?: number
 }
 
@@ -35,6 +68,7 @@ type TelegramMessage = {
   message_id: number
   chat?: TelegramChat
   from?: TelegramUser
+  text?: string
   caption?: string
   photo?: TelegramPhoto[]
   video?: TelegramVideo
@@ -44,6 +78,38 @@ type TelegramUpdate = {
   update_id?: number
   message?: TelegramMessage
   edited_message?: TelegramMessage
+}
+
+type TelegramReplyKeyboard = {
+  keyboard: Array<Array<{ text: string }>>
+  resize_keyboard?: boolean
+  one_time_keyboard?: boolean
+}
+
+type ConversationDraft = {
+  workflowType?: 'hero' | 'project' | 'project-media'
+  heroSlot?: 'primary' | 'secondary'
+  heroDevice?: 'desktop' | 'mobile' | 'both'
+  note?: string
+  title?: string
+  category?: string
+  location?: string
+  year?: string
+  client?: string
+  description?: string
+  fullDescription?: string
+  showOnHomepage?: boolean
+  targetProjectId?: string
+  targetProjectTitle?: string
+  targetMediaRole?: 'primary' | 'mobile' | 'gallery' | 'video'
+  mediaAssetIds?: string[]
+}
+
+type MediaAssetRecord = {
+  id: string
+  kind: string
+  url: string
+  createdAt: Date
 }
 
 export function getDefaultTelegramConfig() {
@@ -83,6 +149,33 @@ export function parseIdList(value: string | null | undefined) {
     .filter(Boolean)
 }
 
+function normalizeText(value: string | undefined | null) {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function replyKeyboard(rows: string[][], oneTimeKeyboard = true): TelegramReplyKeyboard {
+  return {
+    keyboard: rows.map((row) => row.map((text) => ({ text }))),
+    resize_keyboard: true,
+    one_time_keyboard: oneTimeKeyboard,
+  }
+}
+
+function mainMenuKeyboard() {
+  return replyKeyboard(
+    [
+      [MAIN_MENU_LABELS.hero, MAIN_MENU_LABELS.project],
+      [MAIN_MENU_LABELS.projectMedia],
+      [MAIN_MENU_LABELS.status, MAIN_MENU_LABELS.cancel],
+    ],
+    false,
+  )
+}
+
 function isAllowedValue(value: string, allowed: string[]) {
   if (allowed.length === 0) {
     return true
@@ -95,27 +188,58 @@ function extractMessage(update: TelegramUpdate) {
   return update.message || update.edited_message || null
 }
 
-function getFileExtension(fileName: string | undefined, mimeType: string | undefined, fallback: string) {
-  const extFromName = fileName ? path.extname(fileName).toLowerCase() : ''
+function isMediaMessage(message: TelegramMessage) {
+  return Boolean((message.photo && message.photo.length > 0) || message.video?.file_id)
+}
 
-  if (extFromName) {
-    return extFromName
-  }
+function getConversationDraft(value: string | null | undefined) {
+  return parseStoredJson<ConversationDraft>(value, {})
+}
 
-  switch ((mimeType || '').toLowerCase()) {
-    case 'image/jpeg':
-      return '.jpg'
-    case 'image/png':
-      return '.png'
-    case 'image/webp':
-      return '.webp'
-    case 'video/mp4':
-      return '.mp4'
-    case 'video/quicktime':
-      return '.mov'
-    default:
-      return fallback
-  }
+async function updateConversation(
+  telegramUserId: string,
+  data: {
+    chatId?: string
+    flowType?: string | null
+    step?: string | null
+    status?: string
+    draftData?: ConversationDraft
+  },
+) {
+  return db.telegramConversation.update({
+    where: { telegramUserId },
+    data: {
+      chatId: data.chatId,
+      flowType: data.flowType ?? undefined,
+      step: data.step ?? undefined,
+      status: data.status,
+      draftData: data.draftData ? JSON.stringify(data.draftData) : data.draftData === undefined ? undefined : null,
+    },
+  })
+}
+
+async function getOrCreateConversation(telegramUserId: string, chatId: string) {
+  return db.telegramConversation.upsert({
+    where: { telegramUserId },
+    update: {
+      chatId,
+    },
+    create: {
+      telegramUserId,
+      chatId,
+      status: 'idle',
+    },
+  })
+}
+
+async function resetConversation(telegramUserId: string, chatId: string) {
+  return updateConversation(telegramUserId, {
+    chatId,
+    flowType: null,
+    step: null,
+    status: 'idle',
+    draftData: {},
+  })
 }
 
 async function telegramApi<T>(botToken: string, method: string, body?: Record<string, unknown>) {
@@ -129,13 +253,25 @@ async function telegramApi<T>(botToken: string, method: string, body?: Record<st
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok || !data.ok) {
-    const description =
-      (typeof data?.description === 'string' && data.description) ||
-      `Telegram API error on ${method}`
-    throw new Error(description)
+    throw new Error(
+      (typeof data?.description === 'string' && data.description) || `Telegram API error on ${method}`,
+    )
   }
 
   return data.result as T
+}
+
+async function sendTelegramMessage(
+  botToken: string,
+  chatId: string,
+  text: string,
+  keyboard?: TelegramReplyKeyboard,
+) {
+  return telegramApi(botToken, 'sendMessage', {
+    chat_id: chatId,
+    text,
+    reply_markup: keyboard,
+  })
 }
 
 type TelegramFileResult = {
@@ -143,7 +279,7 @@ type TelegramFileResult = {
   file_size?: number
 }
 
-async function downloadTelegramFile(botToken: string, fileId: string, fileNameHint: string, mimeType?: string | null) {
+async function downloadTelegramFile(botToken: string, fileId: string, fileNameHint: string) {
   const fileInfo = await telegramApi<TelegramFileResult>(botToken, 'getFile', { file_id: fileId })
   const fileUrl = `${TELEGRAM_API_BASE}/file/bot${botToken}/${fileInfo.file_path}`
   const response = await fetch(fileUrl)
@@ -165,33 +301,58 @@ async function downloadTelegramFile(botToken: string, fileId: string, fileNameHi
   }
 }
 
-function createApprovalTitle(caption: string | undefined, mediaCount: number) {
-  const firstLine = (caption || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .find(Boolean)
+function buildMediaJobs(message: TelegramMessage) {
+  const jobs: Array<{ kind: 'image' | 'video'; fileId: string; fileNameHint: string; mimeType: string }> = []
+  const largestPhoto = message.photo && message.photo.length > 0 ? message.photo[message.photo.length - 1] : null
 
-  if (firstLine) {
-    return firstLine.slice(0, 90)
+  if (largestPhoto?.file_id) {
+    jobs.push({
+      kind: 'image',
+      fileId: largestPhoto.file_id,
+      fileNameHint: `telegram-photo-${largestPhoto.file_id}.jpg`,
+      mimeType: 'image/jpeg',
+    })
   }
 
-  return mediaCount > 1 ? `Envio de Telegram (${mediaCount} archivos)` : 'Envio de Telegram'
+  if (message.video?.file_id) {
+    jobs.push({
+      kind: 'video',
+      fileId: message.video.file_id,
+      fileNameHint: message.video.file_name || `telegram-video-${message.video.file_id}.mp4`,
+      mimeType: message.video.mime_type || 'video/mp4',
+    })
+  }
+
+  return jobs
 }
 
-function createApprovalSummary(message: TelegramMessage, mediaCount: number) {
-  const pieces: string[] = []
+async function createMediaAssetFromTelegram(
+  botToken: string,
+  message: TelegramMessage,
+  item: { kind: 'image' | 'video'; fileId: string; fileNameHint: string; mimeType: string },
+) {
+  const stored = await downloadTelegramFile(botToken, item.fileId, item.fileNameHint)
 
-  if (message.caption?.trim()) {
-    pieces.push(message.caption.trim().slice(0, 220))
-  }
-
-  pieces.push(mediaCount > 1 ? `${mediaCount} archivos adjuntos` : '1 archivo adjunto')
-
-  if (message.from?.username) {
-    pieces.push(`@${message.from.username}`)
-  }
-
-  return pieces.join(' • ')
+  return db.mediaAsset.create({
+    data: {
+      source: 'telegram',
+      kind: item.kind,
+      fileName: stored.fileName,
+      originalName: item.fileNameHint,
+      mimeType: item.mimeType,
+      size: stored.size,
+      url: stored.url,
+      storagePath: stored.storagePath,
+      telegramFileId: item.fileId,
+      telegramMessageId: String(message.message_id),
+      telegramChatId: message.chat?.id != null ? String(message.chat.id) : null,
+      telegramUserId: message.from?.id != null ? String(message.from.id) : null,
+      status: 'ready',
+      metadata: JSON.stringify({
+        caption: message.caption || '',
+      }),
+    },
+  })
 }
 
 async function storeTelegramIdentity(user: TelegramUser | undefined, isAllowed: boolean) {
@@ -219,61 +380,809 @@ async function storeTelegramIdentity(user: TelegramUser | undefined, isAllowed: 
   })
 }
 
-async function createMediaAssetFromTelegram(
+async function startFlow(
   botToken: string,
-  message: TelegramMessage,
-  item:
-    | { kind: 'image'; fileId: string; fileNameHint: string; mimeType: string }
-    | { kind: 'video'; fileId: string; fileNameHint: string; mimeType: string },
+  chatId: string,
+  telegramUserId: string,
+  flowType: 'hero' | 'project' | 'project-media',
 ) {
-  const stored = await downloadTelegramFile(botToken, item.fileId, item.fileNameHint, item.mimeType)
+  if (flowType === 'hero') {
+    await updateConversation(telegramUserId, {
+      chatId,
+      flowType,
+      step: 'hero-slot',
+      status: 'active',
+      draftData: { workflowType: 'hero', mediaAssetIds: [] },
+    })
 
-  return db.mediaAsset.create({
-    data: {
-      source: 'telegram',
-      kind: item.kind,
-      fileName: stored.fileName,
-      originalName: item.fileNameHint,
-      mimeType: item.mimeType,
-      size: stored.size,
-      url: stored.url,
-      storagePath: stored.storagePath,
-      telegramFileId: item.fileId,
-      telegramMessageId: String(message.message_id),
-      telegramChatId: message.chat?.id != null ? String(message.chat.id) : null,
-      telegramUserId: message.from?.id != null ? String(message.from.id) : null,
-      status: 'ready',
-      metadata: JSON.stringify({
-        caption: message.caption || '',
-      }),
-    },
+    await sendTelegramMessage(
+      botToken,
+      chatId,
+      'Vamos a cargar material para la portada. Primero elige si este medio será principal o secundario.',
+      replyKeyboard([[HERO_SLOT_LABELS.primary, HERO_SLOT_LABELS.secondary], [MAIN_MENU_LABELS.cancel]], true),
+    )
+
+    return
+  }
+
+  if (flowType === 'project') {
+    await updateConversation(telegramUserId, {
+      chatId,
+      flowType,
+      step: 'project-title',
+      status: 'active',
+      draftData: { workflowType: 'project', mediaAssetIds: [] },
+    })
+
+    await sendTelegramMessage(botToken, chatId, 'Vamos a crear un proyecto nuevo. Envia primero el titulo del proyecto.', mainMenuKeyboard())
+    return
+  }
+
+  await updateConversation(telegramUserId, {
+    chatId,
+    flowType,
+    step: 'project-media-target',
+    status: 'active',
+    draftData: { workflowType: 'project-media', mediaAssetIds: [] },
   })
+
+  await sendTelegramMessage(
+    botToken,
+    chatId,
+    'Vamos a agregar material a un proyecto existente. Envia el ID exacto o una parte clara del titulo del proyecto.',
+    mainMenuKeyboard(),
+  )
 }
 
-function buildMediaJobs(message: TelegramMessage) {
-  const jobs: Array<{ kind: 'image' | 'video'; fileId: string; fileNameHint: string; mimeType: string }> = []
-
-  const largestPhoto = message.photo && message.photo.length > 0 ? message.photo[message.photo.length - 1] : null
-
-  if (largestPhoto?.file_id) {
-    jobs.push({
-      kind: 'image',
-      fileId: largestPhoto.file_id,
-      fileNameHint: `telegram-photo-${largestPhoto.file_id}.jpg`,
-      mimeType: 'image/jpeg',
-    })
+function buildConversationStatusText(conversation: Awaited<ReturnType<typeof getOrCreateConversation>>) {
+  if (conversation.status !== 'active' || !conversation.flowType || !conversation.step) {
+    return 'No hay un flujo activo. Usa /nuevo para empezar.'
   }
 
-  if (message.video?.file_id) {
-    jobs.push({
-      kind: 'video',
-      fileId: message.video.file_id,
-      fileNameHint: message.video.file_name || `telegram-video-${message.video.file_id}.mp4`,
-      mimeType: message.video.mime_type || 'video/mp4',
-    })
+  const draft = getConversationDraft(conversation.draftData)
+  const mediaCount = draft.mediaAssetIds?.length || 0
+
+  return [
+    `Flujo activo: ${conversation.flowType}`,
+    `Paso actual: ${conversation.step}`,
+    mediaCount > 0 ? `Archivos adjuntos: ${mediaCount}` : 'Todavia no hay archivos adjuntos.',
+  ].join('\n')
+}
+
+async function findProjectByReference(value: string) {
+  const trimmed = value.trim()
+
+  if (!trimmed) {
+    return { status: 'empty' as const, projects: [] as Array<{ id: string; title: string }> }
   }
 
-  return jobs
+  const exact = await db.project.findFirst({
+    where: {
+      OR: [{ id: trimmed }, { title: trimmed }],
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (exact) {
+    return { status: 'single' as const, projects: [{ id: exact.id, title: exact.title }] }
+  }
+
+  const candidates = await db.project.findMany({
+    where: {
+      title: { contains: trimmed },
+    },
+    select: {
+      id: true,
+      title: true,
+    },
+    take: 5,
+    orderBy: { createdAt: 'desc' },
+  })
+
+  if (candidates.length === 1) {
+    return { status: 'single' as const, projects: candidates }
+  }
+
+  if (candidates.length > 1) {
+    return { status: 'multiple' as const, projects: candidates }
+  }
+
+  return { status: 'none' as const, projects: [] as Array<{ id: string; title: string }> }
+}
+
+async function appendConversationMedia(
+  botToken: string,
+  conversation: Awaited<ReturnType<typeof getOrCreateConversation>>,
+  message: TelegramMessage,
+) {
+  const jobs = buildMediaJobs(message)
+
+  if (jobs.length === 0) {
+    return [] as MediaAssetRecord[]
+  }
+
+  const mediaAssets: MediaAssetRecord[] = []
+
+  for (const job of jobs) {
+    mediaAssets.push(await createMediaAssetFromTelegram(botToken, message, job))
+  }
+
+  const draft = getConversationDraft(conversation.draftData)
+  await updateConversation(conversation.telegramUserId, {
+    chatId: conversation.chatId,
+    draftData: {
+      ...draft,
+      mediaAssetIds: [...(draft.mediaAssetIds || []), ...mediaAssets.map((asset) => asset.id)],
+    },
+  })
+
+  return mediaAssets
+}
+
+async function createWorkflowReview(
+  config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
+  message: TelegramMessage,
+  workflowTitle: string,
+  workflowSummary: string,
+  workflowDetails: string,
+  payload: Record<string, unknown>,
+) {
+  const approval = await db.approvalItem.create({
+    data: {
+      source: 'telegram',
+      entityType: String(payload.workflowType || 'telegram-workflow'),
+      status: 'pending',
+      title: workflowTitle,
+      summary: workflowSummary,
+      details: workflowDetails,
+      requestedByType: 'telegram-user',
+      requestedById: message.from?.id != null ? String(message.from.id) : null,
+      payload: JSON.stringify(payload),
+    },
+  })
+
+  if (!config.autoCreateReviews || config.autoApproveKnownUsers) {
+    await approveTelegramReview(approval.id, config.autoApproveKnownUsers ? 'telegram-auto' : 'telegram-direct')
+  }
+
+  return approval
+}
+
+function joinTextLines(lines: Array<string | null | undefined>) {
+  return lines
+    .map((line) => (line || '').trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+async function finalizeConversation(
+  config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
+  conversation: Awaited<ReturnType<typeof getOrCreateConversation>>,
+  message: TelegramMessage,
+) {
+  const draft = getConversationDraft(conversation.draftData)
+  const mediaAssetIds = draft.mediaAssetIds || []
+
+  if (mediaAssetIds.length === 0) {
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Todavia no has enviado archivos. Envia una foto o video primero.')
+    return { status: 'waiting-media' as const }
+  }
+
+  let approval = null as Awaited<ReturnType<typeof createWorkflowReview>> | null
+
+  if (draft.workflowType === 'hero') {
+    approval = await createWorkflowReview(
+      config,
+      message,
+      `Portada ${draft.heroSlot === 'secondary' ? 'secundaria' : 'principal'}`,
+      `Destino: ${draft.heroDevice || 'desktop'} • ${mediaAssetIds.length} archivo(s)`,
+      draft.note || 'Sin nota adicional.',
+      {
+        workflowType: 'hero',
+        heroSlot: draft.heroSlot || 'primary',
+        heroDevice: draft.heroDevice || 'desktop',
+        note: draft.note || '',
+        mediaAssetIds,
+      },
+    )
+  } else if (draft.workflowType === 'project') {
+    approval = await createWorkflowReview(
+      config,
+      message,
+      draft.title || 'Proyecto nuevo desde Telegram',
+      `${draft.category || config.defaultProjectCategory || 'telegram'} • ${mediaAssetIds.length} archivo(s)`,
+      joinTextLines([draft.description, draft.fullDescription]),
+      {
+        workflowType: 'project',
+        title: draft.title || '',
+        category: draft.category || config.defaultProjectCategory || 'telegram',
+        location: draft.location || '',
+        year: draft.year || '',
+        client: draft.client || '',
+        description: draft.description || '',
+        fullDescription: draft.fullDescription || '',
+        showOnHomepage: Boolean(draft.showOnHomepage),
+        mediaAssetIds,
+      },
+    )
+  } else if (draft.workflowType === 'project-media') {
+    approval = await createWorkflowReview(
+      config,
+      message,
+      `Agregar material a ${draft.targetProjectTitle || 'proyecto'}`,
+      `${draft.targetMediaRole || 'gallery'} • ${mediaAssetIds.length} archivo(s)`,
+      draft.note || 'Material adicional enviado por Telegram.',
+      {
+        workflowType: 'project-media',
+        targetProjectId: draft.targetProjectId || '',
+        targetProjectTitle: draft.targetProjectTitle || '',
+        targetMediaRole: draft.targetMediaRole || 'gallery',
+        note: draft.note || '',
+        mediaAssetIds,
+      },
+    )
+  }
+
+  await createAutomationLog({
+    source: 'telegram',
+    eventType: 'workflow.submitted',
+    status: config.autoCreateReviews ? 'pending' : 'approved',
+    actorType: 'telegram-user',
+    actorId: message.from?.id != null ? String(message.from.id) : null,
+    entityType: 'approval',
+    entityId: approval?.id || null,
+    summary: `Flujo ${draft.workflowType || 'telegram'} enviado`,
+    payload: {
+      workflowType: draft.workflowType,
+      mediaAssetIds,
+    },
+  })
+
+  await resetConversation(conversation.telegramUserId, conversation.chatId)
+
+  await sendTelegramMessage(
+    config.botToken || '',
+    conversation.chatId,
+    config.autoCreateReviews
+      ? 'Listo. El contenido fue enviado a revision en el panel admin.'
+      : 'Listo. El contenido fue procesado directamente.',
+    mainMenuKeyboard(),
+  )
+
+  return { status: 'submitted' as const, approvalId: approval?.id || null }
+}
+
+async function handleCommand(
+  config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
+  conversation: Awaited<ReturnType<typeof getOrCreateConversation>>,
+  normalizedText: string,
+) {
+  const chatId = conversation.chatId
+
+  if (normalizedText === '/start' || normalizedText === '/ayuda') {
+    await resetConversation(conversation.telegramUserId, chatId)
+    await sendTelegramMessage(
+      config.botToken || '',
+      chatId,
+      'Bot listo. Usa /nuevo para comenzar o elige una opcion del menu.',
+      mainMenuKeyboard(),
+    )
+    return { handled: true as const }
+  }
+
+  if (normalizedText === '/cancelar' || normalizedText === normalizeText(MAIN_MENU_LABELS.cancel)) {
+    await resetConversation(conversation.telegramUserId, chatId)
+    await sendTelegramMessage(config.botToken || '', chatId, 'Flujo cancelado.', mainMenuKeyboard())
+    return { handled: true as const }
+  }
+
+  if (normalizedText === '/estado' || normalizedText === normalizeText(MAIN_MENU_LABELS.status)) {
+    await sendTelegramMessage(config.botToken || '', chatId, buildConversationStatusText(conversation), mainMenuKeyboard())
+    return { handled: true as const }
+  }
+
+  if (normalizedText === '/nuevo') {
+    await resetConversation(conversation.telegramUserId, chatId)
+    await sendTelegramMessage(
+      config.botToken || '',
+      chatId,
+      '¿Que quieres publicar?',
+      replyKeyboard(
+        [
+          [MAIN_MENU_LABELS.hero, MAIN_MENU_LABELS.project],
+          [MAIN_MENU_LABELS.projectMedia],
+          [MAIN_MENU_LABELS.cancel],
+        ],
+        true,
+      ),
+    )
+    return { handled: true as const }
+  }
+
+  if (normalizedText === '/portada' || normalizedText === normalizeText(MAIN_MENU_LABELS.hero)) {
+    await startFlow(config.botToken || '', chatId, conversation.telegramUserId, 'hero')
+    return { handled: true as const }
+  }
+
+  if (normalizedText === '/proyecto' || normalizedText === normalizeText(MAIN_MENU_LABELS.project)) {
+    await startFlow(config.botToken || '', chatId, conversation.telegramUserId, 'project')
+    return { handled: true as const }
+  }
+
+  if (normalizedText === '/agregar' || normalizedText === normalizeText(MAIN_MENU_LABELS.projectMedia)) {
+    await startFlow(config.botToken || '', chatId, conversation.telegramUserId, 'project-media')
+    return { handled: true as const }
+  }
+
+  return { handled: false as const }
+}
+
+async function handleConversationStep(
+  config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
+  conversation: Awaited<ReturnType<typeof getOrCreateConversation>>,
+  message: TelegramMessage,
+) {
+  if (conversation.status !== 'active' || !conversation.step) {
+    return { handled: false as const }
+  }
+
+  const text = (message.text || message.caption || '').trim()
+  const normalizedText = normalizeText(text)
+  const draft = getConversationDraft(conversation.draftData)
+
+  if (conversation.step === 'hero-slot') {
+    const heroSlot =
+      normalizedText === normalizeText(HERO_SLOT_LABELS.secondary) ? 'secondary' : normalizedText === normalizeText(HERO_SLOT_LABELS.primary) ? 'primary' : null
+
+    if (!heroSlot) {
+      await sendTelegramMessage(
+        config.botToken || '',
+        conversation.chatId,
+        'Elige si el material es principal o secundario.',
+        replyKeyboard([[HERO_SLOT_LABELS.primary, HERO_SLOT_LABELS.secondary], [MAIN_MENU_LABELS.cancel]], true),
+      )
+      return { handled: true as const }
+    }
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'hero-device',
+      draftData: { ...draft, heroSlot },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      '¿Para que version de portada es este material?',
+      replyKeyboard([[HERO_DEVICE_LABELS.desktop, HERO_DEVICE_LABELS.mobile, HERO_DEVICE_LABELS.both], [MAIN_MENU_LABELS.cancel]], true),
+    )
+
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'hero-device') {
+    const heroDevice =
+      normalizedText === normalizeText(HERO_DEVICE_LABELS.mobile)
+        ? 'mobile'
+        : normalizedText === normalizeText(HERO_DEVICE_LABELS.both)
+          ? 'both'
+          : normalizedText === normalizeText(HERO_DEVICE_LABELS.desktop)
+            ? 'desktop'
+            : null
+
+    if (!heroDevice) {
+      await sendTelegramMessage(
+        config.botToken || '',
+        conversation.chatId,
+        'Elige Desktop, Mobile o Ambos.',
+        replyKeyboard([[HERO_DEVICE_LABELS.desktop, HERO_DEVICE_LABELS.mobile, HERO_DEVICE_LABELS.both], [MAIN_MENU_LABELS.cancel]], true),
+      )
+      return { handled: true as const }
+    }
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'hero-note',
+      draftData: { ...draft, heroDevice },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      'Escribe una nota breve para la revision o responde Omitir.',
+      replyKeyboard([[YES_LABELS.skip], [MAIN_MENU_LABELS.cancel]], true),
+    )
+
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'hero-note') {
+    const note = normalizedText === normalizeText(YES_LABELS.skip) ? '' : text
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'hero-media',
+      draftData: { ...draft, note },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      'Ahora envia una o varias fotos o videos para la portada. Cuando termines, escribe Enviar.',
+      replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
+    )
+
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-title') {
+    if (!text) {
+      await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Envia un titulo valido para el proyecto.')
+      return { handled: true as const }
+    }
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-category',
+      draftData: { ...draft, title: text },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      'Elige la categoria del proyecto o escribe otra categoria.',
+      replyKeyboard([PROJECT_CATEGORY_OPTIONS.map((item) => item[0].toUpperCase() + item.slice(1)), [MAIN_MENU_LABELS.cancel]], true),
+    )
+
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-category') {
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-location',
+      draftData: { ...draft, category: text || config.defaultProjectCategory || 'telegram' },
+    })
+
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Ubicacion del proyecto:', mainMenuKeyboard())
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-location') {
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-year',
+      draftData: { ...draft, location: text },
+    })
+
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Año del proyecto. Si no aplica, responde Omitir.', replyKeyboard([[YES_LABELS.skip], [MAIN_MENU_LABELS.cancel]], true))
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-year') {
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-client',
+      draftData: { ...draft, year: normalizedText === normalizeText(YES_LABELS.skip) ? '' : text },
+    })
+
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Cliente o propietario. Si no aplica, responde Omitir.', replyKeyboard([[YES_LABELS.skip], [MAIN_MENU_LABELS.cancel]], true))
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-client') {
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-description',
+      draftData: { ...draft, client: normalizedText === normalizeText(YES_LABELS.skip) ? '' : text },
+    })
+
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Escribe una descripcion corta del proyecto.')
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-description') {
+    if (!text) {
+      await sendTelegramMessage(config.botToken || '', conversation.chatId, 'La descripcion corta no puede quedar vacia.')
+      return { handled: true as const }
+    }
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-full-description',
+      draftData: { ...draft, description: text },
+    })
+
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Escribe una descripcion mas amplia o responde Omitir.', replyKeyboard([[YES_LABELS.skip], [MAIN_MENU_LABELS.cancel]], true))
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-full-description') {
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-homepage',
+      draftData: { ...draft, fullDescription: normalizedText === normalizeText(YES_LABELS.skip) ? '' : text },
+    })
+
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, '¿Debe aparecer en la portada?', replyKeyboard([[YES_LABELS.yes, YES_LABELS.no], [MAIN_MENU_LABELS.cancel]], true))
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-homepage') {
+    const showOnHomepage =
+      normalizedText === normalizeText(YES_LABELS.yes) ? true : normalizedText === normalizeText(YES_LABELS.no) ? false : null
+
+    if (showOnHomepage == null) {
+      await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Responde Si o No.', replyKeyboard([[YES_LABELS.yes, YES_LABELS.no], [MAIN_MENU_LABELS.cancel]], true))
+      return { handled: true as const }
+    }
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-media',
+      draftData: { ...draft, showOnHomepage },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      'Ahora envia fotos o videos del proyecto. La primera imagen quedara como principal, las siguientes iran a galeria y el primer video quedara como video principal. Cuando termines, escribe Enviar.',
+      replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
+    )
+
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-media-target') {
+    const result = await findProjectByReference(text)
+
+    if (result.status === 'none') {
+      await sendTelegramMessage(config.botToken || '', conversation.chatId, 'No encontre ese proyecto. Envia el ID exacto o una parte mas clara del titulo.')
+      return { handled: true as const }
+    }
+
+    if (result.status === 'multiple') {
+      const listing = result.projects.map((project) => `- ${project.id} | ${project.title}`).join('\n')
+      await sendTelegramMessage(config.botToken || '', conversation.chatId, `Encontre varias coincidencias. Responde con el ID exacto:\n${listing}`)
+      return { handled: true as const }
+    }
+
+    const project = result.projects[0]
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-media-role',
+      draftData: { ...draft, targetProjectId: project.id, targetProjectTitle: project.title },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      `Proyecto seleccionado: ${project.title}. ¿Que tipo de material vas a agregar?`,
+      replyKeyboard(
+        [[PROJECT_MEDIA_ROLE_LABELS.primary, PROJECT_MEDIA_ROLE_LABELS.mobile], [PROJECT_MEDIA_ROLE_LABELS.gallery, PROJECT_MEDIA_ROLE_LABELS.video], [MAIN_MENU_LABELS.cancel]],
+        true,
+      ),
+    )
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-media-role') {
+    const role =
+      normalizedText === normalizeText(PROJECT_MEDIA_ROLE_LABELS.primary)
+        ? 'primary'
+        : normalizedText === normalizeText(PROJECT_MEDIA_ROLE_LABELS.mobile)
+          ? 'mobile'
+          : normalizedText === normalizeText(PROJECT_MEDIA_ROLE_LABELS.gallery)
+            ? 'gallery'
+            : normalizedText === normalizeText(PROJECT_MEDIA_ROLE_LABELS.video)
+              ? 'video'
+              : null
+
+    if (!role) {
+      await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Elige Principal, Mobile, Galeria o Video.')
+      return { handled: true as const }
+    }
+
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-media-note',
+      draftData: { ...draft, targetMediaRole: role },
+    })
+
+    await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Escribe una nota breve para la revision o responde Omitir.', replyKeyboard([[YES_LABELS.skip], [MAIN_MENU_LABELS.cancel]], true))
+    return { handled: true as const }
+  }
+
+  if (conversation.step === 'project-media-note') {
+    await updateConversation(conversation.telegramUserId, {
+      chatId: conversation.chatId,
+      step: 'project-media-upload',
+      draftData: { ...draft, note: normalizedText === normalizeText(YES_LABELS.skip) ? '' : text },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      'Ahora envia los archivos para ese proyecto. Cuando termines, escribe Enviar.',
+      replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
+    )
+    return { handled: true as const }
+  }
+
+  if (['hero-media', 'project-media', 'project-media-upload'].includes(conversation.step)) {
+    if (normalizedText === normalizeText(YES_LABELS.send) || normalizedText === '/enviar') {
+      await finalizeConversation(config, conversation, message)
+      return { handled: true as const }
+    }
+
+    if (!isMediaMessage(message)) {
+      await sendTelegramMessage(config.botToken || '', conversation.chatId, 'Envia una foto o video, o escribe Enviar cuando termines.')
+      return { handled: true as const }
+    }
+
+    const assets = await appendConversationMedia(config.botToken || '', conversation, message)
+
+    await createAutomationLog({
+      source: 'telegram',
+      eventType: 'workflow.media-attached',
+      status: 'success',
+      actorType: 'telegram-user',
+      actorId: message.from?.id != null ? String(message.from.id) : null,
+      summary: `Se adjuntaron ${assets.length} archivo(s) al flujo guiado`,
+      payload: {
+        flowType: conversation.flowType,
+        step: conversation.step,
+        mediaAssetIds: assets.map((asset) => asset.id),
+      },
+    })
+
+    await sendTelegramMessage(
+      config.botToken || '',
+      conversation.chatId,
+      `Recibi ${assets.length} archivo(s). Puedes enviar mas o escribir Enviar para terminar.`,
+      replyKeyboard([[YES_LABELS.send], [MAIN_MENU_LABELS.cancel]], false),
+    )
+    return { handled: true as const }
+  }
+
+  return { handled: false as const }
+}
+
+function mergeMediaList(currentValue: string | null | undefined, newUrls: string[], position: 'prepend' | 'append') {
+  const current = parseUrlList(currentValue)
+  const merged = position === 'prepend' ? [...newUrls, ...current] : [...current, ...newUrls]
+  return JSON.stringify(Array.from(new Set(merged)))
+}
+
+async function applyHeroApproval(payload: {
+  heroSlot?: 'primary' | 'secondary'
+  heroDevice?: 'desktop' | 'mobile' | 'both'
+  mediaAssetIds?: string[]
+}) {
+  const settings = await ensureSiteSettings()
+  const mediaAssetIds = Array.isArray(payload.mediaAssetIds) ? payload.mediaAssetIds : []
+  const assets = await db.mediaAsset.findMany({
+    where: { id: { in: mediaAssetIds } },
+    orderBy: { createdAt: 'asc' },
+  })
+  const urls = assets.map((asset) => asset.url)
+  const position = payload.heroSlot === 'secondary' ? 'append' : 'prepend'
+  const updateData: Record<string, string> = {}
+
+  if (payload.heroDevice === 'desktop' || payload.heroDevice === 'both' || !payload.heroDevice) {
+    updateData.heroImages = mergeMediaList(settings.heroImages, urls, position)
+  }
+
+  if (payload.heroDevice === 'mobile' || payload.heroDevice === 'both') {
+    updateData.heroImagesMobile = mergeMediaList(settings.heroImagesMobile || settings.heroImages, urls, position)
+  }
+
+  const updated = await db.siteSettings.update({
+    where: { id: settings.id },
+    data: updateData,
+  })
+
+  return { entityType: 'site-settings', entityId: updated.id, summary: 'Portada actualizada' }
+}
+
+async function applyProjectApproval(
+  config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
+  payload: {
+    title?: string
+    category?: string
+    location?: string
+    year?: string
+    client?: string
+    description?: string
+    fullDescription?: string
+    showOnHomepage?: boolean
+    mediaAssetIds?: string[]
+  },
+) {
+  const mediaAssetIds = Array.isArray(payload.mediaAssetIds) ? payload.mediaAssetIds : []
+  const assets = await db.mediaAsset.findMany({
+    where: { id: { in: mediaAssetIds } },
+    orderBy: { createdAt: 'asc' },
+  })
+  const images = assets.filter((asset) => asset.kind === 'image')
+  const videos = assets.filter((asset) => asset.kind === 'video')
+  const mainImage = images[0]?.url || null
+  const gallery = images.slice(1).map((asset) => asset.url)
+  const videoUrl = videos[0]?.url || null
+  const parsedYear = payload.year ? Number.parseInt(payload.year, 10) : null
+
+  const project = await db.project.create({
+    data: {
+      title: payload.title || 'Proyecto desde Telegram',
+      description: payload.description || null,
+      fullDescription: payload.fullDescription || payload.description || null,
+      category: payload.category || config.defaultProjectCategory || 'telegram',
+      location: payload.location || null,
+      year: Number.isFinite(parsedYear) ? parsedYear : null,
+      client: payload.client || null,
+      showOnHomepage: Boolean(payload.showOnHomepage),
+      status: config.defaultProjectStatus || 'received',
+      mainImage,
+      gallery: gallery.length > 0 ? JSON.stringify(gallery) : null,
+      videoUrl,
+      published: false,
+      featured: false,
+    },
+  })
+
+  return { entityType: 'project', entityId: project.id, summary: `Proyecto creado: ${project.title}` }
+}
+
+async function applyProjectMediaApproval(payload: {
+  targetProjectId?: string
+  targetMediaRole?: 'primary' | 'mobile' | 'gallery' | 'video'
+  mediaAssetIds?: string[]
+}) {
+  if (!payload.targetProjectId) {
+    throw new Error('No se encontro el proyecto destino')
+  }
+
+  const project = await db.project.findUnique({
+    where: { id: payload.targetProjectId },
+  })
+
+  if (!project) {
+    throw new Error('El proyecto destino ya no existe')
+  }
+
+  const mediaAssetIds = Array.isArray(payload.mediaAssetIds) ? payload.mediaAssetIds : []
+  const assets = await db.mediaAsset.findMany({
+    where: { id: { in: mediaAssetIds } },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const firstImage = assets.find((asset) => asset.kind === 'image') || null
+  const galleryImages = assets.filter((asset) => asset.kind === 'image').map((asset) => asset.url)
+  const firstVideo = assets.find((asset) => asset.kind === 'video') || null
+  const updateData: Record<string, string | null> = {}
+
+  switch (payload.targetMediaRole) {
+    case 'primary':
+      updateData.mainImage = firstImage?.url || project.mainImage || null
+      break
+    case 'mobile':
+      updateData.mainImageMobile = firstImage?.url || project.mainImageMobile || null
+      break
+    case 'video':
+      updateData.videoUrl = firstVideo?.url || project.videoUrl || null
+      break
+    case 'gallery':
+    default:
+      updateData.gallery = mergeMediaList(project.gallery, galleryImages, 'append')
+      break
+  }
+
+  const updated = await db.project.update({
+    where: { id: project.id },
+    data: updateData,
+  })
+
+  return { entityType: 'project', entityId: updated.id, summary: `Proyecto actualizado: ${updated.title}` }
 }
 
 export async function syncTelegramWebhook(configOverride?: Awaited<ReturnType<typeof ensureTelegramConfig>>) {
@@ -293,7 +1202,18 @@ export async function syncTelegramWebhook(configOverride?: Awaited<ReturnType<ty
     payload.secret_token = config.webhookSecret
   }
 
+  const commands = [
+    { command: 'nuevo', description: 'Iniciar flujo guiado de publicacion' },
+    { command: 'portada', description: 'Cargar material para portada' },
+    { command: 'proyecto', description: 'Crear proyecto nuevo' },
+    { command: 'agregar', description: 'Agregar material a un proyecto existente' },
+    { command: 'estado', description: 'Ver el estado del flujo actual' },
+    { command: 'cancelar', description: 'Cancelar el flujo actual' },
+    { command: 'ayuda', description: 'Ver opciones del bot' },
+  ]
+
   const setWebhookResult = await telegramApi<Record<string, unknown>>(config.botToken, 'setWebhook', payload)
+  const commandsResult = await telegramApi<Record<string, unknown>>(config.botToken, 'setMyCommands', { commands })
   const webhookInfo = await telegramApi<Record<string, unknown>>(config.botToken, 'getWebhookInfo')
 
   await createAutomationLog({
@@ -301,10 +1221,87 @@ export async function syncTelegramWebhook(configOverride?: Awaited<ReturnType<ty
     eventType: 'webhook.sync',
     status: 'success',
     summary: 'Webhook de Telegram sincronizado',
-    payload: { setWebhookResult, webhookInfo },
+    payload: { setWebhookResult, commandsResult, webhookInfo },
   })
 
   return webhookInfo
+}
+
+async function processFastMediaMessage(
+  config: Awaited<ReturnType<typeof ensureTelegramConfig>>,
+  message: TelegramMessage,
+  update: TelegramUpdate,
+) {
+  const jobs = buildMediaJobs(message)
+
+  if (jobs.length === 0) {
+    await sendTelegramMessage(config.botToken || '', String(message.chat?.id || ''), 'No recibi medios. Usa /nuevo para iniciar un flujo guiado o envia una foto/video con descripcion.')
+    return { status: 'ignored' as const, reason: 'no-media' }
+  }
+
+  const mediaAssets: MediaAssetRecord[] = []
+
+  for (const job of jobs) {
+    mediaAssets.push(await createMediaAssetFromTelegram(config.botToken || '', message, job))
+  }
+
+  const approval = config.autoCreateReviews
+    ? await db.approvalItem.create({
+        data: {
+          source: 'telegram',
+          entityType: 'incoming-media',
+          status: 'pending',
+          title: message.caption?.trim().split('\n')[0] || `Envio de Telegram (${mediaAssets.length} archivo(s))`,
+          summary: `Ingreso rapido • ${mediaAssets.length} archivo(s)`,
+          details: message.caption || 'Sin descripcion',
+          requestedByType: 'telegram-user',
+          requestedById: message.from?.id != null ? String(message.from.id) : null,
+          payload: JSON.stringify({
+            workflowType: 'quick-upload',
+            caption: message.caption || '',
+            chatId: message.chat?.id != null ? String(message.chat.id) : '',
+            messageId: String(message.message_id),
+            telegramUserId: message.from?.id != null ? String(message.from.id) : '',
+            telegramUsername: message.from?.username || '',
+            mediaAssetIds: mediaAssets.map((item) => item.id),
+          }),
+        },
+      })
+    : null
+
+  if (approval && config.autoApproveKnownUsers) {
+    await approveTelegramReview(approval.id, 'telegram-auto')
+  }
+
+  await createAutomationLog({
+    source: 'telegram',
+    eventType: 'media.received',
+    status: approval ? (config.autoApproveKnownUsers ? 'approved' : 'pending') : 'stored',
+    actorType: 'telegram-user',
+    actorId: message.from?.id != null ? String(message.from.id) : null,
+    entityType: 'approval',
+    entityId: approval?.id || null,
+    summary: 'Se recibio material desde Telegram',
+    payload: {
+      updateId: update.update_id,
+      mediaAssetIds: mediaAssets.map((item) => item.id),
+    },
+  })
+
+  await sendTelegramMessage(
+    config.botToken || '',
+    String(message.chat?.id || ''),
+    approval
+      ? 'Recibido. El material fue enviado a revision en el panel.'
+      : 'Recibido. El material quedo almacenado.',
+    mainMenuKeyboard(),
+  )
+
+  return {
+    status: 'processed' as const,
+    approvalId: approval?.id || null,
+    mediaAssetIds: mediaAssets.map((item) => item.id),
+  }
 }
 
 export async function processTelegramUpdate(rawUpdate: unknown) {
@@ -324,24 +1321,22 @@ export async function processTelegramUpdate(rawUpdate: unknown) {
   const update = (rawUpdate || {}) as TelegramUpdate
   const message = extractMessage(update)
 
-  if (!message) {
+  if (!message?.chat?.id || !message.from?.id) {
     await createAutomationLog({
       source: 'telegram',
       eventType: 'update.ignored',
       status: 'ignored',
-      summary: 'Update sin mensaje utilizable',
+      summary: 'Update sin chat o usuario valido',
       payload: update,
     })
     return { status: 'ignored' as const, reason: 'no-message' }
   }
 
-  const userId = message.from?.id != null ? String(message.from.id) : ''
-  const chatId = message.chat?.id != null ? String(message.chat.id) : ''
+  const userId = String(message.from.id)
+  const chatId = String(message.chat.id)
   const allowedUserIds = parseIdList(config.allowedUserIds)
   const allowedChatIds = parseIdList(config.allowedChatIds)
-  const isAllowedUser = userId ? isAllowedValue(userId, allowedUserIds) : allowedUserIds.length === 0
-  const isAllowedChat = chatId ? isAllowedValue(chatId, allowedChatIds) : allowedChatIds.length === 0
-  const isAllowed = isAllowedUser && isAllowedChat
+  const isAllowed = isAllowedValue(userId, allowedUserIds) && isAllowedValue(chatId, allowedChatIds)
 
   await storeTelegramIdentity(message.from, isAllowed)
 
@@ -351,94 +1346,30 @@ export async function processTelegramUpdate(rawUpdate: unknown) {
       eventType: 'message.rejected',
       status: 'rejected',
       actorType: 'telegram-user',
-      actorId: userId || null,
+      actorId: userId,
       summary: 'Mensaje rechazado por listas de acceso',
-      payload: {
-        updateId: update.update_id,
-        userId,
-        chatId,
-        caption: message.caption || '',
-      },
+      payload: { updateId: update.update_id, chatId },
     })
 
     return { status: 'rejected' as const, reason: 'not-allowed' }
   }
 
-  const jobs = buildMediaJobs(message)
+  const conversation = await getOrCreateConversation(userId, chatId)
+  const normalizedText = normalizeText((message.text || message.caption || '').trim())
+  const commandResult = await handleCommand(config, conversation, normalizedText)
 
-  if (jobs.length === 0) {
-    await createAutomationLog({
-      source: 'telegram',
-      eventType: 'message.ignored',
-      status: 'ignored',
-      actorType: 'telegram-user',
-      actorId: userId || null,
-      summary: 'Mensaje recibido sin foto o video',
-      payload: {
-        updateId: update.update_id,
-        caption: message.caption || '',
-      },
-    })
-
-    return { status: 'ignored' as const, reason: 'no-media' }
+  if (commandResult.handled) {
+    return { status: 'handled' as const }
   }
 
-  const mediaAssets: Awaited<ReturnType<typeof createMediaAssetFromTelegram>>[] = []
+  const refreshedConversation = await getOrCreateConversation(userId, chatId)
+  const stepResult = await handleConversationStep(config, refreshedConversation, message)
 
-  for (const job of jobs) {
-    mediaAssets.push(await createMediaAssetFromTelegram(config.botToken, message, job))
+  if (stepResult.handled) {
+    return { status: 'handled' as const }
   }
 
-  const approval = config.autoCreateReviews
-    ? await db.approvalItem.create({
-        data: {
-          source: 'telegram',
-          entityType: 'incoming-media',
-          status: 'pending',
-          title: createApprovalTitle(message.caption, mediaAssets.length),
-          summary: createApprovalSummary(message, mediaAssets.length),
-          details: message.caption || 'Sin descripcion',
-          requestedByType: 'telegram-user',
-          requestedById: userId || null,
-          payload: JSON.stringify({
-            caption: message.caption || '',
-            chatId,
-            messageId: String(message.message_id),
-            telegramUserId: userId,
-            telegramUsername: message.from?.username || '',
-            mediaAssetIds: mediaAssets.map((item) => item.id),
-          }),
-        },
-      })
-    : null
-
-  if (approval && config.autoApproveKnownUsers) {
-    await approveTelegramReview(approval.id, 'telegram-auto')
-  }
-
-  await createAutomationLog({
-    source: 'telegram',
-    eventType: 'media.received',
-    status: approval ? (config.autoApproveKnownUsers ? 'approved' : 'pending') : 'stored',
-    actorType: 'telegram-user',
-    actorId: userId || null,
-    entityType: 'approval',
-    entityId: approval?.id || null,
-    summary: `Se recibio material desde Telegram${approval ? ' y se genero una revision' : ''}`,
-    payload: {
-      updateId: update.update_id,
-      chatId,
-      caption: message.caption || '',
-      mediaAssetIds: mediaAssets.map((item) => item.id),
-      approvalId: approval?.id || null,
-    },
-  })
-
-  return {
-    status: 'processed' as const,
-    approvalId: approval?.id || null,
-    mediaAssetIds: mediaAssets.map((item) => item.id),
-  }
+  return processFastMediaMessage(config, message, update)
 }
 
 export async function approveTelegramReview(reviewId: string, approvedBy: string) {
@@ -455,61 +1386,50 @@ export async function approveTelegramReview(reviewId: string, approvedBy: string
   }
 
   const config = await ensureTelegramConfig()
-  const payload = parseStoredJson<{
-    caption?: string
-    telegramUsername?: string
-    telegramUserId?: string
-    mediaAssetIds?: string[]
-  }>(review.payload, {})
+  const payload = parseStoredJson<Record<string, unknown>>(review.payload, {})
+  const workflowType = String(payload.workflowType || '')
+  let appliedEntity = { entityType: 'approval', entityId: review.id, summary: 'Revision aprobada' }
 
-  const mediaAssetIds = Array.isArray(payload.mediaAssetIds) ? payload.mediaAssetIds : []
-
-  if (mediaAssetIds.length === 0) {
-    throw new Error('La revision no tiene assets asociados')
-  }
-
-  const assets = await db.mediaAsset.findMany({
-    where: {
-      id: {
-        in: mediaAssetIds,
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  if (assets.length === 0) {
-    throw new Error('No se encontraron los medios asociados')
-  }
-
-  const firstImage = assets.find((asset) => asset.kind === 'image') || null
-  const firstVideo = assets.find((asset) => asset.kind === 'video') || null
-  const gallery = assets.filter((asset) => asset.kind === 'image').map((asset) => asset.url)
-  const caption = (payload.caption || review.details || '').trim()
-  const firstCaptionLine = caption.split('\n').map((line) => line.trim()).find(Boolean)
-
-  const project = await db.project.create({
-    data: {
-      title: firstCaptionLine || review.title || `Proyecto ${new Date().toLocaleDateString('es-BO')}`,
-      description: caption || review.summary || 'Material recibido por Telegram.',
-      fullDescription: caption || review.details || 'Material recibido por Telegram.',
+  if (workflowType === 'hero') {
+    appliedEntity = await applyHeroApproval({
+      heroSlot: payload.heroSlot as 'primary' | 'secondary' | undefined,
+      heroDevice: payload.heroDevice as 'desktop' | 'mobile' | 'both' | undefined,
+      mediaAssetIds: Array.isArray(payload.mediaAssetIds) ? (payload.mediaAssetIds as string[]) : [],
+    })
+  } else if (workflowType === 'project') {
+    appliedEntity = await applyProjectApproval(config, {
+      title: typeof payload.title === 'string' ? payload.title : '',
+      category: typeof payload.category === 'string' ? payload.category : '',
+      location: typeof payload.location === 'string' ? payload.location : '',
+      year: typeof payload.year === 'string' ? payload.year : '',
+      client: typeof payload.client === 'string' ? payload.client : '',
+      description: typeof payload.description === 'string' ? payload.description : '',
+      fullDescription: typeof payload.fullDescription === 'string' ? payload.fullDescription : '',
+      showOnHomepage: Boolean(payload.showOnHomepage),
+      mediaAssetIds: Array.isArray(payload.mediaAssetIds) ? (payload.mediaAssetIds as string[]) : [],
+    })
+  } else if (workflowType === 'project-media') {
+    appliedEntity = await applyProjectMediaApproval({
+      targetProjectId: typeof payload.targetProjectId === 'string' ? payload.targetProjectId : '',
+      targetMediaRole: payload.targetMediaRole as 'primary' | 'mobile' | 'gallery' | 'video' | undefined,
+      mediaAssetIds: Array.isArray(payload.mediaAssetIds) ? (payload.mediaAssetIds as string[]) : [],
+    })
+  } else {
+    appliedEntity = await applyProjectApproval(config, {
+      title: review.title,
       category: config.defaultProjectCategory || 'telegram',
-      mainImage: firstImage?.url || null,
-      gallery: gallery.length > 0 ? JSON.stringify(gallery) : null,
-      videoUrl: firstVideo?.url || null,
-      client: payload.telegramUsername ? `Telegram @${payload.telegramUsername}` : payload.telegramUserId ? `Telegram ${payload.telegramUserId}` : null,
-      status: config.defaultProjectStatus || 'received',
-      published: false,
-      featured: false,
-      showOnHomepage: false,
-    },
-  })
+      description: review.details || review.summary || 'Material recibido por Telegram.',
+      fullDescription: review.details || review.summary || 'Material recibido por Telegram.',
+      mediaAssetIds: Array.isArray(payload.mediaAssetIds) ? (payload.mediaAssetIds as string[]) : [],
+    })
+  }
 
   await db.approvalItem.update({
     where: { id: review.id },
     data: {
       status: 'approved',
-      entityType: 'project',
-      entityId: project.id,
+      entityType: appliedEntity.entityType,
+      entityId: appliedEntity.entityId,
       approvedBy,
       approvedAt: new Date(),
     },
@@ -521,16 +1441,13 @@ export async function approveTelegramReview(reviewId: string, approvedBy: string
     status: 'success',
     actorType: 'admin-user',
     actorId: approvedBy,
-    entityType: 'project',
-    entityId: project.id,
-    summary: `Revision aprobada y convertida en borrador de proyecto: ${project.title}`,
-    payload: {
-      reviewId: review.id,
-      mediaAssetIds,
-    },
+    entityType: appliedEntity.entityType,
+    entityId: appliedEntity.entityId,
+    summary: appliedEntity.summary,
+    payload: { reviewId: review.id },
   })
 
-  return project
+  return appliedEntity
 }
 
 export async function rejectTelegramReview(reviewId: string, approvedBy: string, reason?: string) {
@@ -565,9 +1482,7 @@ export async function rejectTelegramReview(reviewId: string, approvedBy: string,
     entityType: 'approval',
     entityId: reviewId,
     summary: 'Revision rechazada',
-    payload: {
-      reason: reason || '',
-    },
+    payload: { reason: reason || '' },
   })
 
   return updated
