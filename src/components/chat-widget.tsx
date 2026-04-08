@@ -237,7 +237,7 @@ export function ChatWidget() {
           setIsOpen(nextOpen)
           if (nextOpen) setHasOpened(true)
         }}
-        className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-zinc-900 text-white rounded-full shadow-lg hover:bg-zinc-800 transition-all duration-300 flex items-center justify-center"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-zinc-900 text-white rounded-full shadow-lg hover:bg-zinc-800 transition-all duration-300 flex items-center justify-center"
         aria-label="Chat"
       >
         {isOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />}
@@ -245,7 +245,7 @@ export function ChatWidget() {
 
       {/* Chat window */}
       {isOpen && (
-        <div className="fixed bottom-20 left-4 sm:bottom-24 sm:left-6 z-50 w-[calc(100%-2rem)] sm:w-80 md:w-96 bg-white rounded-lg shadow-2xl border border-zinc-200 overflow-hidden">
+        <div className="fixed bottom-20 right-4 sm:bottom-24 sm:right-6 z-50 w-[calc(100%-2rem)] sm:w-80 md:w-96 bg-white rounded-lg shadow-2xl border border-zinc-200 overflow-hidden">
           {/* Header */}
           <div className="bg-zinc-900 text-white px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">

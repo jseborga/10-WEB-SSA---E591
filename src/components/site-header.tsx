@@ -1,7 +1,6 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -15,37 +14,18 @@ const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) =
 
 interface SiteHeaderProps {
   tone?: 'light' | 'dark'
-  logoUrl?: string | null
-  companyName?: string | null
 }
 
-function getInitials(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join('')
-    .toUpperCase()
-}
-
-export function SiteHeader({ tone = 'light', logoUrl, companyName }: SiteHeaderProps) {
+export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
   const { t } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const isLight = tone === 'light'
-  const iconButtonClass = [
-    'inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors backdrop-blur-md overflow-hidden',
-    isLight
-      ? 'border-white/40 bg-black/12 text-white hover:border-white/70 hover:bg-black/24'
-      : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
-  ].join(' ')
   const menuButtonClass = [
     'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] uppercase tracking-[0.24em] transition-colors backdrop-blur-md',
     isLight
       ? 'border-white/40 bg-black/12 text-white hover:border-white/70 hover:bg-black/24'
       : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
   ].join(' ')
-  const initials = getInitials(companyName || 'SSA Ingenieria')
   const menuItems = [
     { href: '/contacto', label: t.nav.contact || 'Contacto' },
     { href: '/proyectos', label: t.nav.projects },
@@ -55,22 +35,18 @@ export function SiteHeader({ tone = 'light', logoUrl, companyName }: SiteHeaderP
   return (
     <>
     <header className="fixed inset-x-0 top-0 z-50">
-      <nav className="mx-auto flex h-20 max-w-7xl items-center justify-end px-4 sm:px-6">
+      <nav className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-2">
-          <Link href="/" aria-label="Inicio" className={iconButtonClass}>
-            {logoUrl ? (
-              <span className="relative h-full w-full">
-                <Image
-                  src={logoUrl}
-                  alt={companyName || 'Inicio'}
-                  fill
-                  className="object-cover"
-                />
-              </span>
-            ) : (
-              <span className="text-[11px] font-medium tracking-[0.28em]">{initials}</span>
-            )}
+          <LanguageSelector iconOnly blinking tone={tone} />
+          <Link
+            href="/"
+            aria-label="Inicio"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-transparent"
+          >
+            <span className="h-3.5 w-3.5 rounded-full bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.08)]" />
           </Link>
+        </div>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setIsMenuOpen((current) => !current)}
             className={menuButtonClass}
@@ -78,7 +54,6 @@ export function SiteHeader({ tone = 'light', logoUrl, companyName }: SiteHeaderP
             <span>Menu</span>
             {isMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
-          <LanguageSelector iconOnly blinking tone={tone} />
         </div>
       </nav>
 

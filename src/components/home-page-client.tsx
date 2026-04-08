@@ -104,7 +104,7 @@ export default function HomePageClient({
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-zinc-950">
-      <SiteHeader tone="light" logoUrl={siteSettings?.logoUrl} companyName={siteSettings?.companyName} />
+      <SiteHeader tone="light" />
 
       <section className="relative min-h-screen">
         <div className="absolute inset-0">
