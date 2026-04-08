@@ -131,6 +131,89 @@ model SiteSettings {
   updatedAt    DateTime @updatedAt
 }
 
+model TelegramConfig {
+  id                   String   @id @default(cuid())
+  enabled              Boolean  @default(false)
+  botToken             String?
+  botUsername          String?
+  webhookUrl           String?
+  webhookSecret        String?
+  allowedUserIds       String?
+  allowedChatIds       String?
+  autoCreateReviews    Boolean  @default(true)
+  autoApproveKnownUsers Boolean @default(false)
+  defaultProjectCategory String? @default("telegram")
+  defaultProjectStatus String? @default("received")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model TelegramIdentity {
+  id             String   @id @default(cuid())
+  telegramUserId String   @unique
+  username       String?
+  firstName      String?
+  lastName       String?
+  isAllowed      Boolean  @default(false)
+  lastSeenAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model MediaAsset {
+  id                String   @id @default(cuid())
+  source            String   @default("manual")
+  kind              String
+  fileName          String
+  originalName      String?
+  mimeType          String?
+  size              Int?
+  url               String
+  storagePath       String?
+  telegramFileId    String?
+  telegramMessageId String?
+  telegramChatId    String?
+  telegramUserId    String?
+  status            String   @default("ready")
+  metadata          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model ApprovalItem {
+  id              String   @id @default(cuid())
+  source          String   @default("manual")
+  entityType      String
+  entityId        String?
+  status          String   @default("pending")
+  title           String
+  summary         String?
+  details         String?
+  payload         String?
+  requestedByType String?
+  requestedById   String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AutomationLog {
+  id         String   @id @default(cuid())
+  source     String
+  eventType  String
+  status     String
+  actorType  String?
+  actorId    String?
+  entityType String?
+  entityId   String?
+  summary    String
+  payload    String?
+  createdAt  DateTime @default(now())
+}
+
 model ChatConfig {
   id                String   @id @default(cuid())
   enabled           Boolean  @default(false)

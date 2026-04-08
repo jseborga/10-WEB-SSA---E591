@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -110,7 +110,54 @@ interface SiteSettings {
   tiktokUrl: string
 }
 
-type TabType = 'projects' | 'publications' | 'site-config' | 'contacts' | 'ai-config' | 'users'
+interface TelegramConfigType {
+  id?: string
+  enabled: boolean
+  botToken: string
+  botUsername: string
+  webhookUrl: string
+  webhookSecret: string
+  allowedUserIds: string
+  allowedChatIds: string
+  autoCreateReviews: boolean
+  autoApproveKnownUsers: boolean
+  defaultProjectCategory: string
+  defaultProjectStatus: string
+}
+
+interface ApprovalItemType {
+  id: string
+  source: string
+  entityType: string
+  entityId: string | null
+  status: string
+  title: string
+  summary: string | null
+  details: string | null
+  requestedByType: string | null
+  requestedById: string | null
+  approvedBy: string | null
+  approvedAt: string | null
+  rejectedAt: string | null
+  rejectionReason: string | null
+  createdAt: string
+}
+
+interface AutomationLogEntry {
+  id: string
+  source: string
+  eventType: string
+  status: string
+  actorType: string | null
+  actorId: string | null
+  entityType: string | null
+  entityId: string | null
+  summary: string
+  payload: string | null
+  createdAt: string
+}
+
+type TabType = 'projects' | 'publications' | 'site-config' | 'contacts' | 'ai-config' | 'automation' | 'users'
 type SessionState = {
   checking: boolean
   configured: boolean
@@ -152,6 +199,7 @@ type PublicationFormState = {
 }
 
 type SiteFormState = SiteSettings
+type TelegramFormState = TelegramConfigType
 
 type UserFormState = {
   username: string
@@ -236,12 +284,27 @@ const emptyUserForm: UserFormState = {
   active: true,
 }
 
+const emptyTelegramForm: TelegramFormState = {
+  enabled: false,
+  botToken: '',
+  botUsername: '',
+  webhookUrl: '',
+  webhookSecret: '',
+  allowedUserIds: '',
+  allowedChatIds: '',
+  autoCreateReviews: true,
+  autoApproveKnownUsers: false,
+  defaultProjectCategory: 'telegram',
+  defaultProjectStatus: 'received',
+}
+
 const providers = [
-  { id: 'default', name: 'Z-AI (Default)', models: ['default'] },
-  { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
-  { id: 'openai-compatible', name: 'OpenAI Compatible', models: ['custom-model'] },
-  { id: 'google', name: 'Google AI', models: ['gemini-pro', 'gemini-1.5-pro'] },
-  { id: 'anthropic', name: 'Anthropic', models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'] }
+  { id: 'default', name: 'Z-AI (Default)', models: ['default'], defaultModel: 'default', defaultBaseUrl: '' },
+  { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'], defaultModel: 'gpt-4o-mini', defaultBaseUrl: 'https://api.openai.com/v1' },
+  { id: 'openrouter', name: 'OpenRouter', models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.5-flash'], defaultModel: 'openai/gpt-4o-mini', defaultBaseUrl: 'https://openrouter.ai/api/v1' },
+  { id: 'openai-compatible', name: 'OpenAI Compatible', models: ['custom-model'], defaultModel: '', defaultBaseUrl: '' },
+  { id: 'google', name: 'Google AI', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-image'], defaultModel: 'gemini-2.5-flash', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+  { id: 'anthropic', name: 'Anthropic', models: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest'], defaultModel: 'claude-3-5-sonnet-latest', defaultBaseUrl: 'https://api.anthropic.com/v1' },
 ]
 
 function clampIntegerString(value: string, fallback: number, min: number, max: number) {
@@ -308,11 +371,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [publications, setPublications] = useState<Publication[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [reviews, setReviews] = useState<ApprovalItemType[]>([])
+  const [automationLogs, setAutomationLogs] = useState<AutomationLogEntry[]>([])
   const [chatConfig, setChatConfig] = useState<ChatConfigType | null>(null)
   const [loading, setLoading] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
+  const [automationActionId, setAutomationActionId] = useState<string | null>(null)
   const [session, setSession] = useState<SessionState>({
     checking: false,
     configured: false,
@@ -327,6 +393,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
   const [publicationForm, setPublicationForm] = useState<PublicationFormState>(emptyPublicationForm)
   const [siteForm, setSiteForm] = useState<SiteFormState>(emptySiteForm)
+  const [telegramForm, setTelegramForm] = useState<TelegramFormState>(emptyTelegramForm)
   const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm)
   const [aiForm, setAiForm] = useState({
     enabled: false, provider: 'default', apiKey: '', apiBaseUrl: '', model: '',
@@ -352,6 +419,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     [heroPreviewImage, siteForm.heroImagesMobile],
   )
   const heroPreviewStyles = useMemo(() => getHeroPreviewStyles(siteForm), [siteForm])
+  const pendingReviews = useMemo(() => reviews.filter((review) => review.status === 'pending'), [reviews])
 
   const authCopy = useMemo(() => {
     if (language === 'en') {
@@ -414,34 +482,55 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const loadAdminData = async () => {
     try {
       const isAdminUser = session.role === 'admin'
-      const [projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes] = await Promise.all([
+      const [projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes] = await Promise.all([
         fetch('/api/projects', { cache: 'no-store' }),
         fetch('/api/publications', { cache: 'no-store' }),
         fetch('/api/contact', { cache: 'no-store' }),
         fetch('/api/chat-config', { cache: 'no-store' }),
         fetch('/api/site-settings', { cache: 'no-store' }),
         isAdminUser ? fetch('/api/admin/users', { cache: 'no-store' }) : Promise.resolve(null),
+        isAdminUser ? fetch('/api/telegram/config', { cache: 'no-store' }) : Promise.resolve(null),
+        fetch('/api/automation/reviews', { cache: 'no-store' }),
+        fetch('/api/automation/logs', { cache: 'no-store' }),
       ])
 
-      if ([projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes].some(response => response?.status === 401)) {
+      if ([projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes].some(response => response?.status === 401)) {
         setSession(current => ({ ...current, authenticated: false, role: null, username: null, root: false }))
         return
       }
 
-      const [projectsData, publicationsData, contactsData, configData, siteData, usersData] = await Promise.all([
+      const [projectsData, publicationsData, contactsData, configData, siteData, usersData, telegramData, reviewsData, logsData] = await Promise.all([
         projectsRes.json(),
         publicationsRes.json(),
         contactsRes.json(),
         configRes.json(),
         siteRes.json(),
         usersRes ? usersRes.json() : Promise.resolve([]),
+        telegramRes ? telegramRes.json() : Promise.resolve(emptyTelegramForm),
+        reviewsRes.json(),
+        logsRes.json(),
       ])
 
       setProjects(Array.isArray(projectsData) ? projectsData : [])
       setPublications(Array.isArray(publicationsData) ? publicationsData : [])
       setContacts(Array.isArray(contactsData) ? contactsData : [])
       setUsers(Array.isArray(usersData) ? usersData : [])
+      setReviews(Array.isArray(reviewsData) ? reviewsData : [])
+      setAutomationLogs(Array.isArray(logsData) ? logsData : [])
       setChatConfig(configData)
+      setTelegramForm({
+        enabled: Boolean(telegramData.enabled),
+        botToken: telegramData.botToken || '',
+        botUsername: telegramData.botUsername || '',
+        webhookUrl: telegramData.webhookUrl || '',
+        webhookSecret: telegramData.webhookSecret || '',
+        allowedUserIds: telegramData.allowedUserIds || '',
+        allowedChatIds: telegramData.allowedChatIds || '',
+        autoCreateReviews: telegramData.autoCreateReviews ?? true,
+        autoApproveKnownUsers: telegramData.autoApproveKnownUsers ?? false,
+        defaultProjectCategory: telegramData.defaultProjectCategory || 'telegram',
+        defaultProjectStatus: telegramData.defaultProjectStatus || 'received',
+      })
       setSiteForm({
         companyName: siteData.companyName || '',
         legalName: siteData.legalName || '',
@@ -517,7 +606,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   }, [isOpen, session.authenticated, session.role])
 
   useEffect(() => {
-    if (session.role !== 'admin' && ['site-config', 'ai-config', 'users'].includes(activeTab)) {
+    if (session.role !== 'admin' && ['site-config', 'ai-config', 'automation', 'users'].includes(activeTab)) {
       setActiveTab('projects')
     }
   }, [activeTab, session.role])
@@ -555,16 +644,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
     try {
       if (target === 'gallery' || target === 'galleryMobile') {
-        const uploadedUrls = []
+        const uploadedUrls: string[] = []
 
         for (const file of Array.from(files)) {
           uploadedUrls.push(await uploadFile(file))
         }
 
-        setProjectForm((current) => ({
-          ...current,
-          [target]: [current[target].trim(), ...uploadedUrls].filter(Boolean).join('\n'),
-        }))
+        setProjectForm((current) =>
+          target === 'gallery'
+            ? {
+                ...current,
+                gallery: [current.gallery.trim(), ...uploadedUrls].filter(Boolean).join('\n'),
+              }
+            : {
+                ...current,
+                galleryMobile: [current.galleryMobile.trim(), ...uploadedUrls].filter(Boolean).join('\n'),
+              },
+        )
       } else if (target === 'mainImage' || target === 'mainImageMobile') {
         const [file] = Array.from(files)
         const uploadedUrl = await uploadFile(file)
@@ -623,16 +719,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     setUploadingField(target)
 
     try {
-      const uploadedUrls = []
+      const uploadedUrls: string[] = []
 
       for (const file of Array.from(files)) {
         uploadedUrls.push(await uploadFile(file))
       }
 
-      setSiteForm((current) => ({
-        ...current,
-        [target]: [...uploadedUrls, current[target].trim()].filter(Boolean).join('\n'),
-      }))
+      setSiteForm((current) =>
+        target === 'heroImages'
+          ? {
+              ...current,
+              heroImages: [...uploadedUrls, current.heroImages.trim()].filter(Boolean).join('\n'),
+            }
+          : {
+              ...current,
+              heroImagesMobile: [...uploadedUrls, current.heroImagesMobile.trim()].filter(Boolean).join('\n'),
+            },
+      )
 
       toast.success('Medios del hero subidos correctamente')
     } catch (error) {
@@ -908,6 +1011,17 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     }
   }
 
+  const handleProviderChange = (providerId: string) => {
+    const preset = providers.find((item) => item.id === providerId)
+
+    setAiForm((current) => ({
+      ...current,
+      provider: providerId,
+      model: preset?.defaultModel ?? '',
+      apiBaseUrl: preset?.defaultBaseUrl ?? '',
+    }))
+  }
+
   const handleSaveAIConfig = async () => {
     setLoading(true)
     try {
@@ -915,6 +1029,80 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       if (res.ok) { toast.success(t.admin.saveAIConfig); void loadAdminData() }
     } catch { toast.error('Error') }
     finally { setLoading(false) }
+  }
+
+  const handleSaveTelegramConfig = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/telegram/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(telegramForm),
+      })
+
+      if (res.ok) {
+        toast.success('Configuracion de Telegram guardada')
+        void loadAdminData()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'No se pudo guardar Telegram')
+      }
+    } catch {
+      toast.error('Error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSyncTelegramWebhook = async () => {
+    setAutomationActionId('telegram-sync')
+    try {
+      const response = await fetch('/api/telegram/config/sync', { method: 'POST' })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo sincronizar el webhook')
+        return
+      }
+
+      toast.success('Webhook sincronizado con Telegram')
+      void loadAdminData()
+    } catch {
+      toast.error('Error')
+    } finally {
+      setAutomationActionId(null)
+    }
+  }
+
+  const handleReviewAction = async (reviewId: string, action: 'approve' | 'reject') => {
+    setAutomationActionId(reviewId)
+
+    try {
+      const rejectionReason =
+        action === 'reject'
+          ? window.prompt('Motivo del rechazo (opcional):', '') || ''
+          : ''
+
+      const response = await fetch(`/api/automation/reviews/${reviewId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reason: rejectionReason }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo procesar la revision')
+        return
+      }
+
+      toast.success(action === 'approve' ? 'Revision aprobada' : 'Revision rechazada')
+      void loadAdminData()
+    } catch {
+      toast.error('Error')
+    } finally {
+      setAutomationActionId(null)
+    }
   }
 
   const tabs = [
@@ -925,6 +1113,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       ? [
           { key: 'site-config' as TabType, label: 'Sitio', icon: Globe },
           { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot },
+          { key: 'automation' as TabType, label: 'Automatizacion', icon: Send },
           { key: 'users' as TabType, label: 'Usuarios', icon: Users },
         ]
       : []),
@@ -1638,7 +1827,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-medium text-zinc-700 mb-1 block">Proveedor IA</label>
-                          <select value={aiForm.provider} onChange={e => setAiForm({ ...aiForm, provider: e.target.value, model: '' })} className="w-full h-9 px-3 border rounded-md text-sm">
+                          <select value={aiForm.provider} onChange={e => handleProviderChange(e.target.value)} className="w-full h-9 px-3 border rounded-md text-sm">
                             {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                         </div>
@@ -1657,6 +1846,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           <label className="text-xs font-medium text-zinc-700 mb-1 block">Base URL opcional</label>
                           <Input value={aiForm.apiBaseUrl} onChange={e => setAiForm({ ...aiForm, apiBaseUrl: e.target.value })} placeholder="https://api.openai.com/v1" className="text-sm" />
                         </div>
+                      </div>
+
+                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
+                        OpenRouter queda preconfigurado con <span className="font-mono">https://openrouter.ai/api/v1</span>. Si eliges ese proveedor, normalmente solo necesitas pegar la API key.
                       </div>
 
                       {/* Company Info */}
@@ -1760,6 +1953,166 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <Button onClick={handleSaveAIConfig} disabled={loading || !aiForm.systemPrompt} className="w-full bg-zinc-900 hover:bg-zinc-800 py-5 text-xs tracking-widest">
                         <Save className="w-4 h-4 mr-2" />{loading ? t.admin.saving : t.admin.saveAIConfig}
                       </Button>
+                    </div>
+                  )}
+
+                  {activeTab === 'automation' && (
+                    <div className="space-y-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-base font-light">Automatizacion</h2>
+                          <p className="text-xs text-zinc-500 mt-1">Conecta Telegram, genera revisiones pendientes y conserva un log completo de lo que entra y lo que se aprueba.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" onClick={() => void handleSyncTelegramWebhook()} disabled={automationActionId === 'telegram-sync'} className="text-xs sm:text-sm">
+                            {automationActionId === 'telegram-sync' ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                            Sincronizar webhook
+                          </Button>
+                          <Button onClick={() => void handleSaveTelegramConfig()} disabled={loading} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm">
+                            <Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar Telegram'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Bot de Telegram</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Recibe fotos y videos desde usuarios autorizados, los guarda y crea una revision antes de convertirlos en proyectos.</p>
+                          </div>
+                          <button onClick={() => setTelegramForm({ ...telegramForm, enabled: !telegramForm.enabled })} className={`w-11 h-6 rounded-full transition-colors ${telegramForm.enabled ? 'bg-green-500' : 'bg-zinc-300'}`}>
+                            <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${telegramForm.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Bot token</label>
+                            <Input type="password" value={telegramForm.botToken} onChange={e => setTelegramForm({ ...telegramForm, botToken: e.target.value })} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Bot username</label>
+                            <Input value={telegramForm.botUsername} onChange={e => setTelegramForm({ ...telegramForm, botUsername: e.target.value })} placeholder="ssa_bot" className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Webhook URL publica</label>
+                            <Input value={telegramForm.webhookUrl} onChange={e => setTelegramForm({ ...telegramForm, webhookUrl: e.target.value })} placeholder="https://tu-dominio.com/api/telegram/webhook" className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Webhook secret</label>
+                            <Input value={telegramForm.webhookSecret} onChange={e => setTelegramForm({ ...telegramForm, webhookSecret: e.target.value })} placeholder="token-secreto-opcional" className="text-sm" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">User IDs autorizados</label>
+                            <Textarea value={telegramForm.allowedUserIds} onChange={e => setTelegramForm({ ...telegramForm, allowedUserIds: e.target.value })} rows={3} placeholder={'Uno por linea o separado por comas\n123456789'} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Chat IDs autorizados</label>
+                            <Textarea value={telegramForm.allowedChatIds} onChange={e => setTelegramForm({ ...telegramForm, allowedChatIds: e.target.value })} rows={3} placeholder={'Opcional\n-1001234567890'} className="text-sm" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Categoria por defecto</label>
+                            <Input value={telegramForm.defaultProjectCategory} onChange={e => setTelegramForm({ ...telegramForm, defaultProjectCategory: e.target.value })} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Estado por defecto</label>
+                            <Input value={telegramForm.defaultProjectStatus} onChange={e => setTelegramForm({ ...telegramForm, defaultProjectStatus: e.target.value })} className="text-sm" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                            <input type="checkbox" checked={telegramForm.autoCreateReviews} onChange={e => setTelegramForm({ ...telegramForm, autoCreateReviews: e.target.checked })} className="h-4 w-4 rounded border-zinc-300" />
+                            Crear revision pendiente por cada envio
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                            <input type="checkbox" checked={telegramForm.autoApproveKnownUsers} onChange={e => setTelegramForm({ ...telegramForm, autoApproveKnownUsers: e.target.checked })} className="h-4 w-4 rounded border-zinc-300" />
+                            Autoaprobar usuarios conocidos
+                          </label>
+                        </div>
+
+                        <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
+                          Endpoint esperado: <span className="font-mono">/api/telegram/webhook</span>. Usa user ID o chat ID, no contraseña de Telegram.
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Revisiones pendientes</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Cada envio puede aprobarse para crear un borrador de proyecto o rechazarse.</p>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-700">{pendingReviews.length} pendientes</span>
+                        </div>
+
+                        <div className="grid gap-3">
+                          {reviews.map(review => (
+                            <div key={review.id} className="rounded-xl border border-zinc-200 p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-sm font-medium text-zinc-900">{review.title}</h4>
+                                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${review.status === 'pending' ? 'bg-amber-100 text-amber-700' : review.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{review.status}</span>
+                                  </div>
+                                  <p className="text-xs text-zinc-500 mt-1">{review.summary || 'Sin resumen'}</p>
+                                  <div className="mt-2 text-[11px] text-zinc-400 flex flex-wrap gap-2">
+                                    <span>{review.source}</span>
+                                    <span>•</span>
+                                    <span>{new Date(review.createdAt).toLocaleString()}</span>
+                                    {review.requestedById ? <><span>•</span><span>{review.requestedById}</span></> : null}
+                                  </div>
+                                  {review.details ? <p className="mt-3 text-xs text-zinc-600 whitespace-pre-wrap">{review.details}</p> : null}
+                                </div>
+                                {review.status === 'pending' ? (
+                                  <div className="flex items-center gap-2">
+                                    <Button variant="outline" onClick={() => void handleReviewAction(review.id, 'reject')} disabled={automationActionId === review.id} className="text-xs">
+                                      {automationActionId === review.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <XCircle className="w-4 h-4 mr-1" />}
+                                      Rechazar
+                                    </Button>
+                                    <Button onClick={() => void handleReviewAction(review.id, 'approve')} disabled={automationActionId === review.id} className="bg-zinc-900 hover:bg-zinc-800 text-xs">
+                                      {automationActionId === review.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}
+                                      Aprobar
+                                    </Button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                          {reviews.length === 0 && <p className="text-center text-zinc-500 py-6 text-sm">Aun no hay revisiones registradas.</p>}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+                        <div>
+                          <h3 className="text-sm font-medium text-zinc-900">Log de automatizacion</h3>
+                          <p className="text-xs text-zinc-500 mt-1">Registra que llego, quien lo envio, cuando se aprobo y cualquier error del webhook.</p>
+                        </div>
+                        <div className="grid gap-3">
+                          {automationLogs.map(log => (
+                            <div key={log.id} className="rounded-xl border border-zinc-200 p-3">
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+                                <span className="font-medium text-zinc-700">{log.eventType}</span>
+                                <span>•</span>
+                                <span>{log.status}</span>
+                                <span>•</span>
+                                <span>{new Date(log.createdAt).toLocaleString()}</span>
+                                {log.actorId ? <><span>•</span><span>{log.actorId}</span></> : null}
+                              </div>
+                              <p className="mt-2 text-sm text-zinc-700">{log.summary}</p>
+                              {log.entityType || log.entityId ? (
+                                <p className="mt-1 text-xs text-zinc-500">{[log.entityType, log.entityId].filter(Boolean).join(': ')}</p>
+                              ) : null}
+                            </div>
+                          ))}
+                          {automationLogs.length === 0 && <p className="text-center text-zinc-500 py-6 text-sm">Todavia no hay eventos automáticos.</p>}
+                        </div>
+                      </div>
                     </div>
                   )}
 

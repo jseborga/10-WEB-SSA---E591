@@ -1,13 +1,14 @@
 import HomePageClient from '@/components/home-page-client'
 import { db } from '@/lib/db'
+import { PublicProject, PublicSiteSettings } from '@/lib/public-site'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 import { getSeoDescription, getSiteUrl } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  let projects = []
-  let siteSettings = getDefaultSiteSettings()
+  let projects: PublicProject[] = []
+  let siteSettings: PublicSiteSettings = getDefaultSiteSettings()
 
   try {
     projects = await db.project.findMany({

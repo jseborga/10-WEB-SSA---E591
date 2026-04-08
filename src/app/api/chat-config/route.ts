@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isAdminAuthenticated, requireAdmin } from '@/lib/admin-auth'
+import { getSessionFromRequest, requireAdmin } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
 function getDefaultChatConfig() {
@@ -103,7 +103,7 @@ export async function GET(request: Request) {
   try {
     const config = await ensureChatConfig()
 
-    if (isAdminAuthenticated(request)) {
+    if (getSessionFromRequest(request)?.role === 'admin') {
       return NextResponse.json(config)
     }
 

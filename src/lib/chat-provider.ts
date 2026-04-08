@@ -21,6 +21,7 @@ const DEFAULT_MODELS = {
   default: 'default',
   openai: 'gpt-4o-mini',
   'openai-compatible': 'gpt-4o-mini',
+  openrouter: 'openai/gpt-4o-mini',
   anthropic: 'claude-sonnet-4-20250514',
   google: 'gemini-2.5-flash',
 } as const
@@ -37,6 +38,8 @@ function normalizeProvider(provider: string | null | undefined) {
     case 'compatible':
     case 'custom':
       return 'openai-compatible'
+    case 'openrouter':
+      return 'openrouter'
     case 'gemini':
       return 'google'
     case 'claude':
@@ -82,6 +85,8 @@ function getProviderApiKey(provider: string, config: ProviderConfig) {
       return trimValue(process.env.OPENAI_API_KEY)
     case 'openai-compatible':
       return trimValue(process.env.OPENAI_COMPAT_API_KEY)
+    case 'openrouter':
+      return trimValue(process.env.OPENROUTER_API_KEY || process.env.OPENAI_COMPAT_API_KEY)
     case 'anthropic':
       return trimValue(process.env.ANTHROPIC_API_KEY)
     case 'google':
@@ -99,6 +104,8 @@ function getProviderBaseUrl(provider: string, config: ProviderConfig) {
       return configuredBase || trimValue(process.env.OPENAI_BASE_URL) || 'https://api.openai.com/v1'
     case 'openai-compatible':
       return configuredBase || trimValue(process.env.OPENAI_COMPAT_BASE_URL) || 'http://localhost:11434/v1'
+    case 'openrouter':
+      return configuredBase || trimValue(process.env.OPENROUTER_BASE_URL) || 'https://openrouter.ai/api/v1'
     case 'anthropic':
       return configuredBase || trimValue(process.env.ANTHROPIC_BASE_URL) || 'https://api.anthropic.com/v1'
     case 'google':
@@ -168,7 +175,7 @@ function getTextFromOpenAiContent(content: unknown) {
 }
 
 async function generateWithOpenAiCompatible(
-  provider: 'openai' | 'openai-compatible',
+  provider: 'openai' | 'openai-compatible' | 'openrouter',
   config: ProviderConfig,
   history: ChatMessage[],
   message: string,
@@ -181,13 +188,19 @@ async function generateWithOpenAiCompatible(
     ? baseUrl
     : `${baseUrl.replace(/\/$/, '')}/chat/completions`
 
-  const headers = ensureJsonHeaders(
-    apiKey
+  const headers = ensureJsonHeaders({
+    ...(apiKey
       ? {
           Authorization: `Bearer ${apiKey}`,
         }
-      : {},
-  )
+      : {}),
+    ...(provider === 'openrouter'
+      ? {
+          ...(trimValue(process.env.OPENROUTER_SITE_URL) ? { 'HTTP-Referer': trimValue(process.env.OPENROUTER_SITE_URL) } : {}),
+          ...(trimValue(process.env.OPENROUTER_APP_NAME) ? { 'X-Title': trimValue(process.env.OPENROUTER_APP_NAME) } : {}),
+        }
+      : {}),
+  })
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -308,6 +321,7 @@ export async function generateChatResponse(config: ProviderConfig, history: Chat
       return generateWithZAI(config, history, message)
     case 'openai':
     case 'openai-compatible':
+    case 'openrouter':
       return generateWithOpenAiCompatible(provider, config, history, message)
     case 'anthropic':
       return generateWithAnthropic(config, history, message)

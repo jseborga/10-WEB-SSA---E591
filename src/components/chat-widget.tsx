@@ -143,7 +143,7 @@ export function ChatWidget() {
       setIsConnected(true)
       const savedSession = getSavedSession()
       if (savedSession) {
-        socket.emit('join-session', { sessionId: newSessionId, name: savedSession.name, email: savedSession.email })
+        socket.emit('join-session', { sessionId, name: savedSession.name, email: savedSession.email })
       }
     })
     socket.on('disconnect', () => setIsConnected(false))

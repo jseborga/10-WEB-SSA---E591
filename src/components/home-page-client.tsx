@@ -38,9 +38,6 @@ export default function HomePageClient({
 }: HomePageClientProps) {
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
-  const advanceHero = () => {
-    setActiveHeroIndex((current) => (current + 1) % Math.max(heroImages.length, 1))
-  }
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)')
@@ -79,11 +76,11 @@ export default function HomePageClient({
   }, [desktopImages, initialProjects, siteSettings?.heroImagesMobile])
 
   const heroImages = isMobile ? mobileImages : desktopImages
-  const activeHeroItem = heroImages[activeHeroIndex] || ''
-
-  useEffect(() => {
-    setActiveHeroIndex(0)
-  }, [isMobile, heroImages.length])
+  const resolvedHeroIndex = heroImages.length > 0 ? activeHeroIndex % heroImages.length : 0
+  const activeHeroItem = heroImages[resolvedHeroIndex] || ''
+  const advanceHero = () => {
+    setActiveHeroIndex((current) => (current + 1) % Math.max(heroImages.length, 1))
+  }
 
   useEffect(() => {
     if (heroImages.length <= 1 || !activeHeroItem || isVideoUrl(activeHeroItem)) {
@@ -121,7 +118,7 @@ export default function HomePageClient({
           {heroImages.length > 0 ? (
             <AnimatePresence mode="sync">
               {heroImages.map((imageUrl, index) =>
-                index === activeHeroIndex ? (
+                index === resolvedHeroIndex ? (
                   isVideoUrl(imageUrl) ? (
                     <motion.video
                       key={`${imageUrl}-${isMobile ? 'mobile' : 'desktop'}`}
