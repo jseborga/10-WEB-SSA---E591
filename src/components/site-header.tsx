@@ -38,6 +38,8 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
       <nav className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-2">
           <LanguageSelector iconOnly blinking tone={tone} />
+        </div>
+        <div className="flex items-center gap-2">
           <Link
             href="/"
             aria-label="Inicio"
@@ -45,8 +47,6 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
           >
             <span className="h-3.5 w-3.5 rounded-full bg-black shadow-[0_0_0_1px_rgba(255,255,255,0.08)]" />
           </Link>
-        </div>
-        <div className="flex items-center gap-2">
           <button
             onClick={() => setIsMenuOpen((current) => !current)}
             className={menuButtonClass}

@@ -14,7 +14,9 @@ export interface PublicProject {
   year: number | null
   area: string | null
   mainImage?: string | null
+  mainImageMobile?: string | null
   gallery?: string | null
+  galleryMobile?: string | null
   videoUrl?: string | null
   client?: string | null
   status?: string | null

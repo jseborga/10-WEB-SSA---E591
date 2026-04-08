@@ -23,7 +23,9 @@ interface Project {
   area: string | null
   images: string | null
   mainImage?: string | null
+  mainImageMobile?: string | null
   gallery?: string | null
+  galleryMobile?: string | null
   videoUrl?: string | null
   client?: string | null
   status?: string | null
@@ -126,7 +128,9 @@ type ProjectFormState = {
   year: string
   area: string
   mainImage: string
+  mainImageMobile: string
   gallery: string
+  galleryMobile: string
   videoUrl: string
   client: string
   status: string
@@ -164,7 +168,9 @@ const emptyProjectForm: ProjectFormState = {
   year: '',
   area: '',
   mainImage: '',
+  mainImageMobile: '',
   gallery: '',
+  galleryMobile: '',
   videoUrl: '',
   client: '',
   status: 'completed',
@@ -539,13 +545,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     return data.url as string
   }
 
-  const handleProjectUpload = async (files: FileList | null, target: 'mainImage' | 'gallery' | 'videoUrl') => {
+  const handleProjectUpload = async (files: FileList | null, target: 'mainImage' | 'mainImageMobile' | 'gallery' | 'galleryMobile' | 'videoUrl') => {
     if (!files || files.length === 0) return
 
     setUploadingField(target)
 
     try {
-      if (target === 'gallery') {
+      if (target === 'gallery' || target === 'galleryMobile') {
         const uploadedUrls = []
 
         for (const file of Array.from(files)) {
@@ -554,12 +560,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
         setProjectForm((current) => ({
           ...current,
-          gallery: [current.gallery.trim(), ...uploadedUrls].filter(Boolean).join('\n'),
+          [target]: [current[target].trim(), ...uploadedUrls].filter(Boolean).join('\n'),
         }))
-      } else if (target === 'mainImage') {
+      } else if (target === 'mainImage' || target === 'mainImageMobile') {
         const [file] = Array.from(files)
         const uploadedUrl = await uploadFile(file)
-        setProjectForm((current) => ({ ...current, mainImage: uploadedUrl }))
+        setProjectForm((current) => ({ ...current, [target]: uploadedUrl }))
       } else {
         const [file] = Array.from(files)
         const uploadedUrl = await uploadFile(file)
@@ -689,7 +695,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
           year: projectForm.year ? parseInt(projectForm.year, 10) : null,
           area: projectForm.area,
           mainImage: projectForm.mainImage,
+          mainImageMobile: projectForm.mainImageMobile,
           gallery: parseGalleryUrls(projectForm.gallery),
+          galleryMobile: parseGalleryUrls(projectForm.galleryMobile),
           videoUrl: projectForm.videoUrl,
           client: projectForm.client,
           status: projectForm.status,
@@ -743,7 +751,18 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       year: project.year?.toString() || '',
       area: project.area || '',
       mainImage: project.mainImage || project.images || '',
+      mainImageMobile: project.mainImageMobile || '',
       gallery,
+      galleryMobile: (() => {
+        if (project.galleryMobile) {
+          try {
+            return JSON.parse(project.galleryMobile).join('\n')
+          } catch {
+            return project.galleryMobile
+          }
+        }
+        return ''
+      })(),
       videoUrl: project.videoUrl || '',
       client: project.client || '',
       status: project.status || 'completed',
@@ -1935,6 +1954,17 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Imagen principal mobile</label>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                  {uploadingField === 'mainImageMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Subir imagen
+                  <input type="file" accept="image/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'mainImageMobile')} />
+                </label>
+              </div>
+              <Input value={projectForm.mainImageMobile} onChange={e => setProjectForm({ ...projectForm, mainImageMobile: e.target.value })} placeholder="/api/media/archivo-mobile.jpg o https://..." className="text-sm" />
+            </div>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Galeria</label>
                 <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
                   {uploadingField === 'gallery' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -1943,6 +1973,17 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                 </label>
               </div>
               <Textarea value={projectForm.gallery} onChange={e => setProjectForm({ ...projectForm, gallery: e.target.value })} rows={4} placeholder="Una URL por linea" className="text-sm" />
+            </div>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Galeria mobile</label>
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                  {uploadingField === 'galleryMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Subir varias imagenes
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'galleryMobile')} />
+                </label>
+              </div>
+              <Textarea value={projectForm.galleryMobile} onChange={e => setProjectForm({ ...projectForm, galleryMobile: e.target.value })} rows={4} placeholder="Opcional. Una URL por linea para movil" className="text-sm" />
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">

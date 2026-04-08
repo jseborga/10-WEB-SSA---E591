@@ -30,6 +30,7 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
   const { t, language } = useLanguage()
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedProject, setSelectedProject] = useState<PublicProject | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
   const categoryOptions = useMemo(
     () => getProjectCategories(siteSettings?.projectCategories, projects.map((project) => project.category)),
     [projects, siteSettings?.projectCategories],
@@ -47,6 +48,16 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
   const similarProjects = selectedProject
     ? projects.filter((project) => project.category === selectedProject.category && project.id !== selectedProject.id).slice(0, 3)
     : []
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const update = () => setIsMobile(mediaQuery.matches)
+
+    update()
+    mediaQuery.addEventListener('change', update)
+
+    return () => mediaQuery.removeEventListener('change', update)
+  }, [])
 
   useEffect(() => {
     const handleNavigateProject = (event: Event) => {
@@ -101,7 +112,7 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
             >
               <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100">
                 <Image
-                  src={project.mainImage || '/images/hero-bg.png'}
+                  src={(isMobile ? project.mainImageMobile || project.mainImage : project.mainImage) || '/images/hero-bg.png'}
                   alt={getLocalizedText(project, language, 'title')}
                   fill
                   className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"

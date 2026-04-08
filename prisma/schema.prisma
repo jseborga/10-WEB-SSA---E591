@@ -26,7 +26,9 @@ model Project {
   published         Boolean  @default(false)
   publishedAt       DateTime?
   mainImage         String?
+  mainImageMobile   String?
   gallery           String?
+  galleryMobile     String?
   videoUrl          String?
   client            String?
   status            String?

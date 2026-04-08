@@ -22,7 +22,9 @@ interface Project {
   year: number | null
   area: string | null
   mainImage?: string | null
+  mainImageMobile?: string | null
   gallery?: string | null
+  galleryMobile?: string | null
   videoUrl?: string | null
   client?: string | null
   status?: string | null
@@ -45,6 +47,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   const { language } = useLanguage()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
 
   const getTitle = useCallback(() => {
     if (language === 'en' && project.titleEn) return project.titleEn
@@ -58,22 +61,34 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
     return project.fullDescription || project.description
   }, [language, project])
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const update = () => setIsMobile(mediaQuery.matches)
+
+    update()
+    mediaQuery.addEventListener('change', update)
+
+    return () => mediaQuery.removeEventListener('change', update)
+  }, [])
+
   // Parse gallery images
   const allImages = useMemo(() => {
+    const rawGallery = isMobile ? project.galleryMobile || project.gallery : project.gallery
+    const leadImage = isMobile ? project.mainImageMobile || project.mainImage : project.mainImage
     let galleryImages: string[] = []
-    if (project.gallery) {
+    if (rawGallery) {
       try {
-        galleryImages = JSON.parse(project.gallery)
+        galleryImages = JSON.parse(rawGallery)
       } catch {
         galleryImages = []
       }
     }
-    return project.mainImage 
-      ? [project.mainImage, ...galleryImages]
+    return leadImage
+      ? [leadImage, ...galleryImages]
       : galleryImages.length > 0 
         ? galleryImages 
         : ['/images/projects/house1.png']
-  }, [project.mainImage, project.gallery])
+  }, [isMobile, project.gallery, project.galleryMobile, project.mainImage, project.mainImageMobile])
 
   const nextImage = useCallback(() => {
     setCurrentImageIndex((prev) => (prev + 1) % allImages.length)
@@ -241,7 +256,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     >
                       <div className="relative w-20 h-16 flex-shrink-0 rounded overflow-hidden">
                         <Image
-                          src={similar.mainImage || '/images/projects/house1.png'}
+                          src={(isMobile ? similar.mainImageMobile || similar.mainImage : similar.mainImage) || '/images/projects/house1.png'}
                           alt=""
                           fill
                           className="object-cover"
