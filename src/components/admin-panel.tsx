@@ -55,6 +55,23 @@ interface Contact {
   subject: string | null; message: string; isRead: boolean; createdAt: string
 }
 
+interface ChatConversationLog {
+  sessionId: string
+  name: string
+  email: string | null
+  startedAt: string
+  lastMessageAt: string
+  unreadCount: number
+  messages: Array<{
+    id: string
+    name: string
+    message: string
+    isFromAdmin: boolean
+    isFromAI: boolean
+    createdAt: string
+  }>
+}
+
 interface ChatConfigType {
   id: string; enabled: boolean; provider: string; apiKey?: string | null; apiBaseUrl?: string | null; model: string | null
   systemPrompt: string; systemPromptEn: string | null; systemPromptPt: string | null
@@ -441,6 +458,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [projects, setProjects] = useState<Project[]>([])
   const [publications, setPublications] = useState<Publication[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [chatConversations, setChatConversations] = useState<ChatConversationLog[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
   const [reviews, setReviews] = useState<ApprovalItemType[]>([])
   const [automationLogs, setAutomationLogs] = useState<AutomationLogEntry[]>([])
@@ -554,10 +572,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const loadAdminData = async () => {
     try {
       const isAdminUser = session.role === 'admin'
-      const [projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes] = await Promise.all([
+      const [projectsRes, publicationsRes, contactsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes] = await Promise.all([
         fetch('/api/projects', { cache: 'no-store' }),
         fetch('/api/publications', { cache: 'no-store' }),
         fetch('/api/contact', { cache: 'no-store' }),
+        fetch('/api/admin/chat-conversations', { cache: 'no-store' }),
         fetch('/api/chat-config', { cache: 'no-store' }),
         fetch('/api/site-settings', { cache: 'no-store' }),
         isAdminUser ? fetch('/api/admin/users', { cache: 'no-store' }) : Promise.resolve(null),
@@ -566,15 +585,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         fetch('/api/automation/logs', { cache: 'no-store' }),
       ])
 
-      if ([projectsRes, publicationsRes, contactsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes].some(response => response?.status === 401)) {
+      if ([projectsRes, publicationsRes, contactsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes].some(response => response?.status === 401)) {
         setSession(current => ({ ...current, authenticated: false, role: null, username: null, root: false }))
         return
       }
 
-      const [projectsData, publicationsData, contactsData, configData, siteData, usersData, telegramData, reviewsData, logsData] = await Promise.all([
+      const [projectsData, publicationsData, contactsData, conversationsData, configData, siteData, usersData, telegramData, reviewsData, logsData] = await Promise.all([
         projectsRes.json(),
         publicationsRes.json(),
         contactsRes.json(),
+        conversationsRes.json(),
         configRes.json(),
         siteRes.json(),
         usersRes ? usersRes.json() : Promise.resolve([]),
@@ -586,6 +606,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       setProjects(Array.isArray(projectsData) ? projectsData : [])
       setPublications(Array.isArray(publicationsData) ? publicationsData : [])
       setContacts(Array.isArray(contactsData) ? contactsData : [])
+      setChatConversations(Array.isArray(conversationsData) ? conversationsData : [])
       setUsers(Array.isArray(usersData) ? usersData : [])
       setReviews(Array.isArray(reviewsData) ? reviewsData : [])
       setAutomationLogs(Array.isArray(logsData) ? logsData : [])
@@ -1930,6 +1951,60 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           </div>
                         ))}
                         {contacts.length === 0 && <p className="text-center text-zinc-500 py-6 text-sm">{t.admin.noContacts}</p>}
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Conversaciones del chat</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Historial persistente del chat web con memoria por sesión.</p>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 text-zinc-700">{chatConversations.length} sesiones</span>
+                        </div>
+                        <div className="grid gap-3">
+                          {chatConversations.map((conversation) => (
+                            <div key={conversation.sessionId} className="rounded-xl border border-zinc-200 p-4">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-sm font-medium text-zinc-900">{conversation.name || 'Visitante'}</h4>
+                                    {conversation.unreadCount > 0 ? (
+                                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">{conversation.unreadCount} sin leer</span>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-1 text-xs text-zinc-500">{conversation.email || 'Sin correo registrado'}</p>
+                                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+                                    <span>{conversation.sessionId}</span>
+                                    <span>•</span>
+                                    <span>Inicio: {new Date(conversation.startedAt).toLocaleString()}</span>
+                                    <span>•</span>
+                                    <span>Último: {new Date(conversation.lastMessageAt).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-4 space-y-2">
+                                {conversation.messages.map((message) => (
+                                  <div
+                                    key={message.id}
+                                    className={`rounded-xl px-3 py-2 text-sm ${
+                                      message.isFromAdmin ? 'bg-zinc-100 text-zinc-900' : 'bg-white border border-zinc-200 text-zinc-700'
+                                    }`}
+                                  >
+                                    <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] opacity-70">
+                                      <span>{message.name}</span>
+                                      {message.isFromAI ? <span>• IA</span> : null}
+                                      <span>•</span>
+                                      <span>{new Date(message.createdAt).toLocaleString()}</span>
+                                    </div>
+                                    <p className="whitespace-pre-wrap">{message.message}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {chatConversations.length === 0 ? (
+                            <p className="text-center text-zinc-500 py-6 text-sm">Todavía no hay conversaciones registradas.</p>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   )}

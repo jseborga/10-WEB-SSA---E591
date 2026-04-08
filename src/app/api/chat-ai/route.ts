@@ -1,10 +1,46 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { generateChatResponse } from '@/lib/chat-provider'
+import { notifyTelegramHumanHandoff } from '@/lib/chat-handoff'
 
 type HistoryMessage = {
   role: string
   content: string
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function shouldEscalateToHuman(message: string, fallbackUsed: boolean) {
+  if (fallbackUsed) {
+    return true
+  }
+
+  const normalized = normalizeText(message)
+  return /(contacto|humano|asesor|agente|llamar|llamada|whatsapp|telefono|cotizacion|cotizacion|presupuesto|precio|reunion|visita|email|correo)/.test(normalized)
+}
+
+function getHandoffNote(language: string, delivered: boolean) {
+  if (language === 'en') {
+    return delivered
+      ? 'A human contact request was forwarded to our team.'
+      : 'If you need human assistance, please contact our team directly.'
+  }
+
+  if (language === 'pt') {
+    return delivered
+      ? 'Uma solicitação de contato humano foi enviada para nossa equipe.'
+      : 'Se precisar de atendimento humano, entre em contato com nossa equipe.'
+  }
+
+  return delivered
+    ? 'Se notificó al equipo para continuar el contacto humano.'
+    : 'Si necesitas atención humana, contáctanos directamente.'
 }
 
 function resolveFallback(
@@ -30,7 +66,7 @@ function resolveFallback(
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { sessionId, message, history = [], language = 'es' } = body
+    const { sessionId, message, history = [], language = 'es', name = 'Visitante', email = '' } = body
 
     if (!message) {
       return NextResponse.json({ error: 'Mensaje requerido' }, { status: 400 })
@@ -58,6 +94,21 @@ export async function POST(request: Request) {
         content: msg.content.trim(),
       }))
 
+    const persistedHistory = sessionId
+      ? (
+          await db.chatMessage.findMany({
+            where: { sessionId },
+            orderBy: { createdAt: 'asc' },
+            take: 16,
+          })
+        ).map((item) => ({
+          role: item.isFromAdmin ? ('assistant' as const) : ('user' as const),
+          content: item.message,
+        }))
+      : []
+
+    const effectiveHistory = persistedHistory.length > 0 ? persistedHistory : normalizedHistory
+
     let aiResponse = ''
     let usedFallback = false
 
@@ -72,7 +123,7 @@ export async function POST(request: Request) {
           temperature: config.temperature,
           maxTokens: config.maxTokens,
         },
-        normalizedHistory,
+        effectiveHistory,
         message,
       )
     } catch (providerError) {
@@ -92,7 +143,8 @@ export async function POST(request: Request) {
       await db.chatMessage.create({
         data: {
           sessionId,
-          name: 'Visitante',
+          name: typeof name === 'string' && name.trim() ? name.trim() : 'Visitante',
+          email: typeof email === 'string' && email.trim() ? email.trim() : null,
           message,
           isFromAdmin: false,
           isFromAI: false
@@ -103,6 +155,7 @@ export async function POST(request: Request) {
         data: {
           sessionId,
           name: config.companyName + ' AI',
+          email: typeof email === 'string' && email.trim() ? email.trim() : null,
           message: aiResponse,
           isFromAdmin: true,
           isFromAI: true
@@ -110,11 +163,37 @@ export async function POST(request: Request) {
       })
     }
 
+    const needsHuman = shouldEscalateToHuman(message, usedFallback)
+    let telegramNotified = false
+
+    if (needsHuman && sessionId) {
+      try {
+        const result = await notifyTelegramHumanHandoff({
+          sessionId,
+          visitorName: typeof name === 'string' && name.trim() ? name.trim() : 'Visitante',
+          visitorEmail: typeof email === 'string' && email.trim() ? email.trim() : null,
+          message,
+          aiResponse,
+          companyName: config.companyName,
+        })
+        telegramNotified = result.sent
+      } catch (telegramError) {
+        console.error('Error notifying Telegram handoff:', telegramError)
+      }
+    }
+
+    const finalResponse =
+      needsHuman && !aiResponse.includes(getHandoffNote(language, telegramNotified))
+        ? `${aiResponse}\n\n${getHandoffNote(language, telegramNotified)}`
+        : aiResponse
+
     return NextResponse.json({
       success: true,
-      response: aiResponse,
+      response: finalResponse,
       provider: config.provider,
       fallbackUsed: usedFallback,
+      needsHuman,
+      telegramNotified,
     })
   } catch (error) {
     console.error('Error processing AI message:', error)

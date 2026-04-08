@@ -47,6 +47,13 @@ function getSavedSession() {
   return saved ? JSON.parse(saved) : null
 }
 
+function normalizeMessages(input: Message[]) {
+  return input.map((item) => ({
+    ...item,
+    timestamp: item.timestamp,
+  }))
+}
+
 export function ChatWidget() {
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
@@ -118,6 +125,31 @@ export function ChatWidget() {
   }, [hasOpened])
 
   useEffect(() => {
+    if (!isOpen || !hasLoadedConfig || !chatConfig?.enabled || !sessionId || !isJoined) {
+      return
+    }
+
+    let isActive = true
+
+    fetch(`/api/chat-history?sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isActive || !Array.isArray(data)) {
+          return
+        }
+
+        setMessages(normalizeMessages(data))
+      })
+      .catch(() => {
+        if (!isActive) return
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [chatConfig?.enabled, hasLoadedConfig, isJoined, isOpen, sessionId])
+
+  useEffect(() => {
     if (!isOpen) {
       setIsConnected(false)
       return
@@ -161,11 +193,15 @@ export function ChatWidget() {
   }, [messages])
 
   const handleJoin = useCallback(() => {
-    if (socketRef.current && name.trim()) {
+    if (!name.trim()) return
+
+    localStorage.setItem('chat_session', JSON.stringify({ name: name.trim(), email: email.trim() }))
+
+    if (socketRef.current) {
       socketRef.current.emit('join-session', { sessionId, name: name.trim(), email: email.trim() || undefined })
-      localStorage.setItem('chat_session', JSON.stringify({ name: name.trim(), email: email.trim() }))
-      setIsJoined(true)
     }
+
+    setIsJoined(true)
   }, [name, email, sessionId])
 
   const sendMessage = useCallback(async () => {
@@ -186,7 +222,7 @@ export function ChatWidget() {
         const res = await fetch('/api/chat-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, message: userMessage, history, language })
+          body: JSON.stringify({ sessionId, message: userMessage, history, language, name, email })
         })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.success && data.response) {
