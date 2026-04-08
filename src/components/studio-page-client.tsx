@@ -39,7 +39,7 @@ export function StudioPageClient({ siteSettings, publication }: StudioPageClient
 
   return (
     <main className="min-h-screen bg-white text-zinc-900">
-      <SiteHeader tone="dark" />
+      <SiteHeader tone="dark" logoUrl={siteSettings?.logoUrl} companyName={siteSettings?.companyName} />
 
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 sm:pt-32">
         <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">

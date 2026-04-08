@@ -64,7 +64,7 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
 
   return (
     <main className="min-h-screen bg-white text-zinc-900">
-      <SiteHeader tone="dark" />
+      <SiteHeader tone="dark" logoUrl={siteSettings?.logoUrl} companyName={siteSettings?.companyName} />
 
       <section className="mx-auto max-w-7xl px-4 pb-12 pt-28 sm:px-6 sm:pt-32">
         <div className="max-w-2xl">
