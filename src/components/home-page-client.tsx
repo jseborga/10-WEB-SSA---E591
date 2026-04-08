@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SiteHeader } from '@/components/site-header'
-import { PublicProject, PublicSiteSettings, parseUrlList } from '@/lib/public-site'
+import { PublicProject, PublicSiteSettings, isVideoUrl, parseUrlList } from '@/lib/public-site'
 
 interface HomePageClientProps {
   initialProjects?: PublicProject[]
@@ -112,26 +112,52 @@ export default function HomePageClient({
             <AnimatePresence mode="sync">
               {heroImages.map((imageUrl, index) =>
                 index === activeHeroIndex ? (
-                  <motion.img
-                    key={`${imageUrl}-${isMobile ? 'mobile' : 'desktop'}`}
-                    src={imageUrl}
-                    alt=""
-                    initial={{ opacity: 0, scale: 1.08 }}
-                    animate={{ opacity: activeHeroOpacity, scale: 1 }}
-                    exit={{ opacity: 0, scale: 1.03 }}
-                    transition={{ duration: 1.6, ease: 'easeOut' }}
-                    className={`absolute inset-0 h-full w-full ${heroImageFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                    style={{
-                      filter:
-                        heroImageTreatment === 'original'
-                          ? `brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
-                          : heroImageTreatment === 'enhanced'
-                            ? `grayscale(4%) saturate(${Math.max(1, activeHeroSaturation * 1.06)}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
-                            : heroImageTreatment === 'monochrome'
-                              ? `grayscale(100%) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
-                              : `grayscale(${activeHeroGrayscale}%) saturate(${activeHeroSaturation}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`,
-                    }}
-                  />
+                  isVideoUrl(imageUrl) ? (
+                    <motion.video
+                      key={`${imageUrl}-${isMobile ? 'mobile' : 'desktop'}`}
+                      src={imageUrl}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      initial={{ opacity: 0, scale: 1.08 }}
+                      animate={{ opacity: activeHeroOpacity, scale: 1 }}
+                      exit={{ opacity: 0, scale: 1.03 }}
+                      transition={{ duration: 1.6, ease: 'easeOut' }}
+                      className={`absolute inset-0 h-full w-full ${heroImageFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                      style={{
+                        filter:
+                          heroImageTreatment === 'original'
+                            ? `brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                            : heroImageTreatment === 'enhanced'
+                              ? `grayscale(4%) saturate(${Math.max(1, activeHeroSaturation * 1.06)}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                              : heroImageTreatment === 'monochrome'
+                                ? `grayscale(100%) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                                : `grayscale(${activeHeroGrayscale}%) saturate(${activeHeroSaturation}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`,
+                      }}
+                    />
+                  ) : (
+                    <motion.img
+                      key={`${imageUrl}-${isMobile ? 'mobile' : 'desktop'}`}
+                      src={imageUrl}
+                      alt=""
+                      initial={{ opacity: 0, scale: 1.08 }}
+                      animate={{ opacity: activeHeroOpacity, scale: 1 }}
+                      exit={{ opacity: 0, scale: 1.03 }}
+                      transition={{ duration: 1.6, ease: 'easeOut' }}
+                      className={`absolute inset-0 h-full w-full ${heroImageFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                      style={{
+                        filter:
+                          heroImageTreatment === 'original'
+                            ? `brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                            : heroImageTreatment === 'enhanced'
+                              ? `grayscale(4%) saturate(${Math.max(1, activeHeroSaturation * 1.06)}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                              : heroImageTreatment === 'monochrome'
+                                ? `grayscale(100%) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`
+                                : `grayscale(${activeHeroGrayscale}%) saturate(${activeHeroSaturation}) brightness(${heroImageBrightness / 100}) contrast(${heroImageContrast / 100})`,
+                      }}
+                    />
+                  )
                 ) : null,
               )}
             </AnimatePresence>

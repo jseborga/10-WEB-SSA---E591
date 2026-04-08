@@ -99,6 +99,10 @@ export function parseLineList(value: string | null | undefined) {
     .filter(Boolean)
 }
 
+export function isVideoUrl(value: string) {
+  return /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(value)
+}
+
 export function formatCategoryLabel(value: string) {
   return value
     .replace(/[-_]+/g, ' ')

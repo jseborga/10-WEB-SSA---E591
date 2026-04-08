@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
-import { formatCategoryLabel, getProjectCategories, parseUrlList } from '@/lib/public-site'
+import { formatCategoryLabel, getProjectCategories, isVideoUrl, parseUrlList } from '@/lib/public-site'
 
 interface Project {
   id: string
@@ -625,7 +625,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         [target]: [...uploadedUrls, current[target].trim()].filter(Boolean).join('\n'),
       }))
 
-      toast.success('Imagenes del hero subidas correctamente')
+      toast.success('Medios del hero subidos correctamente')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
     } finally {
@@ -1180,16 +1180,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           <div className="flex items-center justify-between gap-3">
                             <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes hero desktop</label>
                             <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                              {uploadingField === 'heroImages' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                              Subir varias imagenes
-                              <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImages')} />
+                            {uploadingField === 'heroImages' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              Subir medios
+                              <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImages')} />
                             </label>
                           </div>
                           <Textarea
                             value={siteForm.heroImages}
                             onChange={e => setSiteForm({ ...siteForm, heroImages: e.target.value })}
                             rows={5}
-                            placeholder="Una URL por linea. Si esta vacio, se usan las imagenes principales de proyectos publicados."
+                            placeholder="Una URL por linea. Acepta imagenes o videos. Si esta vacio, se usan las imagenes principales de proyectos publicados."
                             className="text-sm"
                           />
                         </div>
@@ -1198,16 +1198,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                           <div className="flex items-center justify-between gap-3">
                             <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes hero mobile</label>
                             <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                              {uploadingField === 'heroImagesMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                              Subir varias imagenes
-                              <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImagesMobile')} />
+                            {uploadingField === 'heroImagesMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              Subir medios
+                              <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImagesMobile')} />
                             </label>
                           </div>
                           <Textarea
                             value={siteForm.heroImagesMobile}
                             onChange={e => setSiteForm({ ...siteForm, heroImagesMobile: e.target.value })}
                             rows={5}
-                            placeholder="Opcional. Si esta vacio, mobile reutiliza las imagenes desktop."
+                            placeholder="Opcional. Acepta imagenes o videos. Si esta vacio, mobile reutiliza los medios desktop."
                             className="text-sm"
                           />
                         </div>
@@ -1241,15 +1241,30 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                               <div className="relative aspect-[16/9] overflow-hidden rounded-[22px] bg-zinc-100">
                                 {heroPreviewImage ? (
                                   <>
-                                    <img
-                                      src={heroPreviewImage}
-                                      alt=""
-                                      className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                                      style={{
-                                        opacity: heroPreviewStyles.opacity,
-                                        filter: heroPreviewStyles.filter,
-                                      }}
-                                    />
+                                    {isVideoUrl(heroPreviewImage) ? (
+                                      <video
+                                        src={heroPreviewImage}
+                                        autoPlay
+                                        muted
+                                        loop
+                                        playsInline
+                                        className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                        style={{
+                                          opacity: heroPreviewStyles.opacity,
+                                          filter: heroPreviewStyles.filter,
+                                        }}
+                                      />
+                                    ) : (
+                                      <img
+                                        src={heroPreviewImage}
+                                        alt=""
+                                        className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                        style={{
+                                          opacity: heroPreviewStyles.opacity,
+                                          filter: heroPreviewStyles.filter,
+                                        }}
+                                      />
+                                    )}
                                     <div
                                       className="absolute inset-0"
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
@@ -1276,15 +1291,30 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                               <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-zinc-100">
                                 {heroPreviewMobileImage ? (
                                   <>
-                                    <img
-                                      src={heroPreviewMobileImage}
-                                      alt=""
-                                      className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                                      style={{
-                                        opacity: heroPreviewStyles.opacity,
-                                        filter: heroPreviewStyles.filter,
-                                      }}
-                                    />
+                                    {isVideoUrl(heroPreviewMobileImage) ? (
+                                      <video
+                                        src={heroPreviewMobileImage}
+                                        autoPlay
+                                        muted
+                                        loop
+                                        playsInline
+                                        className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                        style={{
+                                          opacity: heroPreviewStyles.opacity,
+                                          filter: heroPreviewStyles.filter,
+                                        }}
+                                      />
+                                    ) : (
+                                      <img
+                                        src={heroPreviewMobileImage}
+                                        alt=""
+                                        className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                                        style={{
+                                          opacity: heroPreviewStyles.opacity,
+                                          filter: heroPreviewStyles.filter,
+                                        }}
+                                      />
+                                    )}
                                     <div
                                       className="absolute inset-0"
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
