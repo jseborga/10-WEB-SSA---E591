@@ -2,18 +2,30 @@
 
 import { useLanguage } from '@/lib/language-context'
 import { Globe } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { useState, useRef, useEffect } from 'react'
 
 const languages = [
-  { code: 'es' as const, name: 'ES', full: 'Español' },
+  { code: 'es' as const, name: 'ES', full: 'Espanol' },
   { code: 'en' as const, name: 'EN', full: 'English' },
-  { code: 'pt' as const, name: 'PT', full: 'Português' }
+  { code: 'pt' as const, name: 'PT', full: 'Portugues' },
 ]
 
-export function LanguageSelector() {
+interface LanguageSelectorProps {
+  iconOnly?: boolean
+  tone?: 'light' | 'dark'
+  blinking?: boolean
+}
+
+export function LanguageSelector({
+  iconOnly = false,
+  tone = 'light',
+  blinking = false,
+}: LanguageSelectorProps) {
   const { language, setLanguage } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const isLight = tone === 'light'
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -21,6 +33,7 @@ export function LanguageSelector() {
         setIsOpen(false)
       }
     }
+
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
@@ -28,16 +41,35 @@ export function LanguageSelector() {
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2 py-1.5 text-xs tracking-wide text-zinc-600 hover:text-zinc-900 transition-colors"
+        onClick={() => setIsOpen((current) => !current)}
+        className={[
+          'inline-flex items-center justify-center rounded-full border px-3 py-2 text-xs tracking-[0.24em] transition-colors backdrop-blur-md',
+          isLight
+            ? 'border-white/40 bg-black/12 text-white hover:border-white/70 hover:bg-black/24'
+            : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
+          iconOnly ? 'h-11 w-11 px-0 py-0' : 'gap-2',
+        ].join(' ')}
         aria-label="Select language"
       >
-        <Globe className="w-3.5 h-3.5" />
-        <span className="uppercase">{language}</span>
+        <motion.span
+          animate={
+            blinking
+              ? {
+                  opacity: [0.35, 1, 0.35],
+                  scale: [1, 1.06, 1],
+                }
+              : undefined
+          }
+          transition={blinking ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } : undefined}
+          className="inline-flex"
+        >
+          <Globe className="h-4 w-4" />
+        </motion.span>
+        {!iconOnly ? <span className="uppercase">{language}</span> : null}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg overflow-hidden z-50 min-w-[120px]">
+        <div className="absolute right-0 top-full z-50 mt-2 min-w-[132px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl">
           {languages.map((lang) => (
             <button
               key={lang.code}
@@ -45,8 +77,8 @@ export function LanguageSelector() {
                 setLanguage(lang.code)
                 setIsOpen(false)
               }}
-              className={`w-full px-4 py-2 text-left text-sm hover:bg-zinc-50 transition-colors ${
-                language === lang.code ? 'bg-zinc-50 text-zinc-900 font-medium' : 'text-zinc-600'
+              className={`w-full px-4 py-3 text-left text-sm transition-colors ${
+                language === lang.code ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
               }`}
             >
               {lang.full}

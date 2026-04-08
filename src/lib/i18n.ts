@@ -5,7 +5,8 @@ export const translations = {
       home: 'Inicio',
       projects: 'Proyectos',
       services: 'Servicios',
-      studio: 'Estudio'
+      studio: 'Estudio',
+      contact: 'Contacto'
     },
     // Hero
     hero: {
@@ -122,7 +123,8 @@ export const translations = {
       home: 'Home',
       projects: 'Projects',
       services: 'Services',
-      studio: 'Studio'
+      studio: 'Studio',
+      contact: 'Contact'
     },
     // Hero
     hero: {
@@ -239,7 +241,8 @@ export const translations = {
       home: 'Início',
       projects: 'Projetos',
       services: 'Serviços',
-      studio: 'Estúdio'
+      studio: 'Estúdio',
+      contact: 'Contato'
     },
     // Hero
     hero: {

@@ -102,6 +102,7 @@ model SiteSettings {
   faviconUrl   String?
   socialShareImageUrl String?
   heroImages   String?
+  heroImagesMobile     String?
   heroImageOpacity    Int      @default(34)
   heroImageSaturation Int      @default(90)
   heroImageBrightness Int      @default(100)
@@ -110,6 +111,7 @@ model SiteSettings {
   heroImageTreatment  String   @default("original")
   heroShowCompanyName Boolean  @default(false)
   heroTextTone        String   @default("dark")
+  projectCategories   String?
   email        String?
   phone        String?
   whatsapp     String?

@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
+import { formatCategoryLabel, getProjectCategories, parseUrlList } from '@/lib/public-site'
 
 interface Project {
   id: string
@@ -82,6 +83,7 @@ interface SiteSettings {
   faviconUrl: string
   socialShareImageUrl: string
   heroImages: string
+  heroImagesMobile: string
   heroImageOpacity: string
   heroImageSaturation: string
   heroImageBrightness: string
@@ -90,6 +92,7 @@ interface SiteSettings {
   heroImageTreatment: 'editorial' | 'original' | 'enhanced' | 'monochrome'
   heroShowCompanyName: boolean
   heroTextTone: 'dark' | 'light'
+  projectCategories: string
   email: string
   phone: string
   whatsapp: string
@@ -192,6 +195,7 @@ const emptySiteForm: SiteFormState = {
   faviconUrl: '',
   socialShareImageUrl: '',
   heroImages: '',
+  heroImagesMobile: '',
   heroImageOpacity: '34',
   heroImageSaturation: '90',
   heroImageBrightness: '100',
@@ -200,6 +204,7 @@ const emptySiteForm: SiteFormState = {
   heroImageTreatment: 'original',
   heroShowCompanyName: false,
   heroTextTone: 'dark',
+  projectCategories: '',
   email: '',
   phone: '',
   whatsapp: '',
@@ -242,31 +247,6 @@ function clampIntegerString(value: string, fallback: number, min: number, max: n
 
 function normalizeChoice<T extends string>(value: string, fallback: T, options: readonly T[]): T {
   return options.includes(value as T) ? (value as T) : fallback
-}
-
-function parseUrlList(value: string | null | undefined) {
-  const rawValue = (value || '').trim()
-
-  if (!rawValue) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue)
-
-    if (Array.isArray(parsed)) {
-      return parsed
-        .map((item) => (typeof item === 'string' ? item.trim() : ''))
-        .filter(Boolean)
-    }
-  } catch {
-    // Fall back to line-based parsing from the admin textarea.
-  }
-
-  return rawValue
-    .split('\n')
-    .map((line) => line.trim().replace(/^['"]|['"]$/g, ''))
-    .filter(Boolean)
 }
 
 function clampPreviewNumber(value: string, fallback: number, min: number, max: number) {
@@ -353,7 +333,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [showProjectDialog, setShowProjectDialog] = useState(false)
   const [showPublicationDialog, setShowPublicationDialog] = useState(false)
+  const projectCategoryOptions = useMemo(
+    () => getProjectCategories(siteForm.projectCategories, projects.map((project) => project.category)),
+    [projects, siteForm.projectCategories],
+  )
   const heroPreviewImage = useMemo(() => parseUrlList(siteForm.heroImages)[0] || '', [siteForm.heroImages])
+  const heroPreviewMobileImage = useMemo(
+    () => parseUrlList(siteForm.heroImagesMobile)[0] || heroPreviewImage,
+    [heroPreviewImage, siteForm.heroImagesMobile],
+  )
   const heroPreviewStyles = useMemo(() => getHeroPreviewStyles(siteForm), [siteForm])
 
   const authCopy = useMemo(() => {
@@ -457,14 +445,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         faviconUrl: siteData.faviconUrl || '',
         socialShareImageUrl: siteData.socialShareImageUrl || '',
         heroImages: siteData.heroImages || '',
+        heroImagesMobile: siteData.heroImagesMobile || '',
         heroImageOpacity: String(siteData.heroImageOpacity ?? 34),
         heroImageSaturation: String(siteData.heroImageSaturation ?? 90),
         heroImageBrightness: String(siteData.heroImageBrightness ?? 100),
         heroImageContrast: String(siteData.heroImageContrast ?? 105),
         heroImageFit: siteData.heroImageFit === 'contain' ? 'contain' : 'cover',
-        heroImageTreatment: ['editorial', 'original', 'enhanced', 'monochrome'].includes(siteData.heroImageTreatment) ? siteData.heroImageTreatment : 'editorial',
+        heroImageTreatment: ['editorial', 'original', 'enhanced', 'monochrome'].includes(siteData.heroImageTreatment) ? siteData.heroImageTreatment : 'original',
         heroShowCompanyName: Boolean(siteData.heroShowCompanyName),
         heroTextTone: siteData.heroTextTone === 'light' ? 'light' : 'dark',
+        projectCategories: siteData.projectCategories || '',
         email: siteData.email || '',
         phone: siteData.phone || '',
         whatsapp: siteData.whatsapp || '',
@@ -618,10 +608,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
     }
   }
 
-  const handleSiteHeroUpload = async (files: FileList | null) => {
+  const handleSiteHeroUpload = async (files: FileList | null, target: 'heroImages' | 'heroImagesMobile') => {
     if (!files || files.length === 0) return
 
-    setUploadingField('heroImages')
+    setUploadingField(target)
 
     try {
       const uploadedUrls = []
@@ -632,7 +622,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
       setSiteForm((current) => ({
         ...current,
-        heroImages: [...uploadedUrls, current.heroImages.trim()].filter(Boolean).join('\n'),
+        [target]: [...uploadedUrls, current[target].trim()].filter(Boolean).join('\n'),
       }))
 
       toast.success('Imagenes del hero subidas correctamente')
@@ -822,7 +812,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         heroImageBrightness: clampIntegerString(siteForm.heroImageBrightness, 100, 70, 150),
         heroImageContrast: clampIntegerString(siteForm.heroImageContrast, 105, 80, 160),
         heroImageFit: normalizeChoice(siteForm.heroImageFit, 'cover', ['cover', 'contain'] as const),
-        heroImageTreatment: normalizeChoice(siteForm.heroImageTreatment, 'editorial', ['editorial', 'original', 'enhanced', 'monochrome'] as const),
+        heroImageTreatment: normalizeChoice(siteForm.heroImageTreatment, 'original', ['editorial', 'original', 'enhanced', 'monochrome'] as const),
         heroTextTone: normalizeChoice(siteForm.heroTextTone, 'dark', ['dark', 'light'] as const),
       }
 
@@ -1012,7 +1002,19 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <h2 className="text-base font-light">{t.admin.projects} ({projects.length})</h2>
-                        <Button onClick={() => { setEditingProject(null); setProjectForm(emptyProjectForm); setShowProjectDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />{t.admin.newProject}</Button>
+                        <Button
+                          onClick={() => {
+                            setEditingProject(null)
+                            setProjectForm({
+                              ...emptyProjectForm,
+                              category: projectCategoryOptions[0] || emptyProjectForm.category,
+                            })
+                            setShowProjectDialog(true)
+                          }}
+                          className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"
+                        >
+                          <Plus className="w-4 h-4 mr-1" />{t.admin.newProject}
+                        </Button>
                       </div>
                       <div className="grid gap-3">
                         {projects.map(p => (
@@ -1026,7 +1028,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                                   </span>
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
-                                  <span>{p.category}</span>
+                                  <span>{formatCategoryLabel(p.category)}</span>
                                   {p.location && <><span>•</span><span>{p.location}</span></>}
                                   {p.year && <><span>•</span><span>{p.year}</span></>}
                                   {p.videoUrl && <><span>•</span><span>Video</span></>}
@@ -1084,7 +1086,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <h2 className="text-base font-light">Configuracion del sitio</h2>
-                          <p className="text-xs text-zinc-500 mt-1">Edita marca, SEO, contacto, redes sociales, imagen de compartir y pie de pagina.</p>
+                          <p className="text-xs text-zinc-500 mt-1">Edita marca, SEO, contacto, redes, portada y categorias configurables.</p>
                         </div>
                         <Button onClick={handleSaveSiteConfig} disabled={loading} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm">
                           <Save className="w-4 h-4 mr-1" />
@@ -1173,31 +1175,63 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                         <p className="text-xs text-zinc-500">Se usa al compartir el link en Facebook, WhatsApp, LinkedIn y otras plataformas. Recomendado: 1200 x 630 px.</p>
                       </div>
 
-                      <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes del hero</label>
-                          <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                            {uploadingField === 'heroImages' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                            Subir varias imagenes
-                            <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files)} />
-                          </label>
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes hero desktop</label>
+                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                              {uploadingField === 'heroImages' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              Subir varias imagenes
+                              <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImages')} />
+                            </label>
+                          </div>
+                          <Textarea
+                            value={siteForm.heroImages}
+                            onChange={e => setSiteForm({ ...siteForm, heroImages: e.target.value })}
+                            rows={5}
+                            placeholder="Una URL por linea. Si esta vacio, se usan las imagenes principales de proyectos publicados."
+                            className="text-sm"
+                          />
                         </div>
+
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes hero mobile</label>
+                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                              {uploadingField === 'heroImagesMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              Subir varias imagenes
+                              <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImagesMobile')} />
+                            </label>
+                          </div>
+                          <Textarea
+                            value={siteForm.heroImagesMobile}
+                            onChange={e => setSiteForm({ ...siteForm, heroImagesMobile: e.target.value })}
+                            rows={5}
+                            placeholder="Opcional. Si esta vacio, mobile reutiliza las imagenes desktop."
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                        <label className="text-xs font-medium text-zinc-700 mb-1 block">Categorias de proyectos</label>
                         <Textarea
-                          value={siteForm.heroImages}
-                          onChange={e => setSiteForm({ ...siteForm, heroImages: e.target.value })}
+                          value={siteForm.projectCategories}
+                          onChange={e => setSiteForm({ ...siteForm, projectCategories: e.target.value })}
                           rows={4}
-                          placeholder="Una URL por linea. Se mezclaran con las imagenes principales de proyectos publicados."
+                          placeholder={'Una categoria por linea.\nConstruccion\nDiseno\nSupervision'}
                           className="text-sm"
                         />
+                        <p className="text-xs text-zinc-500">Estas categorias aparecen en la pagina de proyectos y en el formulario de nuevo proyecto.</p>
                       </div>
 
                       <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h3 className="text-sm font-medium text-zinc-900">Vista previa del hero</h3>
-                            <p className="text-xs text-zinc-500 mt-1">Desktop y mobile usando la primera imagen de la lista.</p>
+                            <p className="text-xs text-zinc-500 mt-1">La home publica queda solo con imagen y menu.</p>
                           </div>
-                          {!heroPreviewImage && <span className="text-xs text-zinc-500">Sube una imagen para ver la previsualizacion</span>}
+                          {!heroPreviewImage && !heroPreviewMobileImage ? <span className="text-xs text-zinc-500">Sube una imagen para ver la previsualizacion</span> : null}
                         </div>
 
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -1220,13 +1254,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                                       className="absolute inset-0"
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
                                     />
-                                    <div className="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
-                                      <span>Menu</span>
-                                    </div>
-                                    <div className="absolute inset-x-6 bottom-8 text-center">
-                                      <div className={`inline-flex items-end gap-1 text-2xl font-light ${heroPreviewStyles.textTone === 'light' ? 'text-white' : 'text-black'}`} style={{ textShadow: heroPreviewStyles.textTone === 'light' ? '0 1px 16px rgba(0,0,0,0.28)' : '0 2px 18px rgba(255,255,255,0.85)' }}>
-                                        <span>{siteForm.tagline?.trim() || 'Construyendo el futuro'}</span>
-                                        <span className="inline-flex opacity-80">...</span>
+                                    <div className="absolute right-4 top-4 flex items-center gap-2">
+                                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
+                                        <Globe className="h-4 w-4" />
+                                      </div>
+                                      <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
+                                        <span>Menu</span>
                                       </div>
                                     </div>
                                   </>
@@ -1239,12 +1272,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
                           <div className="space-y-2">
                             <span className="text-xs uppercase tracking-[0.22em] text-zinc-500">Mobile</span>
-                            <div className="rounded-[28px] border border-zinc-200 bg-zinc-100 p-3 max-w-[280px]">
+                            <div className="max-w-[280px] rounded-[28px] border border-zinc-200 bg-zinc-100 p-3">
                               <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-zinc-100">
-                                {heroPreviewImage ? (
+                                {heroPreviewMobileImage ? (
                                   <>
                                     <img
-                                      src={heroPreviewImage}
+                                      src={heroPreviewMobileImage}
                                       alt=""
                                       className={`absolute inset-0 h-full w-full ${heroPreviewStyles.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
                                       style={{
@@ -1256,13 +1289,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                                       className="absolute inset-0"
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
                                     />
-                                    <div className="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
-                                      <span>Menu</span>
-                                    </div>
-                                    <div className="absolute inset-x-5 bottom-10 text-center">
-                                      <div className={`inline-flex items-end gap-1 text-xl font-light leading-tight ${heroPreviewStyles.textTone === 'light' ? 'text-white' : 'text-black'}`} style={{ textShadow: heroPreviewStyles.textTone === 'light' ? '0 1px 16px rgba(0,0,0,0.28)' : '0 2px 18px rgba(255,255,255,0.85)' }}>
-                                        <span>{siteForm.tagline?.trim() || 'Construyendo el futuro'}</span>
-                                        <span className="inline-flex opacity-80">...</span>
+                                    <div className="absolute right-4 top-4 flex items-center gap-2">
+                                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
+                                        <Globe className="h-4 w-4" />
+                                      </div>
+                                      <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
+                                        <span>Menu</span>
                                       </div>
                                     </div>
                                   </>
@@ -1835,6 +1867,30 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Descripcion completa</label>
               <Textarea value={projectForm.fullDescription} onChange={e => setProjectForm({ ...projectForm, fullDescription: e.target.value })} rows={5} className="text-sm" />
+            </div>
+            <div className="space-y-3 rounded-xl border border-zinc-200 p-4">
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Categoria personalizada</label>
+                <Input value={projectForm.category} onChange={e => setProjectForm({ ...projectForm, category: e.target.value })} className="text-sm" />
+              </div>
+              {projectCategoryOptions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {projectCategoryOptions.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => setProjectForm({ ...projectForm, category })}
+                      className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                        projectForm.category === category
+                          ? 'border-zinc-900 bg-zinc-900 text-white'
+                          : 'border-zinc-200 text-zinc-600 hover:border-zinc-400 hover:text-zinc-900'
+                      }`}
+                    >
+                      {formatCategoryLabel(category)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
