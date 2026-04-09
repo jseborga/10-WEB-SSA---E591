@@ -167,6 +167,7 @@ model SiteSettings {
   heroShowCompanyName Boolean  @default(false)
   heroTextTone        String   @default("dark")
   projectCategories   String?
+  menuConfig          String?
   email        String?
   phone        String?
   whatsapp     String?

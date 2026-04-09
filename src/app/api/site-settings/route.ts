@@ -63,6 +63,7 @@ export async function PUT(request: Request) {
         heroShowCompanyName: Boolean(body.heroShowCompanyName),
         heroTextTone: normalizeChoice(body.heroTextTone, currentSettings.heroTextTone, ['dark', 'light']),
         projectCategories: body.projectCategories ?? currentSettings.projectCategories,
+        menuConfig: body.menuConfig ?? currentSettings.menuConfig,
         email: body.email ?? currentSettings.email,
         phone: body.phone ?? currentSettings.phone,
         whatsapp: body.whatsapp ?? currentSettings.whatsapp,

@@ -2,11 +2,12 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Home, Menu, X } from 'lucide-react'
 import { LanguageSelector } from '@/components/language-selector'
 import { useLanguage } from '@/lib/language-context'
+import type { MenuItemConfig } from '@/lib/menu-config'
 
 const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) => mod.ChatWidget), {
   ssr: false,
@@ -16,35 +17,10 @@ interface SiteHeaderProps {
   tone?: 'light' | 'dark'
 }
 
-type DynamicMenuPage = {
-  id: string
-  title: string
-  slug: string
-  menuOrder?: number
-}
-
-function getMenuHrefFromSlug(slug: string) {
-  const normalized = slug
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-
-  if (normalized === 'contacto') {
-    return '/contacto'
-  }
-
-  if (normalized === 'estudio') {
-    return '/estudio'
-  }
-
-  return `/info/${normalized}`
-}
-
 export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
   const { t } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [dynamicPages, setDynamicPages] = useState<DynamicMenuPage[]>([])
+  const [menuItems, setMenuItems] = useState<MenuItemConfig[]>([])
   const isLight = tone === 'light'
   const menuButtonClass = [
     'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] uppercase tracking-[0.24em] transition-colors backdrop-blur-md',
@@ -55,47 +31,30 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
   useEffect(() => {
     let active = true
 
-    void fetch('/api/publications?menu=true', { cache: 'no-store' })
+    void fetch('/api/menu', { cache: 'no-store' })
       .then(async (response) => (response.ok ? response.json() : []))
       .then((data) => {
         if (!active) {
           return
         }
 
-        setDynamicPages(Array.isArray(data) ? data : [])
+        setMenuItems(Array.isArray(data) ? data : [])
       })
       .catch(() => {
         if (active) {
-          setDynamicPages([])
+          setMenuItems([
+            { id: 'fallback-home', label: 'Inicio', href: '/' },
+            { id: 'fallback-projects', label: t.nav.projects, href: '/proyectos' },
+            { id: 'fallback-studio', label: t.nav.studio, href: '/estudio' },
+            { id: 'fallback-contact', label: t.nav.contact || 'Contacto', href: '/contacto' },
+          ])
         }
       })
 
     return () => {
       active = false
     }
-  }, [])
-
-  const menuItems = useMemo(() => {
-    const items = [
-      { href: '/contacto', label: t.nav.contact || 'Contacto' },
-      { href: '/proyectos', label: t.nav.projects },
-      { href: '/estudio', label: t.nav.studio },
-      ...[...dynamicPages]
-        .sort((a, b) => (a.menuOrder ?? 0) - (b.menuOrder ?? 0))
-        .map((page) => ({
-          href: getMenuHrefFromSlug(page.slug),
-          label: page.title,
-        })),
-    ]
-
-    const deduped = new Map<string, string>()
-
-    for (const item of items) {
-      deduped.set(item.href, item.label)
-    }
-
-    return Array.from(deduped.entries()).map(([href, label]) => ({ href, label }))
-  }, [dynamicPages, t.nav.contact, t.nav.projects, t.nav.studio])
+  }, [t.nav.contact, t.nav.projects, t.nav.studio])
 
   return (
     <>
@@ -137,14 +96,43 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
           >
             <div className="ml-auto flex max-w-7xl flex-col items-end gap-2">
               {menuItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setIsMenuOpen(false)}
-                  className="text-sm text-white/92 transition-colors hover:text-white"
-                >
-                  {item.label}
-                </Link>
+                <div key={item.id} className="flex flex-col items-end gap-2">
+                  {item.href ? (
+                    <Link
+                      href={item.href}
+                      onClick={() => setIsMenuOpen(false)}
+                      target={item.openInNewTab ? '_blank' : undefined}
+                      rel={item.openInNewTab ? 'noreferrer' : undefined}
+                      className="text-sm text-white/92 transition-colors hover:text-white"
+                    >
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className="text-sm text-white/92">{item.label}</span>
+                  )}
+                  {item.children?.length ? (
+                    <div className="mr-2 flex flex-col items-end gap-1 border-r border-white/15 pr-3">
+                      {item.children.map((child) =>
+                        child.href ? (
+                          <Link
+                            key={child.id}
+                            href={child.href}
+                            onClick={() => setIsMenuOpen(false)}
+                            target={child.openInNewTab ? '_blank' : undefined}
+                            rel={child.openInNewTab ? 'noreferrer' : undefined}
+                            className="text-xs text-white/70 transition-colors hover:text-white"
+                          >
+                            {child.label}
+                          </Link>
+                        ) : (
+                          <span key={child.id} className="text-xs text-white/70">
+                            {child.label}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </div>
           </motion.div>

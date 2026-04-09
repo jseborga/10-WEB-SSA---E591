@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin, ArrowUp, ArrowDown, CornerDownRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
+import { type MenuItemConfig, parseMenuConfig, serializeMenuConfig, buildPublicationHref } from '@/lib/menu-config'
 import { formatCategoryLabel, getProjectCategories, isVideoUrl, parseUrlList } from '@/lib/public-site'
 
 interface Project {
@@ -175,6 +176,7 @@ interface SiteSettings {
   heroShowCompanyName: boolean
   heroTextTone: 'dark' | 'light'
   projectCategories: string
+  menuConfig: string
   email: string
   phone: string
   whatsapp: string
@@ -400,6 +402,7 @@ const emptySiteForm: SiteFormState = {
   heroShowCompanyName: false,
   heroTextTone: 'dark',
   projectCategories: '',
+  menuConfig: '',
   email: '',
   phone: '',
   whatsapp: '',
@@ -420,6 +423,19 @@ const emptyUserForm: UserFormState = {
   password: '',
   role: 'editor',
   active: true,
+}
+
+function createMenuItemDraft(label = 'Nuevo item'): MenuItemConfig {
+  return {
+    id:
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? `menu-${crypto.randomUUID()}`
+        : `menu-${Math.random().toString(36).slice(2, 10)}`,
+    label,
+    href: '',
+    openInNewTab: false,
+    children: [],
+  }
 }
 
 const emptyTelegramForm: TelegramFormState = {
@@ -697,6 +713,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
   const [publicationForm, setPublicationForm] = useState<PublicationFormState>(emptyPublicationForm)
   const [siteForm, setSiteForm] = useState<SiteFormState>(emptySiteForm)
+  const [menuItems, setMenuItems] = useState<MenuItemConfig[]>([])
   const [telegramForm, setTelegramForm] = useState<TelegramFormState>(emptyTelegramForm)
   const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm)
   const [aiForm, setAiForm] = useState({
@@ -768,6 +785,19 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     [projectForm.facebookUrl, projectForm.instagramUrl, projectForm.linkedinUrl, projectForm.referenceUrl, projectForm.youtubeUrl],
   )
   const pendingReviews = useMemo(() => reviews.filter((review) => review.status === 'pending'), [reviews])
+  const publishedPagesForMenu = useMemo(
+    () =>
+      publications
+        .filter((publication) => publication.published && publication.showInMenu)
+        .sort((a, b) => (a.menuOrder ?? 0) - (b.menuOrder ?? 0))
+        .map((publication) => ({
+          id: publication.id,
+          title: publication.title,
+          slug: publication.slug,
+          menuOrder: publication.menuOrder ?? 0,
+        })),
+    [publications],
+  )
   const eligibleHomepageProjects = useMemo(
     () =>
       projects.filter((project) => project.showOnHomepage && (project.mainImage || project.mainImageMobile || project.videoUrl)),
@@ -1066,6 +1096,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         heroShowCompanyName: Boolean(siteData.heroShowCompanyName),
         heroTextTone: siteData.heroTextTone === 'light' ? 'light' : 'dark',
         projectCategories: siteData.projectCategories || '',
+        menuConfig: siteData.menuConfig || '',
         email: siteData.email || '',
         phone: siteData.phone || '',
         whatsapp: siteData.whatsapp || '',
@@ -1079,6 +1110,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         youtubeUrl: siteData.youtubeUrl || '',
         tiktokUrl: siteData.tiktokUrl || '',
       })
+      setMenuItems(
+        parseMenuConfig(siteData.menuConfig, (Array.isArray(publicationsData) ? publicationsData : [])
+          .filter((publication: Publication) => publication.published && publication.showInMenu)
+          .map((publication: Publication) => ({
+            id: publication.id,
+            title: publication.title,
+            slug: publication.slug,
+            menuOrder: publication.menuOrder ?? 0,
+          }))),
+      )
       setAiForm({
         enabled: configData.enabled,
         provider: configData.provider || 'default',
@@ -1151,6 +1192,114 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
+
+  const handleAddMenuItem = () => {
+    setMenuItems((current) => [...current, createMenuItemDraft()])
+  }
+
+  const handleInsertDefaultMenu = () => {
+    setMenuItems(parseMenuConfig('', publishedPagesForMenu))
+  }
+
+  const handleUpdateMenuItem = (itemId: string, patch: Partial<MenuItemConfig>) => {
+    setMenuItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
+    )
+  }
+
+  const handleMoveMenuItem = (itemId: string, direction: 'up' | 'down') => {
+    setMenuItems((current) => {
+      const index = current.findIndex((item) => item.id === itemId)
+      if (index < 0) return current
+
+      const nextIndex = direction === 'up' ? index - 1 : index + 1
+      if (nextIndex < 0 || nextIndex >= current.length) return current
+
+      const updated = [...current]
+      const [item] = updated.splice(index, 1)
+      updated.splice(nextIndex, 0, item)
+      return updated
+    })
+  }
+
+  const handleRemoveMenuItem = (itemId: string) => {
+    setMenuItems((current) => current.filter((item) => item.id !== itemId))
+  }
+
+  const handleAddSubmenuItem = (parentId: string) => {
+    setMenuItems((current) =>
+      current.map((item) =>
+        item.id === parentId
+          ? { ...item, children: [...(item.children || []), createMenuItemDraft('Nuevo submenu')] }
+          : item,
+      ),
+    )
+  }
+
+  const handleUpdateSubmenuItem = (parentId: string, childId: string, patch: Partial<MenuItemConfig>) => {
+    setMenuItems((current) =>
+      current.map((item) =>
+        item.id === parentId
+          ? {
+              ...item,
+              children: (item.children || []).map((child) => (child.id === childId ? { ...child, ...patch } : child)),
+            }
+          : item,
+      ),
+    )
+  }
+
+  const handleMoveSubmenuItem = (parentId: string, childId: string, direction: 'up' | 'down') => {
+    setMenuItems((current) =>
+      current.map((item) => {
+        if (item.id !== parentId || !item.children?.length) return item
+
+        const index = item.children.findIndex((child) => child.id === childId)
+        if (index < 0) return item
+
+        const nextIndex = direction === 'up' ? index - 1 : index + 1
+        if (nextIndex < 0 || nextIndex >= item.children.length) return item
+
+        const updatedChildren = [...item.children]
+        const [child] = updatedChildren.splice(index, 1)
+        updatedChildren.splice(nextIndex, 0, child)
+
+        return { ...item, children: updatedChildren }
+      }),
+    )
+  }
+
+  const handleRemoveSubmenuItem = (parentId: string, childId: string) => {
+    setMenuItems((current) =>
+      current.map((item) =>
+        item.id === parentId
+          ? {
+              ...item,
+              children: (item.children || []).filter((child) => child.id !== childId),
+            }
+          : item,
+      ),
+    )
+  }
+
+  const handleAddPublicationToMenu = (publication: Pick<Publication, 'title' | 'slug'>) => {
+    const href = buildPublicationHref(publication.slug)
+
+    setMenuItems((current) => {
+      if (current.some((item) => item.href === href)) {
+        return current
+      }
+
+      return [
+        ...current,
+        {
+          ...createMenuItemDraft(publication.title),
+          label: publication.title,
+          href,
+        },
+      ]
+    })
+  }
 
   const uploadFile = async (file: File) => {
     const formData = new FormData()
@@ -1765,6 +1914,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     try {
       const normalizedSiteForm = {
         ...siteForm,
+        menuConfig: serializeMenuConfig(menuItems),
         heroImageOpacity: clampIntegerString(siteForm.heroImageOpacity, 34, 5, 70),
         heroImageSaturation: clampIntegerString(siteForm.heroImageSaturation, 90, 0, 160),
         heroImageBrightness: clampIntegerString(siteForm.heroImageBrightness, 100, 70, 150),
@@ -2567,9 +2717,173 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   {/* Publications */}
                   {activeTab === 'publications' && (
                     <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h2 className="text-base font-light">Páginas y menú ({publications.length})</h2>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h2 className="text-base font-light">Páginas y menú ({publications.length})</h2>
+                          <p className="mt-1 text-xs text-zinc-500">Configura nombres del header, enlaces y submenús sin tocar el código.</p>
+                        </div>
                         <Button onClick={() => { setEditingPublication(null); setPublicationForm(emptyPublicationForm); setPublicationImageVariants(null); setShowPublicationDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />Nueva página</Button>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 space-y-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Editor de menú general</h3>
+                            <p className="mt-1 text-xs text-zinc-500">Renombra items, cambia enlaces y arma un nivel de submenú para hacer el sitio más genérico.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" onClick={handleInsertDefaultMenu} className="text-xs">
+                              Restaurar base
+                            </Button>
+                            <Button type="button" variant="outline" onClick={handleAddMenuItem} className="text-xs">
+                              <Plus className="mr-1 h-4 w-4" />
+                              Item principal
+                            </Button>
+                            <Button type="button" onClick={handleSaveSiteConfig} disabled={loading || session.role !== 'admin'} className="bg-zinc-900 hover:bg-zinc-800 text-xs">
+                              <Save className="mr-1 h-4 w-4" />
+                              {loading ? t.admin.saving : 'Guardar menú'}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-3 text-xs text-zinc-500">
+                          Usa rutas como <span className="font-medium text-zinc-700">/</span>, <span className="font-medium text-zinc-700">/proyectos</span>, <span className="font-medium text-zinc-700">/estudio</span>, <span className="font-medium text-zinc-700">/contacto</span>, <span className="font-medium text-zinc-700">/info/slug</span> o un enlace externo completo.
+                        </div>
+
+                        {publishedPagesForMenu.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">Páginas publicadas listas para insertar</p>
+                            <div className="flex flex-wrap gap-2">
+                              {publishedPagesForMenu.map((page) => (
+                                <button
+                                  key={page.id}
+                                  type="button"
+                                  onClick={() => handleAddPublicationToMenu({ title: page.title, slug: page.slug })}
+                                  className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-700 transition-colors hover:border-zinc-500 hover:bg-zinc-100"
+                                >
+                                  + {page.title}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-3">
+                          {menuItems.map((item, index) => (
+                            <div key={item.id} className="rounded-2xl border border-zinc-200 bg-zinc-50/60 p-4">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                                <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-zinc-700">Nombre visible</label>
+                                    <Input
+                                      value={item.label}
+                                      onChange={(event) => handleUpdateMenuItem(item.id, { label: event.target.value })}
+                                      className="text-sm"
+                                      placeholder="Ej. Servicios"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-zinc-700">Enlace</label>
+                                    <Input
+                                      value={item.href || ''}
+                                      onChange={(event) => handleUpdateMenuItem(item.id, { href: event.target.value })}
+                                      className="text-sm"
+                                      placeholder="/ruta o https://..."
+                                    />
+                                  </div>
+                                  <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(item.openInNewTab)}
+                                      onChange={(event) => handleUpdateMenuItem(item.id, { openInNewTab: event.target.checked })}
+                                      className="h-4 w-4 rounded border-zinc-300"
+                                    />
+                                    Abrir en nueva pestaña
+                                  </label>
+                                </div>
+                                <div className="flex flex-wrap gap-2 lg:w-auto">
+                                  <Button type="button" variant="outline" size="sm" onClick={() => handleMoveMenuItem(item.id, 'up')} disabled={index === 0}>
+                                    <ArrowUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="outline" size="sm" onClick={() => handleMoveMenuItem(item.id, 'down')} disabled={index === menuItems.length - 1}>
+                                    <ArrowDown className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="outline" size="sm" onClick={() => handleAddSubmenuItem(item.id)}>
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Submenú
+                                  </Button>
+                                  <Button type="button" variant="outline" size="sm" onClick={() => handleRemoveMenuItem(item.id)} className="text-red-600 hover:text-red-700">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {item.children?.length ? (
+                                <div className="mt-4 space-y-3 border-t border-zinc-200 pt-4">
+                                  {item.children.map((child, childIndex) => (
+                                    <div key={child.id} className="rounded-xl border border-zinc-200 bg-white p-3">
+                                      <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-400">
+                                        <CornerDownRight className="h-3.5 w-3.5" />
+                                        Submenú {childIndex + 1}
+                                      </div>
+                                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                                        <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                                          <div>
+                                            <label className="mb-1 block text-xs font-medium text-zinc-700">Nombre visible</label>
+                                            <Input
+                                              value={child.label}
+                                              onChange={(event) => handleUpdateSubmenuItem(item.id, child.id, { label: event.target.value })}
+                                              className="text-sm"
+                                              placeholder="Ej. Dirección de obra"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="mb-1 block text-xs font-medium text-zinc-700">Enlace</label>
+                                            <Input
+                                              value={child.href || ''}
+                                              onChange={(event) => handleUpdateSubmenuItem(item.id, child.id, { href: event.target.value })}
+                                              className="text-sm"
+                                              placeholder="/ruta o https://..."
+                                            />
+                                          </div>
+                                          <label className="flex items-center gap-2 text-xs text-zinc-600 sm:col-span-2">
+                                            <input
+                                              type="checkbox"
+                                              checked={Boolean(child.openInNewTab)}
+                                              onChange={(event) => handleUpdateSubmenuItem(item.id, child.id, { openInNewTab: event.target.checked })}
+                                              className="h-4 w-4 rounded border-zinc-300"
+                                            />
+                                            Abrir en nueva pestaña
+                                          </label>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 lg:w-auto">
+                                          <Button type="button" variant="outline" size="sm" onClick={() => handleMoveSubmenuItem(item.id, child.id, 'up')} disabled={childIndex === 0}>
+                                            <ArrowUp className="h-4 w-4" />
+                                          </Button>
+                                          <Button type="button" variant="outline" size="sm" onClick={() => handleMoveSubmenuItem(item.id, child.id, 'down')} disabled={childIndex === (item.children?.length ?? 1) - 1}>
+                                            <ArrowDown className="h-4 w-4" />
+                                          </Button>
+                                          <Button type="button" variant="outline" size="sm" onClick={() => handleRemoveSubmenuItem(item.id, child.id)} className="text-red-600 hover:text-red-700">
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+
+                          {menuItems.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-500">
+                              Aún no hay items en el menú. Puedes agregar uno manualmente o restaurar la base automática.
+                            </div>
+                          )}
+                        </div>
+
+                        {session.role !== 'admin' && (
+                          <p className="text-xs text-amber-600">Solo los administradores pueden guardar cambios del menú general.</p>
+                        )}
                       </div>
                       <div className="grid gap-3">
                         {publications.map(p => (

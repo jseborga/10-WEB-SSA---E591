@@ -23,6 +23,7 @@ export function getDefaultSiteSettings() {
     heroShowCompanyName: false,
     heroTextTone: 'dark',
     projectCategories: '',
+    menuConfig: '',
     email: 'admin@ingenieria.com.bo',
     phone: '+591 2241146',
     whatsapp: '+591 76205333',
