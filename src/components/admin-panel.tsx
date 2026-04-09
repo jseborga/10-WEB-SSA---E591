@@ -4515,7 +4515,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
       {/* Project Dialog */}
       <Dialog open={showProjectDialog} onOpenChange={setShowProjectDialog}>
-        <DialogContent className="h-[100dvh] w-[100vw] max-w-none rounded-none border-0 p-0">
+        <DialogContent showCloseButton={false} className="left-0 top-0 h-[100dvh] w-[100vw] max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 sm:max-w-none">
           <div className="flex h-full flex-col bg-white">
             <DialogHeader className="border-b border-zinc-200 px-5 py-4 sm:px-6">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
