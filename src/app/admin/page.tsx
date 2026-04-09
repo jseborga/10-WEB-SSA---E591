@@ -11,7 +11,7 @@ export const metadata = {
 export default function AdminPage() {
   return (
     <main className="min-h-screen bg-zinc-100">
-      <AdminPanel initialOpen />
+      <AdminPanel initialOpen hideLauncher fullPage />
     </main>
   )
 }

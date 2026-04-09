@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -206,7 +206,7 @@ interface AutomationLogEntry {
   createdAt: string
 }
 
-type TabType = 'projects' | 'publications' | 'site-config' | 'contacts' | 'ai-config' | 'automation' | 'users'
+type TabType = 'analytics' | 'projects' | 'publications' | 'leads' | 'contacts' | 'site-config' | 'ai-config' | 'automation' | 'users'
 type SessionState = {
   checking: boolean
   configured: boolean
@@ -480,6 +480,7 @@ function MediaPreviewGrid({
 interface AdminPanelProps {
   initialOpen?: boolean
   hideLauncher?: boolean
+  fullPage?: boolean
 }
 
 const leadStatusOptions = [
@@ -522,10 +523,10 @@ function isLeadFollowUpDue(value: string | null | undefined) {
   return !Number.isNaN(date.getTime()) && date.getTime() <= Date.now()
 }
 
-export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminPanelProps) {
+export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage = false }: AdminPanelProps) {
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(initialOpen)
-  const [activeTab, setActiveTab] = useState<TabType>('projects')
+  const [activeTab, setActiveTab] = useState<TabType>('analytics')
   const [projects, setProjects] = useState<Project[]>([])
   const [publications, setPublications] = useState<Publication[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -622,6 +623,41 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       })
   }, [chatLeads, leadFilter])
+  const analyticsSummary = useMemo(() => {
+    const publishedProjects = projects.filter((project) => project.published).length
+    const draftProjects = projects.length - publishedProjects
+    const publishedPages = publications.filter((publication) => publication.published).length
+    const pendingReviewsCount = pendingReviews.length
+    const homepageProjects = projects.filter((project) => project.showOnHomepage).length
+    const featuredProjects = projects.filter((project) => project.featured).length
+    const mediaCount = projects.reduce((total, project) => {
+      const projectMedia = [
+        project.mainImage,
+        project.mainImageMobile,
+        project.videoUrl,
+        ...(project.gallery ? parseUrlList(project.gallery) : []),
+        ...(project.galleryMobile ? parseUrlList(project.galleryMobile) : []),
+      ].filter(Boolean).length
+
+      return total + projectMedia
+    }, 0)
+
+    return {
+      publishedProjects,
+      draftProjects,
+      publishedPages,
+      pendingReviewsCount,
+      homepageProjects,
+      featuredProjects,
+      totalContacts: contacts.length,
+      totalLeads: chatLeads.length,
+      qualifiedLeads: chatLeads.filter((lead) => lead.qualified).length,
+      wonLeads: chatLeads.filter((lead) => lead.leadStatus === 'won').length,
+      openLeads: chatLeads.filter((lead) => !['won', 'lost', 'archived'].includes(lead.leadStatus)).length,
+      mediaCount,
+      chatSessions: chatConversations.length,
+    }
+  }, [projects, publications, pendingReviews, contacts.length, chatLeads, chatConversations.length])
 
   const authCopy = useMemo(() => {
     if (language === 'en') {
@@ -815,7 +851,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
   useEffect(() => {
     if (session.role !== 'admin' && ['site-config', 'ai-config', 'automation', 'users'].includes(activeTab)) {
-      setActiveTab('projects')
+      setActiveTab('analytics')
     }
   }, [activeTab, session.role])
 
@@ -1472,8 +1508,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
   }
 
   const tabs = [
+    { key: 'analytics' as TabType, label: 'Resumen', icon: BarChart3 },
     { key: 'projects' as TabType, label: t.admin.projects, icon: Building2 },
     { key: 'publications' as TabType, label: 'Paginas/Menu', icon: FileText },
+    { key: 'leads' as TabType, label: 'Leads', icon: Mail },
     { key: 'contacts' as TabType, label: t.admin.contacts, icon: Mail },
     ...(session.role === 'admin'
       ? [
@@ -1496,10 +1534,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
       {/* Panel */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/40" onClick={() => setIsOpen(false)}>
-            <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 25 }} className="absolute left-0 top-0 bottom-0 w-full max-w-md sm:max-w-2xl lg:max-w-4xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+          <motion.div
+            initial={fullPage ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={fullPage ? undefined : { opacity: 0 }}
+            className={fullPage ? 'relative min-h-screen bg-zinc-100' : 'fixed inset-0 z-50 bg-black/40'}
+            onClick={fullPage ? undefined : () => setIsOpen(false)}
+          >
+            <motion.div
+              initial={fullPage ? false : { x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={fullPage ? undefined : { x: '-100%' }}
+              transition={fullPage ? undefined : { type: 'spring', damping: 25 }}
+              className={fullPage ? 'min-h-screen w-full bg-zinc-100' : 'absolute left-0 top-0 bottom-0 w-full max-w-md sm:max-w-2xl lg:max-w-4xl bg-white shadow-2xl'}
+              onClick={fullPage ? undefined : e => e.stopPropagation()}
+            >
               {/* Header */}
-              <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b">
+              <div className={`flex items-center justify-between px-4 sm:px-6 py-4 border-b ${fullPage ? 'sticky top-0 z-20 bg-white/92 backdrop-blur supports-[backdrop-filter]:bg-white/80' : 'bg-white'}`}>
                 <div className="flex items-center gap-3">
                   <div>
                     <h1 className="text-lg font-light tracking-wide">{t.admin.title}</h1>
@@ -1513,7 +1564,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                     </Button>
                   )}
                 </div>
-                <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-zinc-100 rounded-full"><X className="w-5 h-5" /></button>
+                {!fullPage ? <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-zinc-100 rounded-full"><X className="w-5 h-5" /></button> : null}
               </div>
 
               {session.checking ? (
@@ -1563,19 +1614,118 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                   </div>
                 </div>
               ) : (
-                <>
-                  {/* Tabs */}
-                  <div className="flex border-b overflow-x-auto">
-                    {tabs.map(tab => (
-                      <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`flex items-center gap-1.5 px-4 sm:px-6 py-3 text-xs sm:text-sm whitespace-nowrap transition-colors ${activeTab === tab.key ? 'border-b-2 border-zinc-900 text-zinc-900' : 'text-zinc-500 hover:text-zinc-900'}`}>
-                        <tab.icon className="w-4 h-4" />{tab.label}
-                      </button>
-                    ))}
-                  </div>
+                  <div className={fullPage ? 'grid min-h-[calc(100vh-77px)] lg:grid-cols-[240px_minmax(0,1fr)]' : 'min-h-[calc(100vh-77px)]'}>
+                    <div className={fullPage ? 'border-r border-zinc-200 bg-white' : 'border-b'}>
+                      {fullPage ? (
+                        <div className="p-5">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">Panel</p>
+                          <p className="mt-2 text-sm text-zinc-600">Gestiona contenido, leads, automatizaciones y configuracion general.</p>
+                        </div>
+                      ) : null}
+                      <div className={fullPage ? 'space-y-1 px-3 pb-4' : 'flex overflow-x-auto'}>
+                        {tabs.map(tab => (
+                          <button
+                            key={tab.key}
+                            onClick={() => setActiveTab(tab.key)}
+                            className={
+                              fullPage
+                                ? `flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors ${
+                                    activeTab === tab.key ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                                  }`
+                                : `flex items-center gap-1.5 px-4 sm:px-6 py-3 text-xs sm:text-sm whitespace-nowrap transition-colors ${
+                                    activeTab === tab.key ? 'border-b-2 border-zinc-900 text-zinc-900' : 'text-zinc-500 hover:text-zinc-900'
+                                  }`
+                            }
+                          >
+                            <tab.icon className="w-4 h-4" />{tab.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <ScrollArea className={fullPage ? 'h-[calc(100vh-77px)]' : 'h-[calc(100vh-130px)]'}>
+                      <div className={fullPage ? 'p-4 sm:p-6 lg:p-8' : 'p-4 sm:p-6'}>
+                  {activeTab === 'analytics' && (
+                    <div className="space-y-6">
+                      <div>
+                        <h2 className="text-2xl font-light text-zinc-900">Resumen general</h2>
+                        <p className="mt-2 text-sm text-zinc-500">Vista operativa del contenido, leads, automatizaciones y estado general del sitio.</p>
+                      </div>
 
-                  {/* Content */}
-                  <ScrollArea className="h-[calc(100vh-130px)]">
-                    <div className="p-4 sm:p-6">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Proyectos</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.publishedProjects}</p>
+                          <p className="mt-2 text-xs text-zinc-500">{analyticsSummary.draftProjects} en borrador</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Leads abiertos</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.openLeads}</p>
+                          <p className="mt-2 text-xs text-zinc-500">{analyticsSummary.qualifiedLeads} calificados</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Paginas publicadas</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.publishedPages}</p>
+                          <p className="mt-2 text-xs text-zinc-500">{publications.length} paginas totales</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Revisiones</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.pendingReviewsCount}</p>
+                          <p className="mt-2 text-xs text-zinc-500">Pendientes de aprobacion</p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <h3 className="text-sm font-medium text-zinc-900">Embudo comercial</h3>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">Leads nuevos</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{leadSummary.new}</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">Por atender</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{leadSummary.dueToday}</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">En cotizacion</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{leadSummary.proposal}</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">Ganados</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{analyticsSummary.wonLeads}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <h3 className="text-sm font-medium text-zinc-900">Estado del contenido</h3>
+                          <div className="mt-4 space-y-3 text-sm text-zinc-600">
+                            <div className="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3">
+                              <span>Proyectos en portada</span>
+                              <span className="font-medium text-zinc-900">{analyticsSummary.homepageProjects}</span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3">
+                              <span>Destacados</span>
+                              <span className="font-medium text-zinc-900">{analyticsSummary.featuredProjects}</span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3">
+                              <span>Medios cargados en proyectos</span>
+                              <span className="font-medium text-zinc-900">{analyticsSummary.mediaCount}</span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3">
+                              <span>Sesiones de chat registradas</span>
+                              <span className="font-medium text-zinc-900">{analyticsSummary.chatSessions}</span>
+                            </div>
+                            <div className="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3">
+                              <span>Contactos por formulario</span>
+                              <span className="font-medium text-zinc-900">{analyticsSummary.totalContacts}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Projects */}
                   {activeTab === 'projects' && (
                     <div className="space-y-4">
@@ -2177,7 +2327,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                         ))}
                         {contacts.length === 0 && <p className="text-center text-zinc-500 py-6 text-sm">{t.admin.noContacts}</p>}
                       </div>
-                      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+                    </div>
+                  )}
+
+                  {activeTab === 'leads' && (
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <h3 className="text-sm font-medium text-zinc-900">Bandeja comercial del chat</h3>
@@ -2890,9 +3045,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                       </div>
                     </div>
                   )}
-                </div>
-              </ScrollArea>
-            </>
+                        </div>
+                      </ScrollArea>
+                  </div>
               )}
             </motion.div>
           </motion.div>
