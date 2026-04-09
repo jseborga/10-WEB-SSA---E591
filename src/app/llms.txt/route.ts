@@ -2,6 +2,25 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 import { getSeoDescription, getSiteUrl } from '@/lib/seo'
+import { parseLineList } from '@/lib/public-site'
+
+function getPublicationPath(slug: string) {
+  const normalized = slug
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+
+  if (normalized === 'contacto') {
+    return '/contacto'
+  }
+
+  if (normalized === 'estudio') {
+    return '/estudio'
+  }
+
+  return `/info/${normalized}`
+}
 
 export async function GET() {
   const siteSettings = await ensureSiteSettings().catch(() => getDefaultSiteSettings())
@@ -23,9 +42,15 @@ export async function GET() {
     '',
     getSeoDescription(siteSettings),
     '',
+    '## Services',
+    ...parseLineList(siteSettings.projectCategories).map((item) => `- ${item}`),
+    '',
     '## Main URLs',
     `- Home: ${siteUrl}/`,
-    ...pages.map((page) => `- ${page.title}: ${siteUrl}/info/${page.slug}${page.excerpt ? ` - ${page.excerpt}` : ''}`),
+    `- Projects: ${siteUrl}/proyectos`,
+    `- Studio: ${siteUrl}/estudio`,
+    `- Contact: ${siteUrl}/contacto`,
+    ...pages.map((page) => `- ${page.title}: ${siteUrl}${getPublicationPath(page.slug)}${page.excerpt ? ` - ${page.excerpt}` : ''}`),
     '',
     '## Contact',
     siteSettings.email ? `- Email: ${siteSettings.email}` : '',
@@ -40,4 +65,3 @@ export async function GET() {
     },
   })
 }
-

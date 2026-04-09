@@ -71,7 +71,14 @@ export function LanguageSelector({
       </button>
 
       {isOpen && (
-        <div className="absolute left-full top-full z-50 ml-2 mt-2 min-w-[168px] overflow-hidden rounded-2xl border border-zinc-200 bg-white/96 p-1.5 shadow-[0_24px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+        <div
+          className={[
+            'absolute left-0 top-full z-50 mt-3 min-w-[188px] overflow-hidden rounded-3xl p-2 shadow-[0_24px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl',
+            isLight
+              ? 'border border-white/20 bg-black/18'
+              : 'border border-zinc-200 bg-white/96',
+          ].join(' ')}
+        >
           {languages.map((lang) => (
             <button
               key={lang.code}
@@ -79,14 +86,24 @@ export function LanguageSelector({
                 setLanguage(lang.code)
                 setIsOpen(false)
               }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
-                language === lang.code ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-sky-50 hover:text-zinc-900'
+              className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm transition-colors ${
+                language === lang.code
+                  ? isLight
+                    ? 'bg-white/16 text-white'
+                    : 'bg-zinc-900 text-white'
+                  : isLight
+                    ? 'text-white/88 hover:bg-white/10 hover:text-white'
+                    : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
               }`}
             >
               <span>{lang.full}</span>
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-[0.18em] ${
-                  language === lang.code ? 'bg-white/14 text-white' : 'bg-sky-100 text-sky-700'
+                  language === lang.code
+                    ? 'bg-sky-400/20 text-sky-200'
+                    : isLight
+                      ? 'bg-sky-400/15 text-sky-200'
+                      : 'bg-sky-100 text-sky-700'
                 }`}
               >
                 {lang.name}

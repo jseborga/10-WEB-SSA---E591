@@ -50,6 +50,9 @@ model Publication {
   contentEn   String?
   contentPt   String?
   image       String?
+  seoTitle    String?
+  seoDescription String?
+  seoKeywords String?
   published   Boolean  @default(false)
   showInMenu  Boolean  @default(false)
   menuOrder   Int      @default(0)
@@ -264,6 +267,11 @@ model ChatConfig {
   apiKey            String?
   apiBaseUrl        String?
   model             String?
+  imageProvider     String   @default("google")
+  imageApiKey       String?
+  imageApiBaseUrl   String?
+  imageModel        String?
+  imagePrompt       String?
   systemPrompt      String
   systemPromptEn    String?
   systemPromptPt    String?

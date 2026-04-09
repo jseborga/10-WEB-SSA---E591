@@ -43,11 +43,15 @@ interface Publication {
   excerpt: string | null
   content: string | null
   image?: string | null
+  seoTitle?: string | null
+  seoDescription?: string | null
+  seoKeywords?: string | null
   published: boolean
   showInMenu?: boolean
   menuOrder?: number
   category: string | null
   createdAt: string
+  updatedAt?: string
 }
 
 interface Contact {
@@ -105,6 +109,7 @@ interface ChatConversationLog {
 
 interface ChatConfigType {
   id: string; enabled: boolean; provider: string; apiKey?: string | null; apiBaseUrl?: string | null; model: string | null
+  imageProvider?: string | null; imageApiKey?: string | null; imageApiBaseUrl?: string | null; imageModel?: string | null; imagePrompt?: string | null
   systemPrompt: string; systemPromptEn: string | null; systemPromptPt: string | null
   welcomeMessage: string | null; welcomeMessageEn: string | null; welcomeMessagePt: string | null
   fallbackMessage: string | null; fallbackMessageEn: string | null; fallbackMessagePt: string | null
@@ -243,8 +248,33 @@ type PublicationFormState = {
   content: string
   image: string
   category: string
+  seoTitle: string
+  seoDescription: string
+  seoKeywords: string
   showInMenu: boolean
   menuOrder: string
+  published: boolean
+}
+
+type PreparedImageResult = {
+  target: 'project' | 'publication' | 'hero'
+  treatment: 'original' | 'enhanced' | 'editorial' | 'monochrome'
+  original: {
+    url: string
+    width: number | null
+    height: number | null
+    format: string | null
+  }
+  desktop: {
+    url: string
+    width: number
+    height: number
+  }
+  mobile: {
+    url: string
+    width: number
+    height: number
+  }
 }
 
 type SiteFormState = SiteSettings
@@ -293,8 +323,12 @@ const emptyPublicationForm: PublicationFormState = {
   content: '',
   image: '',
   category: 'informacion',
+  seoTitle: '',
+  seoDescription: '',
+  seoKeywords: '',
   showInMenu: false,
   menuOrder: '0',
+  published: false,
 }
 
 const emptySiteForm: SiteFormState = {
@@ -363,6 +397,12 @@ const providers = [
   { id: 'google', name: 'Google AI', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-image'], defaultModel: 'gemini-2.5-flash', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
   { id: 'anthropic', name: 'Anthropic', models: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest'], defaultModel: 'claude-3-5-sonnet-latest', defaultBaseUrl: 'https://api.anthropic.com/v1' },
 ]
+
+const imageProviders = [
+  { id: 'google', name: 'Google AI Studio', models: ['gemini-2.5-flash-image'], defaultModel: 'gemini-2.5-flash-image', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+  { id: 'openrouter', name: 'OpenRouter', models: ['google/gemini-2.5-flash-image-preview', 'openai/gpt-4o-mini'], defaultModel: 'google/gemini-2.5-flash-image-preview', defaultBaseUrl: 'https://openrouter.ai/api/v1' },
+  { id: 'openai-compatible', name: 'OpenAI Compatible', models: ['custom-image-model'], defaultModel: '', defaultBaseUrl: '' },
+] as const
 
 function clampIntegerString(value: string, fallback: number, min: number, max: number) {
   const parsed = Number.parseInt(value, 10)
@@ -542,7 +582,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [leadSavingId, setLeadSavingId] = useState<string | null>(null)
   const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [projectAiLoading, setProjectAiLoading] = useState(false)
+  const [publicationAiLoading, setPublicationAiLoading] = useState(false)
+  const [siteSeoLoading, setSiteSeoLoading] = useState(false)
   const [salesPromptLoading, setSalesPromptLoading] = useState(false)
+  const [projectImageAssistLoading, setProjectImageAssistLoading] = useState(false)
+  const [publicationImageAssistLoading, setPublicationImageAssistLoading] = useState(false)
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
   const [automationActionId, setAutomationActionId] = useState<string | null>(null)
   const [session, setSession] = useState<SessionState>({
@@ -555,6 +599,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   })
   const [adminUsername, setAdminUsername] = useState('admin')
   const [adminPassword, setAdminPassword] = useState('')
+  const [projectImageTreatment, setProjectImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
+  const [publicationImageTreatment, setPublicationImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
+  const [projectImageVariants, setProjectImageVariants] = useState<PreparedImageResult | null>(null)
+  const [publicationImageVariants, setPublicationImageVariants] = useState<PreparedImageResult | null>(null)
 
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
   const [publicationForm, setPublicationForm] = useState<PublicationFormState>(emptyPublicationForm)
@@ -563,6 +611,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm)
   const [aiForm, setAiForm] = useState({
     enabled: false, provider: 'default', apiKey: '', apiBaseUrl: '', model: '',
+    imageProvider: 'google', imageApiKey: '', imageApiBaseUrl: '', imageModel: 'gemini-2.5-flash-image', imagePrompt: '',
     systemPrompt: '', systemPromptEn: '', systemPromptPt: '',
     welcomeMessage: '', welcomeMessageEn: '', welcomeMessagePt: '',
     fallbackMessage: '', fallbackMessageEn: '', fallbackMessagePt: '',
@@ -816,6 +865,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         apiKey: configData.apiKey || '',
         apiBaseUrl: configData.apiBaseUrl || '',
         model: configData.model || '',
+        imageProvider: configData.imageProvider || 'google',
+        imageApiKey: configData.imageApiKey || '',
+        imageApiBaseUrl: configData.imageApiBaseUrl || '',
+        imageModel: configData.imageModel || 'gemini-2.5-flash-image',
+        imagePrompt: configData.imagePrompt || '',
         systemPrompt: configData.systemPrompt || '',
         systemPromptEn: configData.systemPromptEn || '',
         systemPromptPt: configData.systemPromptPt || '',
@@ -855,7 +909,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     }
   }, [activeTab, session.role])
 
-  const buildSlug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  const buildSlug = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
 
   const parseGalleryUrls = (value: string) =>
     value
@@ -908,6 +969,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       } else if (target === 'mainImage' || target === 'mainImageMobile') {
         const [file] = Array.from(files)
         const uploadedUrl = await uploadFile(file)
+        if (target === 'mainImage') {
+          setProjectImageVariants(null)
+        }
         setProjectForm((current) => ({ ...current, [target]: uploadedUrl }))
       } else {
         const [file] = Array.from(files)
@@ -931,6 +995,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     try {
       const [file] = Array.from(files)
       const uploadedUrl = await uploadFile(file)
+      setPublicationImageVariants(null)
       setPublicationForm((current) => ({ ...current, image: uploadedUrl }))
       toast.success('Imagen subida correctamente')
     } catch (error) {
@@ -1121,6 +1186,157 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     }
   }
 
+  const handleAssistPublicationWithAi = async () => {
+    setPublicationAiLoading(true)
+    try {
+      const response = await fetch('/api/ai/publication-copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(publicationForm),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo generar la sugerencia de la pagina')
+        return
+      }
+
+      const suggestion = data.suggestion || {}
+
+      setPublicationForm((current) => ({
+        ...current,
+        title: typeof suggestion.title === 'string' && suggestion.title.trim() ? suggestion.title.trim() : current.title,
+        slug: typeof suggestion.slug === 'string' && suggestion.slug.trim() ? buildSlug(suggestion.slug) : current.slug,
+        excerpt: typeof suggestion.excerpt === 'string' && suggestion.excerpt.trim() ? suggestion.excerpt.trim() : current.excerpt,
+        content: typeof suggestion.content === 'string' && suggestion.content.trim() ? suggestion.content.trim() : current.content,
+        category: typeof suggestion.category === 'string' && suggestion.category.trim() ? suggestion.category.trim() : current.category,
+        seoTitle: typeof suggestion.seoTitle === 'string' && suggestion.seoTitle.trim() ? suggestion.seoTitle.trim() : current.seoTitle,
+        seoDescription:
+          typeof suggestion.seoDescription === 'string' && suggestion.seoDescription.trim()
+            ? suggestion.seoDescription.trim()
+            : current.seoDescription,
+        seoKeywords:
+          typeof suggestion.seoKeywords === 'string' && suggestion.seoKeywords.trim()
+            ? suggestion.seoKeywords.trim()
+            : current.seoKeywords,
+      }))
+
+      toast.success('La IA preparo el texto y el SEO de la pagina')
+    } catch {
+      toast.error('No se pudo generar la sugerencia de la pagina')
+    } finally {
+      setPublicationAiLoading(false)
+    }
+  }
+
+  const handleGenerateSiteSeo = async () => {
+    setSiteSeoLoading(true)
+    try {
+      const response = await fetch('/api/ai/site-seo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(siteForm),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo generar el SEO del sitio')
+        return
+      }
+
+      const suggestion = data.suggestion || {}
+
+      setSiteForm((current) => ({
+        ...current,
+        seoTitle: typeof suggestion.seoTitle === 'string' && suggestion.seoTitle.trim() ? suggestion.seoTitle.trim() : current.seoTitle,
+        seoDescription:
+          typeof suggestion.seoDescription === 'string' && suggestion.seoDescription.trim()
+            ? suggestion.seoDescription.trim()
+            : current.seoDescription,
+        seoKeywords:
+          typeof suggestion.seoKeywords === 'string' && suggestion.seoKeywords.trim()
+            ? suggestion.seoKeywords.trim()
+            : current.seoKeywords,
+      }))
+
+      toast.success('SEO del sitio actualizado con IA')
+    } catch {
+      toast.error('No se pudo generar el SEO del sitio')
+    } finally {
+      setSiteSeoLoading(false)
+    }
+  }
+
+  const handlePrepareProjectImage = async () => {
+    if (!projectForm.mainImage.trim()) {
+      toast.error('Sube o pega primero una imagen principal del proyecto')
+      return
+    }
+
+    setProjectImageAssistLoading(true)
+    try {
+      const response = await fetch('/api/ai/image-variants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceUrl: projectForm.mainImage,
+          target: 'project',
+          treatment: projectImageTreatment,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data.result) {
+        toast.error(data.error || 'No se pudieron preparar las variantes de imagen')
+        return
+      }
+
+      setProjectImageVariants(data.result)
+      toast.success('Variantes desktop/mobile listas para revisar')
+    } catch {
+      toast.error('No se pudieron preparar las variantes de imagen')
+    } finally {
+      setProjectImageAssistLoading(false)
+    }
+  }
+
+  const handlePreparePublicationImage = async () => {
+    if (!publicationForm.image.trim()) {
+      toast.error('Sube o pega primero una imagen para la pagina')
+      return
+    }
+
+    setPublicationImageAssistLoading(true)
+    try {
+      const response = await fetch('/api/ai/image-variants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceUrl: publicationForm.image,
+          target: 'publication',
+          treatment: publicationImageTreatment,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data.result) {
+        toast.error(data.error || 'No se pudieron preparar las variantes de imagen')
+        return
+      }
+
+      setPublicationImageVariants(data.result)
+      toast.success('Vista previa de imagen lista para la pagina')
+    } catch {
+      toast.error('No se pudieron preparar las variantes de imagen')
+    } finally {
+      setPublicationImageAssistLoading(false)
+    }
+  }
+
   const handleDeleteProject = async (id: string) => {
     if (!confirm(t.admin.confirmDelete)) return
     try {
@@ -1131,6 +1347,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
   const openEditProject = (project: Project) => {
     setEditingProject(project)
+    setProjectImageVariants(null)
     let gallery = ''
 
     if (project.gallery) {
@@ -1172,7 +1389,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     setShowProjectDialog(true)
   }
 
-  const handleSavePublication = async () => {
+  const handleSavePublication = async (published: boolean) => {
     setLoading(true)
     try {
       const url = editingPublication ? `/api/publications/${editingPublication.id}` : '/api/publications'
@@ -1184,14 +1401,19 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         body: JSON.stringify({
           ...publicationForm,
           slug,
-          published: true,
+          published,
           menuOrder: parseInt(publicationForm.menuOrder, 10) || 0,
         }),
       })
       if (res.ok) {
-        toast.success(editingPublication ? 'Actualizado' : 'Publicado')
+        toast.success(
+          editingPublication
+            ? published ? 'Pagina actualizada y publicada' : 'Pagina actualizada como borrador'
+            : published ? 'Pagina creada y publicada' : 'Pagina guardada como borrador',
+        )
         setShowPublicationDialog(false); setEditingPublication(null)
         setPublicationForm(emptyPublicationForm)
+        setPublicationImageVariants(null)
         void loadAdminData()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -1215,9 +1437,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       content: pub.content || '',
       image: pub.image || '',
       category: pub.category || 'informacion',
+      seoTitle: pub.seoTitle || '',
+      seoDescription: pub.seoDescription || '',
+      seoKeywords: pub.seoKeywords || '',
       showInMenu: Boolean(pub.showInMenu),
       menuOrder: String(pub.menuOrder ?? 0),
+      published: Boolean(pub.published),
     })
+    setPublicationImageVariants(null)
     setShowPublicationDialog(true)
   }
 
@@ -1311,6 +1538,17 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       provider: providerId,
       model: preset?.defaultModel ?? '',
       apiBaseUrl: preset?.defaultBaseUrl ?? '',
+    }))
+  }
+
+  const handleImageProviderChange = (providerId: string) => {
+    const preset = imageProviders.find((item) => item.id === providerId)
+
+    setAiForm((current) => ({
+      ...current,
+      imageProvider: providerId,
+      imageModel: preset?.defaultModel ?? '',
+      imageApiBaseUrl: preset?.defaultBaseUrl ?? '',
     }))
   }
 
@@ -1738,6 +1976,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               ...emptyProjectForm,
                               category: projectCategoryOptions[0] || emptyProjectForm.category,
                             })
+                            setProjectImageVariants(null)
                             setShowProjectDialog(true)
                           }}
                           className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"
@@ -1780,7 +2019,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <h2 className="text-base font-light">Páginas y menú ({publications.length})</h2>
-                        <Button onClick={() => { setEditingPublication(null); setPublicationForm(emptyPublicationForm); setShowPublicationDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />Nueva página</Button>
+                        <Button onClick={() => { setEditingPublication(null); setPublicationForm(emptyPublicationForm); setPublicationImageVariants(null); setShowPublicationDialog(true) }} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"><Plus className="w-4 h-4 mr-1" />Nueva página</Button>
                       </div>
                       <div className="grid gap-3">
                         {publications.map(p => (
@@ -1840,9 +2079,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       </div>
 
                       <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
-                        <div>
-                          <h3 className="text-sm font-medium text-zinc-900">SEO y redes sociales</h3>
-                          <p className="text-xs text-zinc-500 mt-1">Estos campos controlan Google, Facebook, WhatsApp, LinkedIn y otros robots.</p>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">SEO y redes sociales</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Estos campos controlan Google, Facebook, WhatsApp, LinkedIn y otros robots.</p>
+                          </div>
+                          <Button type="button" variant="outline" onClick={() => void handleGenerateSiteSeo()} disabled={siteSeoLoading} className="text-xs sm:text-sm">
+                            {siteSeoLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Bot className="w-4 h-4 mr-1" />}
+                            {siteSeoLoading ? 'Generando...' : 'Generar SEO con IA'}
+                          </Button>
                         </div>
 
                         <div>
@@ -2669,6 +2914,40 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         OpenRouter queda preconfigurado con <span className="font-mono">https://openrouter.ai/api/v1</span>. Si eliges ese proveedor, normalmente solo necesitas pegar la API key.
                       </div>
 
+                      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-4">
+                        <div>
+                          <h3 className="text-sm font-medium text-zinc-900">IA para imagenes</h3>
+                          <p className="mt-1 text-xs text-zinc-500">Configura aqui el proveedor principal para la siguiente capa de mejora generativa. La preparacion desktop/mobile ya funciona desde el formulario de proyectos y paginas.</p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Proveedor de imagen</label>
+                            <select value={aiForm.imageProvider} onChange={e => handleImageProviderChange(e.target.value)} className="w-full h-9 px-3 border rounded-md text-sm">
+                              {imageProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Modelo de imagen</label>
+                            <select value={aiForm.imageModel} onChange={e => setAiForm({ ...aiForm, imageModel: e.target.value })} className="w-full h-9 px-3 border rounded-md text-sm">
+                              <option value="">Default</option>
+                              {imageProviders.find((provider) => provider.id === aiForm.imageProvider)?.models.map((model) => <option key={model} value={model}>{model}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">API Key imagen</label>
+                            <Input type="password" value={aiForm.imageApiKey} onChange={e => setAiForm({ ...aiForm, imageApiKey: e.target.value })} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Base URL imagen</label>
+                            <Input value={aiForm.imageApiBaseUrl} onChange={e => setAiForm({ ...aiForm, imageApiBaseUrl: e.target.value })} placeholder="https://generativelanguage.googleapis.com/v1beta" className="text-sm" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Instruccion visual base</label>
+                          <Textarea value={aiForm.imagePrompt} onChange={e => setAiForm({ ...aiForm, imagePrompt: e.target.value })} rows={3} className="text-sm" />
+                        </div>
+                      </div>
+
                       {/* Company Info */}
                       <div>
                         <label className="text-xs font-medium text-zinc-700 mb-1 block">{t.admin.companyName}</label>
@@ -3062,6 +3341,26 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
+                  <p className="text-sm font-medium text-sky-950">Asistencia con IA para paginas</p>
+                  <p className="mt-1 text-xs text-sky-800">
+                    Mejora el titulo, el contenido y los campos SEO de la pagina usando el proveedor configurado en admin.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleAssistPublicationWithAi()}
+                  disabled={publicationAiLoading}
+                  className="border-sky-200 bg-white text-sky-900 hover:bg-sky-100"
+                >
+                  {publicationAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}
+                  Asistir con IA
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
                   <p className="text-sm font-medium text-sky-950">Asistencia con IA</p>
                   <p className="mt-1 text-xs text-sky-800">
                     Usa los datos actuales del proyecto para sugerir mejor titulo, descripcion corta, descripcion completa y categoria.
@@ -3186,6 +3485,78 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 onRemove={() => setProjectForm((current) => ({ ...current, mainImageMobile: '' }))}
               />
             </div>
+            <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-sky-950">Optimizar imagen para desktop y mobile</p>
+                  <p className="mt-1 text-xs text-sky-800">
+                    Genera variantes listas para publicar a partir de la imagen principal actual. La configuracion IA de imagen queda guardada en el panel para la siguiente capa generativa.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handlePrepareProjectImage()}
+                  disabled={projectImageAssistLoading || !projectForm.mainImage.trim()}
+                  className="border-sky-200 bg-white text-sky-900 hover:bg-sky-100"
+                >
+                  {projectImageAssistLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
+                  {projectImageAssistLoading ? 'Preparando...' : 'Preparar variantes'}
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['enhanced', 'editorial', 'monochrome', 'original'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setProjectImageTreatment(option)}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                      projectImageTreatment === option
+                        ? 'border-sky-600 bg-sky-600 text-white'
+                        : 'border-sky-200 bg-white text-sky-900 hover:bg-sky-100'
+                    }`}
+                  >
+                    {option === 'enhanced' ? 'Mejorada' : option === 'editorial' ? 'Editorial' : option === 'monochrome' ? 'Monocromo' : 'Original'}
+                  </button>
+                ))}
+              </div>
+              {projectImageVariants ? (
+                <div className="space-y-4">
+                  <MediaPreviewGrid
+                    items={[
+                      { url: projectImageVariants.desktop.url, label: `Desktop ${projectImageVariants.desktop.width}x${projectImageVariants.desktop.height}` },
+                      { url: projectImageVariants.mobile.url, label: `Mobile ${projectImageVariants.mobile.width}x${projectImageVariants.mobile.height}` },
+                    ]}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setProjectForm((current) => ({ ...current, mainImage: projectImageVariants.desktop.url, mainImageMobile: projectImageVariants.mobile.url }))}
+                    >
+                      Aplicar a proyecto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setProjectForm((current) => ({ ...current, mainImage: projectImageVariants.desktop.url }))}
+                    >
+                      Solo desktop
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setProjectForm((current) => ({ ...current, mainImageMobile: projectImageVariants.mobile.url }))}
+                    >
+                      Solo mobile
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Galeria</label>
@@ -3257,7 +3628,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
       {/* Publication Dialog */}
       <Dialog open={showPublicationDialog} onOpenChange={setShowPublicationDialog}>
-        <DialogContent className="max-w-md sm:max-w-xl">
+        <DialogContent className="max-w-md sm:max-w-2xl">
           <DialogHeader><DialogTitle>{editingPublication ? 'Editar pagina' : 'Nueva pagina'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
             <div>
@@ -3292,16 +3663,108 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 </label>
               </div>
               <Input value={publicationForm.image} onChange={e => setPublicationForm({ ...publicationForm, image: e.target.value })} className="text-sm" />
+              <MediaPreviewGrid
+                items={publicationForm.image ? [{ url: publicationForm.image, label: 'Imagen de pagina' }] : []}
+                emptyLabel="Aun no hay imagen para esta pagina."
+                onRemove={() => setPublicationForm((current) => ({ ...current, image: '' }))}
+              />
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-sky-950">Preparar imagen publicada</p>
+                  <p className="mt-1 text-xs text-sky-800">
+                    Genera una version mas limpia y ligera para la pagina. La variante mobile queda lista para reutilizar en portada u otras publicaciones.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handlePreparePublicationImage()}
+                  disabled={publicationImageAssistLoading || !publicationForm.image.trim()}
+                  className="border-sky-200 bg-white text-sky-900 hover:bg-sky-100"
+                >
+                  {publicationImageAssistLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
+                  {publicationImageAssistLoading ? 'Preparando...' : 'Preparar variantes'}
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['enhanced', 'editorial', 'monochrome', 'original'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setPublicationImageTreatment(option)}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                      publicationImageTreatment === option
+                        ? 'border-sky-600 bg-sky-600 text-white'
+                        : 'border-sky-200 bg-white text-sky-900 hover:bg-sky-100'
+                    }`}
+                  >
+                    {option === 'enhanced' ? 'Mejorada' : option === 'editorial' ? 'Editorial' : option === 'monochrome' ? 'Monocromo' : 'Original'}
+                  </button>
+                ))}
+              </div>
+              {publicationImageVariants ? (
+                <div className="space-y-4">
+                  <MediaPreviewGrid
+                    items={[
+                      { url: publicationImageVariants.desktop.url, label: `Desktop ${publicationImageVariants.desktop.width}x${publicationImageVariants.desktop.height}` },
+                      { url: publicationImageVariants.mobile.url, label: `Mobile ${publicationImageVariants.mobile.width}x${publicationImageVariants.mobile.height}` },
+                    ]}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => setPublicationForm((current) => ({ ...current, image: publicationImageVariants.desktop.url }))}
+                    >
+                      Usar desktop en pagina
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-xs"
+                      onClick={() => navigator.clipboard.writeText(publicationImageVariants.mobile.url).then(() => toast.success('URL mobile copiada'))}
+                    >
+                      Copiar URL mobile
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido</label>
               <Textarea value={publicationForm.content} onChange={e => setPublicationForm({ ...publicationForm, content: e.target.value })} rows={7} className="text-sm" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-medium text-zinc-900">SEO de la pagina</h3>
+                <p className="mt-1 text-xs text-zinc-500">Estos campos alimentan Google, redes sociales, buscadores y robots.</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Titulo SEO</label>
+                <Input value={publicationForm.seoTitle} onChange={e => setPublicationForm({ ...publicationForm, seoTitle: e.target.value })} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Descripcion SEO</label>
+                <Textarea value={publicationForm.seoDescription} onChange={e => setPublicationForm({ ...publicationForm, seoDescription: e.target.value })} rows={3} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Palabras clave SEO</label>
+                <Input value={publicationForm.seoKeywords} onChange={e => setPublicationForm({ ...publicationForm, seoKeywords: e.target.value })} className="text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="flex items-center gap-2 text-sm text-zinc-700">
                 <input type="checkbox" checked={publicationForm.showInMenu} onChange={e => setPublicationForm({ ...publicationForm, showInMenu: e.target.checked })} />
                 Mostrar en menu
               </label>
+              <div className="text-xs text-zinc-500 flex items-center">
+                Estado actual: <span className="ml-1 font-medium text-zinc-700">{publicationForm.published ? 'Publicado' : 'Borrador'}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-zinc-700 mb-1 block">Orden en menu</label>
                 <Input value={publicationForm.menuOrder} onChange={e => setPublicationForm({ ...publicationForm, menuOrder: e.target.value })} type="number" className="text-sm" />
@@ -3310,7 +3773,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPublicationDialog(false)} className="text-sm">{t.admin.cancel}</Button>
-            <Button onClick={handleSavePublication} disabled={!publicationForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar pagina'}</Button>
+            <Button onClick={() => void handleSavePublication(false)} disabled={!publicationForm.title || loading || Boolean(uploadingField)} variant="outline" className="text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar borrador'}</Button>
+            <Button onClick={() => void handleSavePublication(true)} disabled={!publicationForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar y publicar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

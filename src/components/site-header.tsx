@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Home, Menu, X } from 'lucide-react'
 import { LanguageSelector } from '@/components/language-selector'
@@ -16,9 +16,35 @@ interface SiteHeaderProps {
   tone?: 'light' | 'dark'
 }
 
+type DynamicMenuPage = {
+  id: string
+  title: string
+  slug: string
+  menuOrder?: number
+}
+
+function getMenuHrefFromSlug(slug: string) {
+  const normalized = slug
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+
+  if (normalized === 'contacto') {
+    return '/contacto'
+  }
+
+  if (normalized === 'estudio') {
+    return '/estudio'
+  }
+
+  return `/info/${normalized}`
+}
+
 export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
   const { t } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [dynamicPages, setDynamicPages] = useState<DynamicMenuPage[]>([])
   const isLight = tone === 'light'
   const menuButtonClass = [
     'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] uppercase tracking-[0.24em] transition-colors backdrop-blur-md',
@@ -26,11 +52,50 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
       ? 'border-white/40 bg-black/12 text-white hover:border-white/70 hover:bg-black/24'
       : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
   ].join(' ')
-  const menuItems = [
-    { href: '/contacto', label: t.nav.contact || 'Contacto' },
-    { href: '/proyectos', label: t.nav.projects },
-    { href: '/estudio', label: t.nav.studio },
-  ]
+  useEffect(() => {
+    let active = true
+
+    void fetch('/api/publications?menu=true', { cache: 'no-store' })
+      .then(async (response) => (response.ok ? response.json() : []))
+      .then((data) => {
+        if (!active) {
+          return
+        }
+
+        setDynamicPages(Array.isArray(data) ? data : [])
+      })
+      .catch(() => {
+        if (active) {
+          setDynamicPages([])
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const menuItems = useMemo(() => {
+    const items = [
+      { href: '/contacto', label: t.nav.contact || 'Contacto' },
+      { href: '/proyectos', label: t.nav.projects },
+      { href: '/estudio', label: t.nav.studio },
+      ...[...dynamicPages]
+        .sort((a, b) => (a.menuOrder ?? 0) - (b.menuOrder ?? 0))
+        .map((page) => ({
+          href: getMenuHrefFromSlug(page.slug),
+          label: page.title,
+        })),
+    ]
+
+    const deduped = new Map<string, string>()
+
+    for (const item of items) {
+      deduped.set(item.href, item.label)
+    }
+
+    return Array.from(deduped.entries()).map(([href, label]) => ({ href, label }))
+  }, [dynamicPages, t.nav.contact, t.nav.projects, t.nav.studio])
 
   return (
     <>

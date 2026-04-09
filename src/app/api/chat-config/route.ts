@@ -9,6 +9,11 @@ function getDefaultChatConfig() {
     apiKey: null,
     apiBaseUrl: '',
     model: '',
+    imageProvider: 'google',
+    imageApiKey: null,
+    imageApiBaseUrl: '',
+    imageModel: 'gemini-2.5-flash-image',
+    imagePrompt: 'Optimiza imagenes para una web corporativa premium de ingenieria y arquitectura. Prioriza composicion limpia, luz equilibrada y versiones desktop/mobile listas para publicacion.',
     systemPrompt: `Eres el asistente virtual de SSA Ingenieria, una empresa dedicada a construccion, diseno, supervision, asesoria tecnica especializada, software a medida y ERP para construccion.
 
 Tu trabajo es responder con claridad, de forma profesional y breve.
@@ -133,6 +138,11 @@ export async function PUT(request: Request) {
         apiKey: body.apiKey ?? currentConfig.apiKey,
         apiBaseUrl: body.apiBaseUrl ?? currentConfig.apiBaseUrl,
         model: body.model ?? currentConfig.model,
+        imageProvider: body.imageProvider ?? currentConfig.imageProvider,
+        imageApiKey: body.imageApiKey ?? currentConfig.imageApiKey,
+        imageApiBaseUrl: body.imageApiBaseUrl ?? currentConfig.imageApiBaseUrl,
+        imageModel: body.imageModel ?? currentConfig.imageModel,
+        imagePrompt: body.imagePrompt ?? currentConfig.imagePrompt,
         systemPrompt: body.systemPrompt ?? currentConfig.systemPrompt,
         systemPromptEn: body.systemPromptEn ?? currentConfig.systemPromptEn,
         systemPromptPt: body.systemPromptPt ?? currentConfig.systemPromptPt,

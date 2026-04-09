@@ -37,6 +37,10 @@ export interface PublicPublication {
   contentEn?: string | null
   contentPt?: string | null
   image?: string | null
+  seoTitle?: string | null
+  seoDescription?: string | null
+  seoKeywords?: string | null
+  category?: string | null
 }
 
 export interface PublicSiteSettings {

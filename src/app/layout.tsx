@@ -19,9 +19,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(siteUrl),
+    applicationName: companyName,
     title,
     description,
     keywords,
+    referrer: 'origin-when-cross-origin',
     authors: [{ name: companyName }],
     creator: companyName,
     publisher: companyName,
