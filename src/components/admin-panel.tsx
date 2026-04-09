@@ -55,8 +55,22 @@ interface Publication {
 }
 
 interface Contact {
-  id: string; name: string; email: string; phone: string | null
-  subject: string | null; message: string; isRead: boolean; createdAt: string
+  id: string
+  name: string
+  email: string
+  phone: string | null
+  subject: string | null
+  message: string
+  isRead: boolean
+  status: string
+  priority: string
+  ownerName: string | null
+  nextAction: string | null
+  nextFollowUpAt: string | null
+  lastContactedAt: string | null
+  internalNotes: string | null
+  aiSummary: string | null
+  createdAt: string
 }
 
 interface ChatLead {
@@ -109,6 +123,8 @@ interface ChatConversationLog {
 
 interface ChatConfigType {
   id: string; enabled: boolean; provider: string; apiKey?: string | null; apiBaseUrl?: string | null; model: string | null
+  automationProvider?: string | null; automationApiKey?: string | null; automationApiBaseUrl?: string | null; automationModel?: string | null
+  automationFallbackProvider?: string | null; automationFallbackApiKey?: string | null; automationFallbackApiBaseUrl?: string | null; automationFallbackModel?: string | null
   imageProvider?: string | null; imageApiKey?: string | null; imageApiBaseUrl?: string | null; imageModel?: string | null; imagePrompt?: string | null
   systemPrompt: string; systemPromptEn: string | null; systemPromptPt: string | null
   welcomeMessage: string | null; welcomeMessageEn: string | null; welcomeMessagePt: string | null
@@ -194,6 +210,7 @@ interface ApprovalItemType {
   rejectedAt: string | null
   rejectionReason: string | null
   createdAt: string
+  payload?: string | null
   previewAssets?: MediaPreviewItem[]
 }
 
@@ -211,7 +228,7 @@ interface AutomationLogEntry {
   createdAt: string
 }
 
-type TabType = 'analytics' | 'projects' | 'publications' | 'leads' | 'contacts' | 'site-config' | 'ai-config' | 'automation' | 'users'
+type TabType = 'analytics' | 'projects' | 'publications' | 'crm' | 'requests' | 'telegram' | 'logs' | 'leads' | 'contacts' | 'site-config' | 'ai-config' | 'automation' | 'users'
 type SessionState = {
   checking: boolean
   configured: boolean
@@ -459,6 +476,38 @@ function removeUrlFromList(value: string | null | undefined, urlToRemove: string
   return parseUrlList(value).filter((item) => item !== urlToRemove).join('\n')
 }
 
+function parseStoredJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value?.trim()) {
+    return fallback
+  }
+
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+function getWhatsappHref(phone: string | null | undefined) {
+  const digits = (phone || '').replace(/[^\d]/g, '')
+  return digits ? `https://wa.me/${digits}` : ''
+}
+
+function getPhoneHref(phone: string | null | undefined) {
+  const normalized = (phone || '').trim()
+  return normalized ? `tel:${normalized}` : ''
+}
+
+function getMailHref(email: string | null | undefined) {
+  const normalized = (email || '').trim()
+  return normalized ? `mailto:${normalized}` : ''
+}
+
+function getTelegramHref(handle: string | null | undefined) {
+  const normalized = (handle || '').trim().replace(/^@/, '')
+  return normalized ? `https://t.me/${normalized}` : ''
+}
+
 function getPreviewItemTitle(item: MediaPreviewItem) {
   if (item.label?.trim()) {
     return item.label.trim()
@@ -580,6 +629,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [authLoading, setAuthLoading] = useState(false)
   const [leadFilter, setLeadFilter] = useState<'all' | 'attention' | 'new' | 'contacted' | 'proposal' | 'won' | 'lost' | 'archived'>('all')
   const [leadSavingId, setLeadSavingId] = useState<string | null>(null)
+  const [contactSavingId, setContactSavingId] = useState<string | null>(null)
+  const [crmSummaryTarget, setCrmSummaryTarget] = useState<string | null>(null)
+  const [crmSort, setCrmSort] = useState<'follow-up' | 'recent' | 'priority'>('follow-up')
+  const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
   const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [projectAiLoading, setProjectAiLoading] = useState(false)
   const [publicationAiLoading, setPublicationAiLoading] = useState(false)
@@ -611,6 +664,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm)
   const [aiForm, setAiForm] = useState({
     enabled: false, provider: 'default', apiKey: '', apiBaseUrl: '', model: '',
+    automationProvider: 'google', automationApiKey: '', automationApiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', automationModel: 'gemini-2.5-flash',
+    automationFallbackProvider: 'openrouter', automationFallbackApiKey: '', automationFallbackApiBaseUrl: 'https://openrouter.ai/api/v1', automationFallbackModel: 'openai/gpt-4o-mini',
     imageProvider: 'google', imageApiKey: '', imageApiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', imageModel: 'gemini-3.1-flash-image-preview', imagePrompt: '',
     systemPrompt: '', systemPromptEn: '', systemPromptPt: '',
     welcomeMessage: '', welcomeMessageEn: '', welcomeMessagePt: '',
@@ -646,7 +701,32 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       needsHuman: chatLeads.filter((lead) => lead.needsHuman).length,
     }
   }, [chatLeads])
+  const assignableOwners = useMemo(() => {
+    const values = new Set<string>()
+
+    users.forEach((user) => {
+      const candidate = (user.displayName || user.username || '').trim()
+      if (candidate) {
+        values.add(candidate)
+      }
+    })
+
+    chatLeads.forEach((lead) => {
+      if (lead.ownerName?.trim()) {
+        values.add(lead.ownerName.trim())
+      }
+    })
+
+    contacts.forEach((contact) => {
+      if (contact.ownerName?.trim()) {
+        values.add(contact.ownerName.trim())
+      }
+    })
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'es'))
+  }, [chatLeads, contacts, users])
   const visibleChatLeads = useMemo(() => {
+    const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 } as const
     return [...chatLeads]
       .filter((lead) => {
         if (leadFilter === 'all') return true
@@ -657,6 +737,17 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         return lead.leadStatus === leadFilter
       })
       .sort((a, b) => {
+        if (crmSort === 'priority') {
+          const priorityDelta = (priorityRank[a.priority as keyof typeof priorityRank] ?? 99) - (priorityRank[b.priority as keyof typeof priorityRank] ?? 99)
+          if (priorityDelta !== 0) {
+            return priorityDelta
+          }
+        }
+
+        if (crmSort === 'recent') {
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        }
+
         const aDue = isLeadFollowUpDue(a.nextFollowUpAt)
         const bDue = isLeadFollowUpDue(b.nextFollowUpAt)
         if (aDue !== bDue) {
@@ -671,7 +762,53 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       })
-  }, [chatLeads, leadFilter])
+  }, [chatLeads, crmSort, leadFilter])
+  const visibleContacts = useMemo(() => {
+    const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 } as const
+
+    return [...contacts].sort((a, b) => {
+      if (crmSort === 'priority') {
+        const priorityDelta = (priorityRank[a.priority as keyof typeof priorityRank] ?? 99) - (priorityRank[b.priority as keyof typeof priorityRank] ?? 99)
+        if (priorityDelta !== 0) {
+          return priorityDelta
+        }
+      }
+
+      if (crmSort === 'recent') {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+
+      const aDue = isLeadFollowUpDue(a.nextFollowUpAt)
+      const bDue = isLeadFollowUpDue(b.nextFollowUpAt)
+      if (aDue !== bDue) {
+        return aDue ? -1 : 1
+      }
+
+      const aNext = a.nextFollowUpAt ? new Date(a.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+      const bNext = b.nextFollowUpAt ? new Date(b.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+      if (aNext !== bNext) {
+        return aNext - bNext
+      }
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+  }, [contacts, crmSort])
+  const filteredReviews = useMemo(() => {
+    if (requestFilter === 'all') {
+      return reviews
+    }
+
+    return reviews.filter((review) => review.status === requestFilter)
+  }, [requestFilter, reviews])
+  const requestSummary = useMemo(
+    () => ({
+      total: reviews.length,
+      pending: reviews.filter((review) => review.status === 'pending').length,
+      approved: reviews.filter((review) => review.status === 'approved').length,
+      rejected: reviews.filter((review) => review.status === 'rejected').length,
+    }),
+    [reviews],
+  )
   const analyticsSummary = useMemo(() => {
     const publishedProjects = projects.filter((project) => project.published).length
     const draftProjects = projects.length - publishedProjects
@@ -865,6 +1002,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         apiKey: configData.apiKey || '',
         apiBaseUrl: configData.apiBaseUrl || '',
         model: configData.model || '',
+        automationProvider: configData.automationProvider || 'google',
+        automationApiKey: configData.automationApiKey || '',
+        automationApiBaseUrl: configData.automationApiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta',
+        automationModel: configData.automationModel || 'gemini-2.5-flash',
+        automationFallbackProvider: configData.automationFallbackProvider || 'openrouter',
+        automationFallbackApiKey: configData.automationFallbackApiKey || '',
+        automationFallbackApiBaseUrl: configData.automationFallbackApiBaseUrl || 'https://openrouter.ai/api/v1',
+        automationFallbackModel: configData.automationFallbackModel || 'openai/gpt-4o-mini',
         imageProvider: configData.imageProvider || 'google',
         imageApiKey: configData.imageApiKey || '',
         imageApiBaseUrl: configData.imageApiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta',
@@ -904,7 +1049,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   }, [isOpen, session.authenticated, session.role])
 
   useEffect(() => {
-    if (session.role !== 'admin' && ['site-config', 'ai-config', 'automation', 'users'].includes(activeTab)) {
+    if (session.role !== 'admin' && ['site-config', 'ai-config', 'telegram', 'logs', 'users'].includes(activeTab)) {
       setActiveTab('analytics')
     }
   }, [activeTab, session.role])
@@ -1552,6 +1697,28 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     }))
   }
 
+  const handleAutomationProviderChange = (providerId: string) => {
+    const preset = providers.find((item) => item.id === providerId)
+
+    setAiForm((current) => ({
+      ...current,
+      automationProvider: providerId,
+      automationModel: preset?.defaultModel ?? '',
+      automationApiBaseUrl: preset?.defaultBaseUrl ?? '',
+    }))
+  }
+
+  const handleAutomationFallbackProviderChange = (providerId: string) => {
+    const preset = providers.find((item) => item.id === providerId)
+
+    setAiForm((current) => ({
+      ...current,
+      automationFallbackProvider: providerId,
+      automationFallbackModel: preset?.defaultModel ?? '',
+      automationFallbackApiBaseUrl: preset?.defaultBaseUrl ?? '',
+    }))
+  }
+
   const handleSaveAIConfig = async () => {
     setLoading(true)
     try {
@@ -1614,6 +1781,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     setChatLeads((current) => current.map((lead) => (lead.id === leadId ? { ...lead, ...patch } : lead)))
   }
 
+  const updateContactLocally = (contactId: string, patch: Partial<Contact>) => {
+    setContacts((current) => current.map((contact) => (contact.id === contactId ? { ...contact, ...patch } : contact)))
+  }
+
   const handleSaveLead = async (lead: ChatLead) => {
     setLeadSavingId(lead.id)
     try {
@@ -1669,6 +1840,76 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     }
     updateLeadLocally(lead.id, nextLead)
     await handleSaveLead(nextLead)
+  }
+
+  const handleSaveContact = async (contact: Contact) => {
+    setContactSavingId(contact.id)
+    try {
+      const response = await fetch(`/api/admin/contacts/${contact.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: contact.name,
+          email: contact.email,
+          phone: contact.phone,
+          subject: contact.subject,
+          message: contact.message,
+          isRead: contact.isRead,
+          status: contact.status,
+          priority: contact.priority,
+          ownerName: contact.ownerName,
+          nextAction: contact.nextAction,
+          nextFollowUpAt: contact.nextFollowUpAt || null,
+          lastContactedAt: contact.lastContactedAt || null,
+          internalNotes: contact.internalNotes,
+          aiSummary: contact.aiSummary,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo guardar el contacto')
+        return
+      }
+
+      updateContactLocally(contact.id, data)
+      toast.success('Contacto actualizado')
+    } catch {
+      toast.error('No se pudo guardar el contacto')
+    } finally {
+      setContactSavingId(null)
+    }
+  }
+
+  const handleGenerateCrmSummary = async (target: 'lead' | 'contact', id: string) => {
+    setCrmSummaryTarget(`${target}:${id}`)
+    try {
+      const response = await fetch('/api/admin/crm-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, id }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data?.record) {
+        toast.error(data.error || 'No se pudo generar el resumen IA')
+        return
+      }
+
+      if (target === 'lead') {
+        updateLeadLocally(id, data.record)
+      } else {
+        updateContactLocally(id, data.record)
+      }
+
+      toast.success(`Resumen IA generado con ${data?.suggestion?.provider || 'IA'}`)
+    } catch {
+      toast.error('No se pudo generar el resumen IA')
+    } finally {
+      setCrmSummaryTarget(null)
+    }
   }
 
   const handleSaveTelegramConfig = async () => {
@@ -1745,17 +1986,124 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     }
   }
 
+  const handleLoadReviewDraft = (review: ApprovalItemType) => {
+    const payload = parseStoredJson<Record<string, unknown>>(review.payload, {})
+    const workflowType = typeof payload.workflowType === 'string' ? payload.workflowType : review.entityType
+    const assets = review.previewAssets || []
+    const imageUrls = assets.filter((asset) => asset.kind === 'image').map((asset) => asset.url)
+    const videoUrl = assets.find((asset) => asset.kind === 'video')?.url || ''
+
+    if (workflowType === 'project') {
+      setEditingProject(null)
+      setProjectForm({
+        ...emptyProjectForm,
+        title: typeof payload.title === 'string' ? payload.title : review.title,
+        description: typeof payload.description === 'string' ? payload.description : review.summary || '',
+        fullDescription: typeof payload.fullDescription === 'string' ? payload.fullDescription : review.details || '',
+        category: typeof payload.category === 'string' ? payload.category : projectCategoryOptions[0] || emptyProjectForm.category,
+        location: typeof payload.location === 'string' ? payload.location : '',
+        year: typeof payload.year === 'string' ? payload.year : '',
+        mainImage: imageUrls[0] || '',
+        gallery: imageUrls.slice(1).join('\n'),
+        videoUrl,
+        client: typeof payload.client === 'string' ? payload.client : '',
+        showOnHomepage: Boolean(payload.showOnHomepage),
+        published: Boolean(payload.publishNow),
+      })
+      setProjectImageVariants(null)
+      setShowProjectDialog(true)
+      setActiveTab('projects')
+      toast.success('Borrador de proyecto cargado para edición')
+      return
+    }
+
+    if (workflowType === 'project-media') {
+      const targetProjectId = typeof payload.targetProjectId === 'string' ? payload.targetProjectId : review.entityId
+      const project = projects.find((item) => item.id === targetProjectId)
+
+      if (!project) {
+        toast.error('No se encontró el proyecto destino para esta solicitud')
+        return
+      }
+
+      const targetMediaRole = typeof payload.targetMediaRole === 'string' ? payload.targetMediaRole : 'gallery'
+      const nextForm = {
+        ...emptyProjectForm,
+        title: project.title,
+        description: project.description || '',
+        fullDescription: project.fullDescription || '',
+        category: project.category,
+        location: project.location || '',
+        year: project.year ? String(project.year) : '',
+        area: project.area || '',
+        mainImage: project.mainImage || '',
+        mainImageMobile: project.mainImageMobile || '',
+        gallery: parseUrlList(project.gallery).join('\n'),
+        galleryMobile: parseUrlList(project.galleryMobile).join('\n'),
+        videoUrl: project.videoUrl || '',
+        client: project.client || '',
+        status: project.status || '',
+        featured: Boolean(project.featured),
+        showOnHomepage: Boolean(project.showOnHomepage),
+        published: Boolean(project.published),
+      }
+
+      if (targetMediaRole === 'primary') {
+        nextForm.mainImage = imageUrls[0] || nextForm.mainImage
+      } else if (targetMediaRole === 'mobile') {
+        nextForm.mainImageMobile = imageUrls[0] || nextForm.mainImageMobile
+      } else if (targetMediaRole === 'video') {
+        nextForm.videoUrl = videoUrl || nextForm.videoUrl
+      } else {
+        nextForm.gallery = [...parseUrlList(project.gallery), ...imageUrls].filter(Boolean).join('\n')
+      }
+
+      setEditingProject(project)
+      setProjectForm(nextForm)
+      setProjectImageVariants(null)
+      setShowProjectDialog(true)
+      setActiveTab('projects')
+      toast.success('Solicitud de material cargada en el proyecto')
+      return
+    }
+
+    if (workflowType === 'hero') {
+      const heroDevice = typeof payload.heroDevice === 'string' ? payload.heroDevice : 'desktop'
+      const position = payload.heroSlot === 'secondary' ? 'append' : 'prepend'
+      const mergeHero = (currentValue: string, nextUrls: string[]) => {
+        const current = parseUrlList(currentValue)
+        const merged = position === 'prepend' ? [...nextUrls, ...current] : [...current, ...nextUrls]
+        return Array.from(new Set(merged)).join('\n')
+      }
+
+      setSiteForm((current) => ({
+        ...current,
+        heroImages: heroDevice === 'mobile' ? current.heroImages : mergeHero(current.heroImages, imageUrls),
+        heroImagesMobile:
+          heroDevice === 'desktop'
+            ? current.heroImagesMobile
+            : mergeHero(current.heroImagesMobile || current.heroImages, imageUrls),
+      }))
+      setActiveTab('site-config')
+      toast.success('Solicitud de portada cargada en configuración del sitio')
+      return
+    }
+
+    toast.error('Este tipo de solicitud aún no tiene editor guiado')
+  }
+
   const tabs = [
     { key: 'analytics' as TabType, label: 'Resumen', icon: BarChart3 },
     { key: 'projects' as TabType, label: t.admin.projects, icon: Building2 },
     { key: 'publications' as TabType, label: 'Paginas/Menu', icon: FileText },
-    { key: 'leads' as TabType, label: 'Leads', icon: Mail },
-    { key: 'contacts' as TabType, label: t.admin.contacts, icon: Mail },
+    { key: 'crm' as TabType, label: 'CRM', icon: Mail },
+    { key: 'requests' as TabType, label: 'Solicitudes', icon: Check },
     ...(session.role === 'admin'
       ? [
           { key: 'site-config' as TabType, label: 'Sitio', icon: Globe },
           { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot },
-          { key: 'automation' as TabType, label: 'Automatizacion', icon: Send },
+          { key: 'telegram' as TabType, label: 'Telegram', icon: Send },
+          { key: 'logs' as TabType, label: 'Logs', icon: FileText },
           { key: 'users' as TabType, label: 'Usuarios', icon: Users },
         ]
       : []),
@@ -2552,6 +2900,305 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                     </div>
                   )}
 
+                  {activeTab === 'crm' && (
+                    <div className="space-y-6">
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                        <div>
+                          <h2 className="text-2xl font-light text-zinc-900">CRM y contactos</h2>
+                          <p className="mt-2 text-sm text-zinc-500">Gestiona leads del chat, formularios de contacto y seguimiento comercial desde una sola bandeja.</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="rounded-full border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600">
+                            {analyticsSummary.totalLeads} leads
+                          </div>
+                          <div className="rounded-full border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600">
+                            {analyticsSummary.totalContacts} contactos
+                          </div>
+                          <select
+                            value={crmSort}
+                            onChange={(e) => setCrmSort(e.target.value as typeof crmSort)}
+                            className="h-10 rounded-full border border-zinc-200 bg-white px-4 text-xs text-zinc-700"
+                          >
+                            <option value="follow-up">Ordenar por seguimiento</option>
+                            <option value="recent">Ordenar por recientes</option>
+                            <option value="priority">Ordenar por prioridad</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Abiertos</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.openLeads}</p>
+                          <p className="mt-2 text-xs text-zinc-500">Leads activos en gestión comercial</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Por atender</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{leadSummary.dueToday}</p>
+                          <p className="mt-2 text-xs text-zinc-500">Seguimientos vencidos o para hoy</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Requieren humano</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{leadSummary.needsHuman}</p>
+                          <p className="mt-2 text-xs text-zinc-500">Conversaciones listas para derivación</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Sesiones chat</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{chatConversations.length}</p>
+                          <p className="mt-2 text-xs text-zinc-500">Memoria reciente y contexto comercial</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Leads del chat</h3>
+                            <p className="mt-1 text-xs text-zinc-500">Califica, asigna y prepara el contacto humano con resumen IA y accesos rápidos.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { value: 'all', label: 'Todos' },
+                              { value: 'attention', label: 'Atencion' },
+                              { value: 'new', label: 'Nuevos' },
+                              { value: 'contacted', label: 'Contactados' },
+                              { value: 'proposal', label: 'Cotizacion' },
+                              { value: 'won', label: 'Ganados' },
+                              { value: 'lost', label: 'Perdidos' },
+                              { value: 'archived', label: 'Archivados' },
+                            ].map((item) => (
+                              <button
+                                key={item.value}
+                                type="button"
+                                onClick={() => setLeadFilter(item.value as typeof leadFilter)}
+                                className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                                  leadFilter === item.value ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4">
+                          {visibleChatLeads.map((lead) => {
+                            const statusMeta = leadStatusOptions.find((item) => item.value === lead.leadStatus) || leadStatusOptions[0]
+                            const priorityMeta = leadPriorityOptions.find((item) => item.value === lead.priority) || leadPriorityOptions[1]
+                            const summaryKey = `lead:${lead.id}`
+
+                            return (
+                              <div key={lead.id} className={`rounded-2xl border p-4 ${isLeadFollowUpDue(lead.nextFollowUpAt) ? 'border-amber-300 bg-amber-50/40' : 'border-zinc-200 bg-zinc-50/50'}`}>
+                                <div className="flex flex-col gap-4 xl:flex-row xl:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="text-base font-medium text-zinc-900">{lead.name || 'Lead sin nombre'}</h4>
+                                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusMeta.tone}`}>{statusMeta.label}</span>
+                                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${priorityMeta.tone}`}>{priorityMeta.label}</span>
+                                      {lead.needsHuman ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">Humano</span> : null}
+                                      {lead.contactConsent ? <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] text-cyan-700">Autorizado</span> : null}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                                      <span>{lead.email || 'Sin correo'}</span>
+                                      <span>{lead.phone || 'Sin telefono'}</span>
+                                      <span>{lead.telegramHandle || 'Sin Telegram'}</span>
+                                      <span>{lead.preferredContactChannel ? `Prefiere ${lead.preferredContactChannel}` : 'Canal libre'}</span>
+                                    </div>
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4 text-xs text-zinc-600">
+                                      <div><span className="font-medium text-zinc-800">Servicio:</span> {lead.serviceType || 'Sin definir'}</div>
+                                      <div><span className="font-medium text-zinc-800">Proyecto:</span> {lead.projectType || 'Sin definir'}</div>
+                                      <div><span className="font-medium text-zinc-800">Ubicación:</span> {lead.projectLocation || 'Sin definir'}</div>
+                                      <div><span className="font-medium text-zinc-800">Sesión:</span> {lead.sessionId}</div>
+                                    </div>
+                                    <div className="mt-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">
+                                      {lead.summary || 'Aún no hay resumen del caso. Usa "Resumen IA" para generarlo con Gemini y fallback.'}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2 xl:max-w-[360px] xl:justify-end">
+                                    {getMailHref(lead.email) ? <a href={getMailHref(lead.email)} className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50">Correo</a> : null}
+                                    {getPhoneHref(lead.phone) ? <a href={getPhoneHref(lead.phone)} className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50">Llamar</a> : null}
+                                    {getWhatsappHref(lead.phone) ? <a href={getWhatsappHref(lead.phone)} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50">WhatsApp</a> : null}
+                                    {getTelegramHref(lead.telegramHandle) ? <a href={getTelegramHref(lead.telegramHandle)} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50">Telegram</a> : null}
+                                    <Button type="button" variant="outline" className="text-xs" onClick={() => void handleGenerateCrmSummary('lead', lead.id)} disabled={crmSummaryTarget === summaryKey}>
+                                      {crmSummaryTarget === summaryKey ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Bot className="w-4 h-4 mr-1" />}
+                                      Resumen IA
+                                    </Button>
+                                    <Button type="button" variant="outline" className="text-xs" onClick={() => void handleMarkLeadContactedNow(lead)} disabled={leadSavingId === lead.id}>
+                                      {leadSavingId === lead.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                                      Marcar contacto
+                                    </Button>
+                                    <Button type="button" className="bg-zinc-900 hover:bg-zinc-800 text-xs" onClick={() => void handleSaveLead(lead)} disabled={leadSavingId === lead.id}>
+                                      {leadSavingId === lead.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                                      Guardar
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Estado</label>
+                                    <select value={lead.leadStatus} onChange={(e) => updateLeadLocally(lead.id, { leadStatus: e.target.value })} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900">
+                                      {leadStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Prioridad</label>
+                                    <select value={lead.priority} onChange={(e) => updateLeadLocally(lead.id, { priority: e.target.value })} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900">
+                                      {leadPriorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Responsable</label>
+                                    <select value={lead.ownerName || ''} onChange={(e) => updateLeadLocally(lead.id, { ownerName: e.target.value || null })} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900">
+                                      <option value="">Sin asignar</option>
+                                      {assignableOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Próximo seguimiento</label>
+                                    <Input type="datetime-local" value={formatDateTimeLocalValue(lead.nextFollowUpAt)} onChange={(e) => updateLeadLocally(lead.id, { nextFollowUpAt: e.target.value ? new Date(e.target.value).toISOString() : null })} className="text-sm" />
+                                  </div>
+                                  <div className="xl:col-span-2">
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Próxima acción</label>
+                                    <Input value={lead.nextAction || ''} onChange={(e) => updateLeadLocally(lead.id, { nextAction: e.target.value })} placeholder="Ej. llamar, enviar brochure, preparar cotización" className="text-sm" />
+                                  </div>
+                                  <div className="xl:col-span-2">
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Notas internas</label>
+                                    <Textarea value={lead.internalNotes || ''} onChange={(e) => updateLeadLocally(lead.id, { internalNotes: e.target.value })} rows={2} className="text-sm" placeholder="Contexto interno, responsable, bloqueos o acuerdos." />
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                          {visibleChatLeads.length === 0 ? <p className="py-8 text-center text-sm text-zinc-500">No hay leads en este filtro.</p> : null}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Contactos del formulario</h3>
+                            <p className="mt-1 text-xs text-zinc-500">Centralizados con el CRM para responder, priorizar y hacer seguimiento.</p>
+                          </div>
+                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700">{visibleContacts.length} registros</span>
+                        </div>
+
+                        <div className="grid gap-4">
+                          {visibleContacts.map((contact) => {
+                            const statusMeta = leadStatusOptions.find((item) => item.value === contact.status) || leadStatusOptions[0]
+                            const priorityMeta = leadPriorityOptions.find((item) => item.value === contact.priority) || leadPriorityOptions[1]
+                            const summaryKey = `contact:${contact.id}`
+
+                            return (
+                              <div key={contact.id} className={`rounded-2xl border p-4 ${isLeadFollowUpDue(contact.nextFollowUpAt) ? 'border-amber-300 bg-amber-50/40' : 'border-zinc-200 bg-zinc-50/50'}`}>
+                                <div className="flex flex-col gap-4 xl:flex-row xl:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h4 className="text-base font-medium text-zinc-900">{contact.name}</h4>
+                                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusMeta.tone}`}>{statusMeta.label}</span>
+                                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${priorityMeta.tone}`}>{priorityMeta.label}</span>
+                                      {!contact.isRead ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-700">Nuevo</span> : null}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                                      <span>{contact.email}</span>
+                                      <span>{contact.phone || 'Sin telefono'}</span>
+                                      <span>{contact.subject || 'Sin asunto'}</span>
+                                    </div>
+                                    <p className="mt-3 whitespace-pre-wrap rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">{contact.message}</p>
+                                    <div className="mt-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">
+                                      {contact.aiSummary || 'Usa "Resumen IA" para convertir este contacto en un caso comercial más claro antes de responder.'}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2 xl:max-w-[360px] xl:justify-end">
+                                    <a href={getMailHref(contact.email)} className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50">Correo</a>
+                                    {getPhoneHref(contact.phone) ? <a href={getPhoneHref(contact.phone)} className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50">Llamar</a> : null}
+                                    {getWhatsappHref(contact.phone) ? <a href={getWhatsappHref(contact.phone)} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50">WhatsApp</a> : null}
+                                    <Button type="button" variant="outline" className="text-xs" onClick={() => void handleGenerateCrmSummary('contact', contact.id)} disabled={crmSummaryTarget === summaryKey}>
+                                      {crmSummaryTarget === summaryKey ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Bot className="w-4 h-4 mr-1" />}
+                                      Resumen IA
+                                    </Button>
+                                    <Button type="button" className="bg-zinc-900 hover:bg-zinc-800 text-xs" onClick={() => void handleSaveContact(contact)} disabled={contactSavingId === contact.id}>
+                                      {contactSavingId === contact.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                                      Guardar
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Estado</label>
+                                    <select value={contact.status} onChange={(e) => updateContactLocally(contact.id, { status: e.target.value })} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900">
+                                      {leadStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Prioridad</label>
+                                    <select value={contact.priority} onChange={(e) => updateContactLocally(contact.id, { priority: e.target.value })} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900">
+                                      {leadPriorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Responsable</label>
+                                    <select value={contact.ownerName || ''} onChange={(e) => updateContactLocally(contact.id, { ownerName: e.target.value || null })} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900">
+                                      <option value="">Sin asignar</option>
+                                      {assignableOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Próximo seguimiento</label>
+                                    <Input type="datetime-local" value={formatDateTimeLocalValue(contact.nextFollowUpAt)} onChange={(e) => updateContactLocally(contact.id, { nextFollowUpAt: e.target.value ? new Date(e.target.value).toISOString() : null })} className="text-sm" />
+                                  </div>
+                                  <div className="xl:col-span-2">
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Próxima acción</label>
+                                    <Input value={contact.nextAction || ''} onChange={(e) => updateContactLocally(contact.id, { nextAction: e.target.value })} placeholder="Ej. responder correo, llamar, enviar brochure" className="text-sm" />
+                                  </div>
+                                  <div className="xl:col-span-2">
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Notas internas</label>
+                                    <Textarea value={contact.internalNotes || ''} onChange={(e) => updateContactLocally(contact.id, { internalNotes: e.target.value })} rows={2} className="text-sm" placeholder="Notas internas, acuerdos o contexto comercial." />
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                          {visibleContacts.length === 0 ? <p className="py-8 text-center text-sm text-zinc-500">Todavía no hay contactos del formulario.</p> : null}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Conversaciones del chat</h3>
+                            <p className="mt-1 text-xs text-zinc-500">Historial resumido para entender el tono, la necesidad y la urgencia antes de escribir.</p>
+                          </div>
+                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700">{chatConversations.length} sesiones</span>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          {chatConversations.map((conversation) => (
+                            <div key={conversation.sessionId} className="rounded-xl border border-zinc-200 p-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-sm font-medium text-zinc-900">{conversation.name || 'Visitante'}</h4>
+                                {conversation.unreadCount > 0 ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">{conversation.unreadCount} sin leer</span> : null}
+                              </div>
+                              <p className="mt-1 text-xs text-zinc-500">{conversation.email || 'Sin correo registrado'}</p>
+                              <div className="mt-3 space-y-2">
+                                {conversation.messages.slice(-4).map((message) => (
+                                  <div key={message.id} className={`rounded-xl px-3 py-2 text-sm ${message.isFromAdmin ? 'bg-zinc-100 text-zinc-900' : 'border border-zinc-200 bg-white text-zinc-700'}`}>
+                                    <div className="mb-1 text-[11px] text-zinc-400">
+                                      {message.name}{message.isFromAI ? ' • IA' : ''} • {new Date(message.createdAt).toLocaleString()}
+                                    </div>
+                                    <p className="whitespace-pre-wrap">{message.message}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {chatConversations.length === 0 ? <p className="py-6 text-center text-sm text-zinc-500">Todavía no hay conversaciones registradas.</p> : null}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Contacts */}
                   {activeTab === 'contacts' && (
                     <div className="space-y-4">
@@ -2916,6 +3563,71 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
                       <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-4">
                         <div>
+                          <h3 className="text-sm font-medium text-zinc-900">IA operativa para CRM y automatizaciones</h3>
+                          <p className="mt-1 text-xs text-zinc-500">Usa Gemini como motor barato para resúmenes, clasificación y ayuda comercial. Si falla o no hay crédito, el sistema cae al proveedor de respaldo.</p>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                          <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Proveedor principal</p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Proveedor</label>
+                                <select value={aiForm.automationProvider} onChange={e => handleAutomationProviderChange(e.target.value)} className="w-full h-9 px-3 border rounded-md text-sm">
+                                  {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Modelo</label>
+                                <select value={aiForm.automationModel} onChange={e => setAiForm({ ...aiForm, automationModel: e.target.value })} className="w-full h-9 px-3 border rounded-md text-sm">
+                                  <option value="">Default</option>
+                                  {providers.find(p => p.id === aiForm.automationProvider)?.models.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">API Key</label>
+                                <Input type="password" value={aiForm.automationApiKey} onChange={e => setAiForm({ ...aiForm, automationApiKey: e.target.value })} className="text-sm" />
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Base URL</label>
+                                <Input value={aiForm.automationApiBaseUrl} onChange={e => setAiForm({ ...aiForm, automationApiBaseUrl: e.target.value })} className="text-sm" />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Fallback</p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Proveedor</label>
+                                <select value={aiForm.automationFallbackProvider} onChange={e => handleAutomationFallbackProviderChange(e.target.value)} className="w-full h-9 px-3 border rounded-md text-sm">
+                                  {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Modelo</label>
+                                <select value={aiForm.automationFallbackModel} onChange={e => setAiForm({ ...aiForm, automationFallbackModel: e.target.value })} className="w-full h-9 px-3 border rounded-md text-sm">
+                                  <option value="">Default</option>
+                                  {providers.find(p => p.id === aiForm.automationFallbackProvider)?.models.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">API Key</label>
+                                <Input type="password" value={aiForm.automationFallbackApiKey} onChange={e => setAiForm({ ...aiForm, automationFallbackApiKey: e.target.value })} className="text-sm" />
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Base URL</label>
+                                <Input value={aiForm.automationFallbackApiBaseUrl} onChange={e => setAiForm({ ...aiForm, automationFallbackApiBaseUrl: e.target.value })} className="text-sm" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-4">
+                        <div>
                           <h3 className="text-sm font-medium text-zinc-900">IA para imagenes</h3>
                           <p className="mt-1 text-xs text-zinc-500">Configura aqui el proveedor principal para la siguiente capa de mejora generativa. La preparacion desktop/mobile ya funciona desde el formulario de proyectos y paginas.</p>
                         </div>
@@ -3062,6 +3774,227 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       <Button onClick={handleSaveAIConfig} disabled={loading || !aiForm.systemPrompt} className="w-full bg-zinc-900 hover:bg-zinc-800 py-5 text-xs tracking-widest">
                         <Save className="w-4 h-4 mr-2" />{loading ? t.admin.saving : t.admin.saveAIConfig}
                       </Button>
+                    </div>
+                  )}
+
+                  {activeTab === 'requests' && (
+                    <div className="space-y-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                          <h2 className="text-2xl font-light text-zinc-900">Solicitudes de publicación</h2>
+                          <p className="mt-2 text-sm text-zinc-500">Revisa lo que llega desde Telegram y otros flujos antes de publicarlo o incorporarlo al sitio.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { value: 'pending', label: `Pendientes ${requestSummary.pending}` },
+                            { value: 'approved', label: `Aprobadas ${requestSummary.approved}` },
+                            { value: 'rejected', label: `Rechazadas ${requestSummary.rejected}` },
+                            { value: 'all', label: `Todas ${requestSummary.total}` },
+                          ].map((item) => (
+                            <button
+                              key={item.value}
+                              type="button"
+                              onClick={() => setRequestFilter(item.value as typeof requestFilter)}
+                              className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                                requestFilter === item.value ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Pendientes</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.pending}</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Aprobadas</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.approved}</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Rechazadas</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.rejected}</p>
+                        </div>
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Total</p>
+                          <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.total}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3">
+                        {filteredReviews.map((review) => (
+                          <div key={review.id} className="rounded-2xl border border-zinc-200 bg-white p-4">
+                            <div className="flex flex-col gap-4 xl:flex-row xl:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="text-sm font-medium text-zinc-900">{review.title}</h4>
+                                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${
+                                    review.status === 'pending'
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : review.status === 'approved'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-rose-100 text-rose-700'
+                                  }`}>
+                                    {review.status}
+                                  </span>
+                                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600">{review.entityType}</span>
+                                </div>
+                                <p className="mt-2 text-sm text-zinc-600">{review.summary || 'Sin resumen'}</p>
+                                {review.details ? <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-500">{review.details}</p> : null}
+                                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+                                  <span>{review.source}</span>
+                                  <span>•</span>
+                                  <span>{new Date(review.createdAt).toLocaleString()}</span>
+                                  {review.requestedById ? <><span>•</span><span>{review.requestedById}</span></> : null}
+                                </div>
+                                {review.previewAssets?.length ? (
+                                  <div className="mt-3">
+                                    <MediaPreviewGrid items={review.previewAssets} />
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="flex flex-wrap gap-2 xl:max-w-[320px] xl:justify-end">
+                                <Button type="button" variant="outline" className="text-xs" onClick={() => handleLoadReviewDraft(review)}>
+                                  <Pencil className="mr-1 h-4 w-4" />
+                                  Editar borrador
+                                </Button>
+                                {review.status === 'pending' ? (
+                                  <>
+                                    <Button variant="outline" onClick={() => void handleReviewAction(review.id, 'reject')} disabled={automationActionId === review.id} className="text-xs">
+                                      {automationActionId === review.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <XCircle className="mr-1 h-4 w-4" />}
+                                      Rechazar
+                                    </Button>
+                                    <Button onClick={() => void handleReviewAction(review.id, 'approve')} disabled={automationActionId === review.id} className="bg-zinc-900 text-xs hover:bg-zinc-800">
+                                      {automationActionId === review.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                                      Aprobar
+                                    </Button>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {filteredReviews.length === 0 ? <p className="py-8 text-center text-sm text-zinc-500">No hay solicitudes en este filtro.</p> : null}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'telegram' && (
+                    <div className="space-y-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-2xl font-light text-zinc-900">Telegram</h2>
+                          <p className="mt-2 text-sm text-zinc-500">Configura el bot, usuarios autorizados y el webhook para recibir material desde terreno.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" onClick={() => void handleSyncTelegramWebhook()} disabled={automationActionId === 'telegram-sync'} className="text-xs sm:text-sm">
+                            {automationActionId === 'telegram-sync' ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                            Sincronizar webhook
+                          </Button>
+                          <Button onClick={() => void handleSaveTelegramConfig()} disabled={loading} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm">
+                            <Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar Telegram'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Bot de Telegram</h3>
+                            <p className="text-xs text-zinc-500 mt-1">Recibe fotos, videos y flujos guiados. Los registros caen en Solicitudes para revisión o edición previa.</p>
+                          </div>
+                          <button onClick={() => setTelegramForm({ ...telegramForm, enabled: !telegramForm.enabled })} className={`w-11 h-6 rounded-full transition-colors ${telegramForm.enabled ? 'bg-green-500' : 'bg-zinc-300'}`}>
+                            <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${telegramForm.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Bot token</label>
+                            <Input type="password" value={telegramForm.botToken} onChange={e => setTelegramForm({ ...telegramForm, botToken: e.target.value })} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Bot username</label>
+                            <Input value={telegramForm.botUsername} onChange={e => setTelegramForm({ ...telegramForm, botUsername: e.target.value })} placeholder="ssa_bot" className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Webhook URL publica</label>
+                            <Input value={telegramForm.webhookUrl} onChange={e => setTelegramForm({ ...telegramForm, webhookUrl: e.target.value })} placeholder="https://tu-dominio.com/api/telegram/webhook" className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Webhook secret</label>
+                            <Input value={telegramForm.webhookSecret} onChange={e => setTelegramForm({ ...telegramForm, webhookSecret: e.target.value })} placeholder="token-secreto-opcional" className="text-sm" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">User IDs autorizados</label>
+                            <Textarea value={telegramForm.allowedUserIds} onChange={e => setTelegramForm({ ...telegramForm, allowedUserIds: e.target.value })} rows={3} placeholder={'Uno por linea o separado por comas\n123456789'} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Chat IDs autorizados</label>
+                            <Textarea value={telegramForm.allowedChatIds} onChange={e => setTelegramForm({ ...telegramForm, allowedChatIds: e.target.value })} rows={3} placeholder={'Opcional\n-1001234567890'} className="text-sm" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Categoria por defecto</label>
+                            <Input value={telegramForm.defaultProjectCategory} onChange={e => setTelegramForm({ ...telegramForm, defaultProjectCategory: e.target.value })} className="text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Estado por defecto</label>
+                            <Input value={telegramForm.defaultProjectStatus} onChange={e => setTelegramForm({ ...telegramForm, defaultProjectStatus: e.target.value })} className="text-sm" />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                            <input type="checkbox" checked={telegramForm.autoCreateReviews} onChange={e => setTelegramForm({ ...telegramForm, autoCreateReviews: e.target.checked })} className="h-4 w-4 rounded border-zinc-300" />
+                            Crear solicitud pendiente por cada envio
+                          </label>
+                          <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                            <input type="checkbox" checked={telegramForm.autoApproveKnownUsers} onChange={e => setTelegramForm({ ...telegramForm, autoApproveKnownUsers: e.target.checked })} className="h-4 w-4 rounded border-zinc-300" />
+                            Autoaprobar usuarios conocidos
+                          </label>
+                        </div>
+
+                        <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
+                          Endpoint esperado: <span className="font-mono">/api/telegram/webhook</span>. Para máxima calidad de imagen, envía el archivo como documento. Las publicaciones llegan al tab <span className="font-medium">Solicitudes</span>.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'logs' && (
+                    <div className="space-y-5">
+                      <div>
+                        <h2 className="text-2xl font-light text-zinc-900">Logs de automatización</h2>
+                        <p className="mt-2 text-sm text-zinc-500">Auditoría separada de webhooks, aprobaciones, rechazos y eventos automáticos.</p>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
+                        <div className="grid gap-3">
+                          {automationLogs.map(log => (
+                            <div key={log.id} className="rounded-xl border border-zinc-200 p-3">
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+                                <span className="font-medium text-zinc-700">{log.eventType}</span>
+                                <span>•</span>
+                                <span>{log.status}</span>
+                                <span>•</span>
+                                <span>{new Date(log.createdAt).toLocaleString()}</span>
+                                {log.actorId ? <><span>•</span><span>{log.actorId}</span></> : null}
+                              </div>
+                              <p className="mt-2 text-sm text-zinc-700">{log.summary}</p>
+                              {log.entityType || log.entityId ? <p className="mt-1 text-xs text-zinc-500">{[log.entityType, log.entityId].filter(Boolean).join(': ')}</p> : null}
+                            </div>
+                          ))}
+                          {automationLogs.length === 0 ? <p className="text-center text-zinc-500 py-6 text-sm">Todavía no hay eventos automáticos.</p> : null}
+                        </div>
+                      </div>
                     </div>
                   )}
 
