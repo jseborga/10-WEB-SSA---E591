@@ -399,8 +399,8 @@ const providers = [
 ]
 
 const imageProviders = [
-  { id: 'google', name: 'Google AI Studio', models: ['gemini-2.5-flash-image'], defaultModel: 'gemini-2.5-flash-image', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
-  { id: 'openrouter', name: 'OpenRouter', models: ['google/gemini-2.5-flash-image-preview', 'openai/gpt-4o-mini'], defaultModel: 'google/gemini-2.5-flash-image-preview', defaultBaseUrl: 'https://openrouter.ai/api/v1' },
+  { id: 'google', name: 'Google AI Studio', models: ['gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image'], defaultModel: 'gemini-3.1-flash-image-preview', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+  { id: 'openrouter', name: 'OpenRouter', models: ['google/gemini-3.1-flash-image-preview', 'google/gemini-2.5-flash-image-preview', 'openai/gpt-4o-mini'], defaultModel: 'google/gemini-3.1-flash-image-preview', defaultBaseUrl: 'https://openrouter.ai/api/v1' },
   { id: 'openai-compatible', name: 'OpenAI Compatible', models: ['custom-image-model'], defaultModel: '', defaultBaseUrl: '' },
 ] as const
 
@@ -611,7 +611,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm)
   const [aiForm, setAiForm] = useState({
     enabled: false, provider: 'default', apiKey: '', apiBaseUrl: '', model: '',
-    imageProvider: 'google', imageApiKey: '', imageApiBaseUrl: '', imageModel: 'gemini-2.5-flash-image', imagePrompt: '',
+    imageProvider: 'google', imageApiKey: '', imageApiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta', imageModel: 'gemini-3.1-flash-image-preview', imagePrompt: '',
     systemPrompt: '', systemPromptEn: '', systemPromptPt: '',
     welcomeMessage: '', welcomeMessageEn: '', welcomeMessagePt: '',
     fallbackMessage: '', fallbackMessageEn: '', fallbackMessagePt: '',
@@ -867,8 +867,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         model: configData.model || '',
         imageProvider: configData.imageProvider || 'google',
         imageApiKey: configData.imageApiKey || '',
-        imageApiBaseUrl: configData.imageApiBaseUrl || '',
-        imageModel: configData.imageModel || 'gemini-2.5-flash-image',
+        imageApiBaseUrl: configData.imageApiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta',
+        imageModel: configData.imageModel || 'gemini-3.1-flash-image-preview',
         imagePrompt: configData.imagePrompt || '',
         systemPrompt: configData.systemPrompt || '',
         systemPromptEn: configData.systemPromptEn || '',

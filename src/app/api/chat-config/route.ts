@@ -11,9 +11,9 @@ function getDefaultChatConfig() {
     model: '',
     imageProvider: 'google',
     imageApiKey: null,
-    imageApiBaseUrl: '',
-    imageModel: 'gemini-2.5-flash-image',
-    imagePrompt: 'Optimiza imagenes para una web corporativa premium de ingenieria y arquitectura. Prioriza composicion limpia, luz equilibrada y versiones desktop/mobile listas para publicacion.',
+    imageApiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    imageModel: 'gemini-3.1-flash-image-preview',
+    imagePrompt: 'Retoque editorial profesional para web de ingenieria y arquitectura. Conserva la composicion, materiales, geometria, perspectiva y color real de la imagen original. Mejora nitidez, rango dinamico, balance de blancos, contraste local y limpieza visual. No agregues ni elimines elementos, no cambies la arquitectura ni el contexto y no alteres el diseno salvo que se indique explicitamente.',
     systemPrompt: `Eres el asistente virtual de SSA Ingenieria, una empresa dedicada a construccion, diseno, supervision, asesoria tecnica especializada, software a medida y ERP para construccion.
 
 Tu trabajo es responder con claridad, de forma profesional y breve.
