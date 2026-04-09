@@ -68,6 +68,12 @@ export async function POST(request: Request) {
       year: typeof body.year === 'string' ? body.year.trim() : '',
       area: typeof body.area === 'string' ? body.area.trim() : '',
       client: typeof body.client === 'string' ? body.client.trim() : '',
+      referenceUrl: typeof body.referenceUrl === 'string' ? body.referenceUrl.trim() : '',
+      hasDesktopImage: Boolean(body.hasDesktopImage),
+      hasMobileImage: Boolean(body.hasMobileImage),
+      galleryCount: typeof body.galleryCount === 'number' ? body.galleryCount : 0,
+      galleryMobileCount: typeof body.galleryMobileCount === 'number' ? body.galleryMobileCount : 0,
+      hasVideo: Boolean(body.hasVideo),
       status: typeof body.status === 'string' ? body.status.trim() : '',
     }
 
@@ -78,6 +84,7 @@ export async function POST(request: Request) {
       'Usa español neutro, tono profesional, concreto y elegante.',
       'No inventes datos tecnicos no provistos.',
       'Si falta informacion, mejora lo existente sin rellenar detalles falsos.',
+      'Si el material visual parece escaso, refuerza el texto sin prometer elementos no entregados.',
       '',
       'Formato JSON exacto:',
       '{',

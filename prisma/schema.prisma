@@ -32,6 +32,11 @@ model Project {
   galleryMobile     String?
   videoUrl          String?
   client            String?
+  referenceUrl      String?
+  instagramUrl      String?
+  facebookUrl       String?
+  linkedinUrl       String?
+  youtubeUrl        String?
   status            String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

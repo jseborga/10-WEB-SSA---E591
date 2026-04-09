@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight, Link2, Instagram, Facebook, Linkedin, Youtube } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
 
 interface Project {
@@ -27,6 +27,11 @@ interface Project {
   galleryMobile?: string | null
   videoUrl?: string | null
   client?: string | null
+  referenceUrl?: string | null
+  instagramUrl?: string | null
+  facebookUrl?: string | null
+  linkedinUrl?: string | null
+  youtubeUrl?: string | null
   status?: string | null
 }
 
@@ -99,6 +104,17 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   }, [allImages.length])
 
   const getCategoryLabel = () => categoryLabels[language]?.[project.category] || project.category
+  const projectLinks = useMemo(
+    () =>
+      [
+        { key: 'reference', label: 'Referencia', href: project.referenceUrl || '', icon: Link2 },
+        { key: 'instagram', label: 'Instagram', href: project.instagramUrl || '', icon: Instagram },
+        { key: 'facebook', label: 'Facebook', href: project.facebookUrl || '', icon: Facebook },
+        { key: 'linkedin', label: 'LinkedIn', href: project.linkedinUrl || '', icon: Linkedin },
+        { key: 'youtube', label: 'YouTube', href: project.youtubeUrl || '', icon: Youtube },
+      ].filter((item) => item.href.trim()),
+    [project.facebookUrl, project.instagramUrl, project.linkedinUrl, project.referenceUrl, project.youtubeUrl],
+  )
 
   return (
     <motion.div
@@ -236,6 +252,30 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                   </div>
                 )}
               </div>
+
+              {projectLinks.length > 0 && (
+                <div className="border-t border-zinc-800 pt-6">
+                  <p className="text-xs uppercase tracking-wider text-zinc-500 mb-3">Referencias y redes</p>
+                  <div className="flex flex-wrap gap-2">
+                    {projectLinks.map((item) => {
+                      const Icon = item.icon
+
+                      return (
+                        <a
+                          key={item.key}
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          {item.label}
+                        </a>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Similar projects */}

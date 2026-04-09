@@ -19,6 +19,11 @@ export interface PublicProject {
   galleryMobile?: string | null
   videoUrl?: string | null
   client?: string | null
+  referenceUrl?: string | null
+  instagramUrl?: string | null
+  facebookUrl?: string | null
+  linkedinUrl?: string | null
+  youtubeUrl?: string | null
   status?: string | null
   showOnHomepage?: boolean
   published?: boolean

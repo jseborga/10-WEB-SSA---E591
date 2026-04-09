@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3 } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -28,6 +28,11 @@ interface Project {
   galleryMobile?: string | null
   videoUrl?: string | null
   client?: string | null
+  referenceUrl?: string | null
+  instagramUrl?: string | null
+  facebookUrl?: string | null
+  linkedinUrl?: string | null
+  youtubeUrl?: string | null
   status?: string | null
   featured?: boolean
   showOnHomepage?: boolean
@@ -252,6 +257,11 @@ type ProjectFormState = {
   galleryMobile: string
   videoUrl: string
   client: string
+  referenceUrl: string
+  instagramUrl: string
+  facebookUrl: string
+  linkedinUrl: string
+  youtubeUrl: string
   status: string
   featured: boolean
   showOnHomepage: boolean
@@ -327,6 +337,11 @@ const emptyProjectForm: ProjectFormState = {
   galleryMobile: '',
   videoUrl: '',
   client: '',
+  referenceUrl: '',
+  instagramUrl: '',
+  facebookUrl: '',
+  linkedinUrl: '',
+  youtubeUrl: '',
   status: 'completed',
   featured: false,
   showOnHomepage: false,
@@ -689,6 +704,47 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     [heroPreviewImage, siteForm.heroImagesMobile],
   )
   const heroPreviewStyles = useMemo(() => getHeroPreviewStyles(siteForm), [siteForm])
+  const projectMediaSummary = useMemo(
+    () => ({
+      galleryCount: parseUrlList(projectForm.gallery).length,
+      galleryMobileCount: parseUrlList(projectForm.galleryMobile).length,
+      hasVideo: Boolean(projectForm.videoUrl.trim()),
+      hasDesktop: Boolean(projectForm.mainImage.trim()),
+      hasMobile: Boolean(projectForm.mainImageMobile.trim()),
+    }),
+    [projectForm.gallery, projectForm.galleryMobile, projectForm.mainImage, projectForm.mainImageMobile, projectForm.videoUrl],
+  )
+  const projectPublishValidation = useMemo(() => {
+    const blockers: string[] = []
+    const warnings: string[] = []
+
+    if (!projectForm.title.trim()) blockers.push('Falta un título del proyecto.')
+    if (!projectForm.category.trim()) blockers.push('Falta la categoría principal.')
+    if (!projectForm.description.trim()) blockers.push('Falta una descripción corta.')
+    if (!projectForm.fullDescription.trim()) warnings.push('Conviene completar una descripción más amplia para la ficha.')
+    if (!projectForm.mainImage.trim()) blockers.push('Falta una imagen principal desktop.')
+    if (!projectForm.mainImageMobile.trim()) warnings.push('No hay imagen principal específica para mobile.')
+    if (!projectMediaSummary.galleryCount && !projectForm.videoUrl.trim()) warnings.push('Conviene añadir galería o video para enriquecer la presentación.')
+    if (!projectForm.location.trim()) warnings.push('La ubicación mejora la lectura comercial del proyecto.')
+    if (!projectForm.client.trim()) warnings.push('Agregar cliente ayuda a contextualizar la obra.')
+
+    return {
+      blockers,
+      warnings,
+      ready: blockers.length === 0,
+    }
+  }, [projectForm, projectMediaSummary.galleryCount])
+  const projectReferenceLinks = useMemo(
+    () =>
+      [
+        { key: 'reference', label: 'Referencia', url: projectForm.referenceUrl, icon: Link2 },
+        { key: 'instagram', label: 'Instagram', url: projectForm.instagramUrl, icon: Instagram },
+        { key: 'facebook', label: 'Facebook', url: projectForm.facebookUrl, icon: Facebook },
+        { key: 'linkedin', label: 'LinkedIn', url: projectForm.linkedinUrl, icon: Linkedin },
+        { key: 'youtube', label: 'YouTube', url: projectForm.youtubeUrl, icon: Youtube },
+      ].filter((item) => item.url.trim()),
+    [projectForm.facebookUrl, projectForm.instagramUrl, projectForm.linkedinUrl, projectForm.referenceUrl, projectForm.youtubeUrl],
+  )
   const pendingReviews = useMemo(() => reviews.filter((review) => review.status === 'pending'), [reviews])
   const leadSummary = useMemo(() => {
     const dueToday = chatLeads.filter((lead) => isLeadFollowUpDue(lead.nextFollowUpAt) && !['won', 'lost', 'archived'].includes(lead.leadStatus)).length
@@ -1243,6 +1299,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       const url = editingProject ? `/api/projects/${editingProject.id}` : '/api/projects'
       const method = editingProject ? 'PUT' : 'POST'
       const published = publishOverride ?? projectForm.published
+
+      if (published && !projectPublishValidation.ready) {
+        toast.error(projectPublishValidation.blockers[0] || 'Completa los campos mínimos antes de publicar')
+        return
+      }
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -1260,6 +1322,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           galleryMobile: parseGalleryUrls(projectForm.galleryMobile),
           videoUrl: projectForm.videoUrl,
           client: projectForm.client,
+          referenceUrl: projectForm.referenceUrl,
+          instagramUrl: projectForm.instagramUrl,
+          facebookUrl: projectForm.facebookUrl,
+          linkedinUrl: projectForm.linkedinUrl,
+          youtubeUrl: projectForm.youtubeUrl,
           status: projectForm.status,
           featured: projectForm.featured,
           showOnHomepage: projectForm.showOnHomepage,
@@ -1274,6 +1341,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         )
         setShowProjectDialog(false); setEditingProject(null)
         setProjectForm(emptyProjectForm)
+        setProjectImageVariants(null)
         void loadAdminData()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -1298,6 +1366,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           year: projectForm.year,
           area: projectForm.area,
           client: projectForm.client,
+          referenceUrl: projectForm.referenceUrl,
+          hasDesktopImage: Boolean(projectForm.mainImage.trim()),
+          hasMobileImage: Boolean(projectForm.mainImageMobile.trim()),
+          galleryCount: parseUrlList(projectForm.gallery).length,
+          galleryMobileCount: parseUrlList(projectForm.galleryMobile).length,
+          hasVideo: Boolean(projectForm.videoUrl.trim()),
           status: projectForm.status,
         }),
       })
@@ -1526,6 +1600,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       })(),
       videoUrl: project.videoUrl || '',
       client: project.client || '',
+      referenceUrl: project.referenceUrl || '',
+      instagramUrl: project.instagramUrl || '',
+      facebookUrl: project.facebookUrl || '',
+      linkedinUrl: project.linkedinUrl || '',
+      youtubeUrl: project.youtubeUrl || '',
       status: project.status || 'completed',
       featured: Boolean(project.featured),
       showOnHomepage: Boolean(project.showOnHomepage),
@@ -2007,6 +2086,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         gallery: imageUrls.slice(1).join('\n'),
         videoUrl,
         client: typeof payload.client === 'string' ? payload.client : '',
+        referenceUrl: typeof payload.referenceUrl === 'string' ? payload.referenceUrl : '',
+        instagramUrl: typeof payload.instagramUrl === 'string' ? payload.instagramUrl : '',
+        facebookUrl: typeof payload.facebookUrl === 'string' ? payload.facebookUrl : '',
+        linkedinUrl: typeof payload.linkedinUrl === 'string' ? payload.linkedinUrl : '',
+        youtubeUrl: typeof payload.youtubeUrl === 'string' ? payload.youtubeUrl : '',
         showOnHomepage: Boolean(payload.showOnHomepage),
         published: Boolean(payload.publishNow),
       })
@@ -2042,6 +2126,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         galleryMobile: parseUrlList(project.galleryMobile).join('\n'),
         videoUrl: project.videoUrl || '',
         client: project.client || '',
+        referenceUrl: project.referenceUrl || '',
+        instagramUrl: project.instagramUrl || '',
+        facebookUrl: project.facebookUrl || '',
+        linkedinUrl: project.linkedinUrl || '',
+        youtubeUrl: project.youtubeUrl || '',
         status: project.status || '',
         featured: Boolean(project.featured),
         showOnHomepage: Boolean(project.showOnHomepage),
@@ -2315,8 +2404,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   {/* Projects */}
                   {activeTab === 'projects' && (
                     <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h2 className="text-base font-light">{t.admin.projects} ({projects.length})</h2>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h2 className="text-2xl font-light text-zinc-900">{t.admin.projects}</h2>
+                          <p className="mt-1 text-sm text-zinc-500">Editor asistido para textos, medios y publicación. Mantén cada proyecto listo para desktop, mobile y ficha pública.</p>
+                        </div>
                         <Button
                           onClick={() => {
                             setEditingProject(null)
@@ -2334,20 +2426,38 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       </div>
                       <div className="grid gap-3">
                         {projects.map(p => (
-                          <div key={p.id} className="border rounded-lg p-3 sm:p-4 hover:border-zinc-300">
-                            <div className="flex justify-between">
-                              <div className="flex-1 min-w-0">
+                          <div key={p.id} className="overflow-hidden rounded-2xl border border-zinc-200 bg-white hover:border-zinc-300">
+                            <div className="grid gap-4 p-4 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-start">
+                              <div className="overflow-hidden rounded-xl bg-zinc-100">
+                                <MediaPreviewGrid
+                                  items={p.mainImage ? [{ url: p.mainImage, label: 'Portada' }] : []}
+                                  emptyLabel="Sin imagen"
+                                />
+                              </div>
+                              <div className="min-w-0">
                                 <div className="flex items-center flex-wrap gap-2">
                                   <h3 className="font-medium text-sm truncate">{p.title}</h3>
                                   <span className={`text-xs px-2 py-0.5 rounded ${p.published ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                                     {p.published ? t.admin.published : t.admin.draft}
                                   </span>
+                                  {p.featured ? <span className="rounded bg-violet-100 px-2 py-0.5 text-xs text-violet-700">Destacado</span> : null}
+                                  {p.showOnHomepage ? <span className="rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-700">Portada</span> : null}
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
                                   <span>{formatCategoryLabel(p.category)}</span>
                                   {p.location && <><span>•</span><span>{p.location}</span></>}
                                   {p.year && <><span>•</span><span>{p.year}</span></>}
                                   {p.videoUrl && <><span>•</span><span>Video</span></>}
+                                </div>
+                                <p className="mt-3 line-clamp-2 text-sm text-zinc-600">{p.description || p.fullDescription || 'Sin descripción editorial todavía.'}</p>
+                                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+                                  <span>{p.mainImage ? 'Desktop lista' : 'Sin desktop'}</span>
+                                  <span>•</span>
+                                  <span>{p.mainImageMobile ? 'Mobile lista' : 'Sin mobile'}</span>
+                                  <span>•</span>
+                                  <span>{parseUrlList(p.gallery).length} galería</span>
+                                  <span>•</span>
+                                  <span>{p.client || 'Sin cliente'}</span>
                                 </div>
                               </div>
                               <div className="flex gap-1 ml-2">
@@ -4258,33 +4368,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
       {/* Project Dialog */}
       <Dialog open={showProjectDialog} onOpenChange={setShowProjectDialog}>
-        <DialogContent className="max-w-md sm:max-w-2xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader><DialogTitle>{editingProject ? t.admin.editProject : t.admin.newProject}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
             <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-sky-950">Asistencia con IA para paginas</p>
-                  <p className="mt-1 text-xs text-sky-800">
-                    Mejora el titulo, el contenido y los campos SEO de la pagina usando el proveedor configurado en admin.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleAssistPublicationWithAi()}
-                  disabled={publicationAiLoading}
-                  className="border-sky-200 bg-white text-sky-900 hover:bg-sky-100"
-                >
-                  {publicationAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}
-                  Asistir con IA
-                </Button>
-              </div>
-            </div>
-            <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium text-sky-950">Asistencia con IA</p>
+                  <p className="text-sm font-medium text-sky-950">Asistencia editorial con IA</p>
                   <p className="mt-1 text-xs text-sky-800">
                     Usa los datos actuales del proyecto para sugerir mejor titulo, descripcion corta, descripcion completa y categoria.
                   </p>
@@ -4300,6 +4390,64 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   Asistir con IA
                 </Button>
               </div>
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-zinc-950">Panel editorial del proyecto</p>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    Controla texto, medios, referencias y salida editorial antes de publicar.
+                  </p>
+                </div>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${projectPublishValidation.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {projectPublishValidation.ready ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                  {projectPublishValidation.ready ? 'Listo para publicar' : 'Faltan minimos'}
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Desktop</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{projectMediaSummary.hasDesktop ? 'Portada lista' : 'Sin portada'}</p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Mobile</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{projectMediaSummary.hasMobile ? 'Variante lista' : 'Sin variante'}</p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Galeria</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{projectMediaSummary.galleryCount} desktop / {projectMediaSummary.galleryMobileCount} mobile</p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Video</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{projectMediaSummary.hasVideo ? 'Incluido' : 'No incluido'}</p>
+                </div>
+              </div>
+              {projectPublishValidation.blockers.length > 0 ? (
+                <div className="space-y-2">
+                  {projectPublishValidation.blockers.map((blocker) => (
+                    <div key={blocker} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      {blocker}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                  La ficha cumple los minimos para publicar.
+                </div>
+              )}
+              {projectPublishValidation.warnings.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {projectPublishValidation.warnings.map((warning) => (
+                    <div key={warning} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700">
+                      {warning}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
+              <Sparkles className="h-4 w-4 text-sky-700" />
+              Ficha editorial
             </div>
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Título *</label>
@@ -4376,6 +4524,59 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 </div>
               ) : null}
             </div>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+              <div>
+                <p className="text-sm font-medium text-zinc-900">Referencias y difusion</p>
+                <p className="mt-1 text-xs text-zinc-500">Añade links de respaldo, publicacion externa o redes relacionadas al proyecto.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-zinc-700 mb-1 block">Link de referencia</label>
+                  <Input value={projectForm.referenceUrl} onChange={e => setProjectForm({ ...projectForm, referenceUrl: e.target.value })} placeholder="https://..." className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-700 mb-1 block">Instagram</label>
+                  <Input value={projectForm.instagramUrl} onChange={e => setProjectForm({ ...projectForm, instagramUrl: e.target.value })} placeholder="https://instagram.com/..." className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-700 mb-1 block">Facebook</label>
+                  <Input value={projectForm.facebookUrl} onChange={e => setProjectForm({ ...projectForm, facebookUrl: e.target.value })} placeholder="https://facebook.com/..." className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-700 mb-1 block">LinkedIn</label>
+                  <Input value={projectForm.linkedinUrl} onChange={e => setProjectForm({ ...projectForm, linkedinUrl: e.target.value })} placeholder="https://linkedin.com/..." className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-700 mb-1 block">YouTube o video externo</label>
+                  <Input value={projectForm.youtubeUrl} onChange={e => setProjectForm({ ...projectForm, youtubeUrl: e.target.value })} placeholder="https://youtube.com/..." className="text-sm" />
+                </div>
+              </div>
+              {projectReferenceLinks.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {projectReferenceLinks.map((item) => {
+                    const Icon = item.icon
+
+                    return (
+                      <div key={item.key} className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-zinc-700">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-zinc-800">{item.label}</p>
+                          <p className="truncate text-[11px] text-zinc-500">{item.url}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-500">Aun no hay links asociados a este proyecto.</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
+              <ImageIcon className="h-4 w-4 text-sky-700" />
+              Medios y formatos
+            </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Imagen principal</label>
@@ -4406,6 +4607,19 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 items={projectForm.mainImageMobile ? [{ url: projectForm.mainImageMobile, label: 'Imagen principal mobile' }] : []}
                 emptyLabel="Sin imagen mobile especifica."
                 onRemove={() => setProjectForm((current) => ({ ...current, mainImageMobile: '' }))}
+              />
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-900">Vista previa de portada</p>
+                <p className="mt-1 text-xs text-zinc-500">Comprueba rapidamente la dupla desktop/mobile antes de generar variantes o publicar.</p>
+              </div>
+              <MediaPreviewGrid
+                items={[
+                  ...(projectForm.mainImage ? [{ url: projectForm.mainImage, label: 'Desktop' }] : []),
+                  ...(projectForm.mainImageMobile ? [{ url: projectForm.mainImageMobile, label: 'Mobile' }] : []),
+                ]}
+                emptyLabel="Sube al menos una imagen principal para activar esta vista."
               />
             </div>
             <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-4">
@@ -4528,23 +4742,32 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 onRemove={() => setProjectForm((current) => ({ ...current, videoUrl: '' }))}
               />
             </div>
-            <label className="flex items-center gap-2 text-sm text-zinc-700">
-              <input type="checkbox" checked={projectForm.featured} onChange={e => setProjectForm({ ...projectForm, featured: e.target.checked })} />
-              Mostrar como destacado
-            </label>
-            <label className="flex items-center gap-2 text-sm text-zinc-700">
-              <input type="checkbox" checked={projectForm.showOnHomepage} onChange={e => setProjectForm({ ...projectForm, showOnHomepage: e.target.checked })} />
-              Mostrar imagen en la portada principal
-            </label>
-            <div className="text-xs text-zinc-500">
-              Estado de publicacion actual: <span className="font-medium text-zinc-700">{projectForm.published ? 'Publicado' : 'Borrador'}</span>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-900">Salida y visibilidad</p>
+                <p className="mt-1 text-xs text-zinc-500">Decide si esta ficha se usa como destacado o como material para portada.</p>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-zinc-700">
+                <input type="checkbox" checked={projectForm.featured} onChange={e => setProjectForm({ ...projectForm, featured: e.target.checked })} />
+                Mostrar como destacado
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-700">
+                <input type="checkbox" checked={projectForm.showOnHomepage} onChange={e => setProjectForm({ ...projectForm, showOnHomepage: e.target.checked })} />
+                Mostrar imagen en la portada principal
+              </label>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                Estado actual: <span className="font-medium text-zinc-800">{projectForm.published ? 'Publicado' : 'Borrador'}</span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-3 text-xs text-zinc-500">
+              Consejo editorial: usa al menos una portada limpia, una variante mobile y una galeria breve que explique el alcance del proyecto.
             </div>
             <p className="text-xs text-zinc-500">Puedes pegar URLs externas o subir archivos. Las subidas quedan guardadas en el volumen del servidor.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowProjectDialog(false)} className="text-sm">{t.admin.cancel}</Button>
             <Button onClick={() => void handleSaveProject(false)} disabled={!projectForm.title || loading || Boolean(uploadingField)} variant="outline" className="text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar borrador'}</Button>
-            <Button onClick={() => void handleSaveProject(true)} disabled={!projectForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar y publicar'}</Button>
+            <Button onClick={() => void handleSaveProject(true)} disabled={!projectForm.title || loading || Boolean(uploadingField) || !projectPublishValidation.ready} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Validar y publicar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

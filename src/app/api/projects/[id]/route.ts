@@ -27,6 +27,15 @@ function normalizeYear(year: unknown) {
   return null
 }
 
+function normalizeOptionalString(value: unknown) {
+  if (typeof value === 'string') {
+    const normalized = value.trim()
+    return normalized.length > 0 ? normalized : null
+  }
+
+  return null
+}
+
 // GET - Obtener proyecto por ID
 export async function GET(
   request: Request,
@@ -92,6 +101,11 @@ export async function PUT(
       galleryMobile,
       videoUrl,
       client,
+      referenceUrl,
+      instagramUrl,
+      facebookUrl,
+      linkedinUrl,
+      youtubeUrl,
       status,
       published,
     } = body
@@ -112,9 +126,14 @@ export async function PUT(
         mainImageMobile: mainImageMobile || null,
         gallery: normalizeGallery(gallery),
         galleryMobile: normalizeGallery(galleryMobile),
-        videoUrl: videoUrl || null,
-        client: client || null,
-        status: status || null,
+        videoUrl: normalizeOptionalString(videoUrl),
+        client: normalizeOptionalString(client),
+        referenceUrl: normalizeOptionalString(referenceUrl),
+        instagramUrl: normalizeOptionalString(instagramUrl),
+        facebookUrl: normalizeOptionalString(facebookUrl),
+        linkedinUrl: normalizeOptionalString(linkedinUrl),
+        youtubeUrl: normalizeOptionalString(youtubeUrl),
+        status: normalizeOptionalString(status),
         published: Boolean(published),
         publishedAt: published ? new Date() : null,
       },
