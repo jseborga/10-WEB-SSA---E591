@@ -62,6 +62,10 @@ interface ChatLead {
   name: string | null
   email: string | null
   phone: string | null
+  telegramHandle: string | null
+  preferredContactChannel: string | null
+  contactConsent: boolean
+  contactConsentAt: string | null
   serviceType: string | null
   projectType: string | null
   projectLocation: string | null
@@ -1346,6 +1350,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
           name: lead.name,
           email: lead.email,
           phone: lead.phone,
+          telegramHandle: lead.telegramHandle,
+          preferredContactChannel: lead.preferredContactChannel,
+          contactConsent: lead.contactConsent,
+          contactConsentAt: lead.contactConsentAt,
           serviceType: lead.serviceType,
           projectType: lead.projectType,
           projectLocation: lead.projectLocation,
@@ -2240,12 +2248,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                                       <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusMeta.tone}`}>{statusMeta.label}</span>
                                       <span className={`rounded-full px-2 py-0.5 text-[11px] ${priorityMeta.tone}`}>{priorityMeta.label}</span>
                                       {lead.qualified ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">Calificado</span> : null}
+                                      {lead.contactConsent ? <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] text-cyan-700">Autorizo contacto</span> : null}
                                       {lead.needsHuman ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">Requiere humano</span> : null}
                                       {lead.telegramNotified ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-700">Telegram enviado</span> : null}
                                     </div>
                                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
                                       {lead.email ? <span>{lead.email}</span> : <span>Sin correo</span>}
                                       {lead.phone ? <span>{lead.phone}</span> : <span>Sin telefono</span>}
+                                      {lead.telegramHandle ? <span>{lead.telegramHandle}</span> : <span>Sin Telegram</span>}
+                                      {lead.preferredContactChannel ? <span>Prefiere: {lead.preferredContactChannel}</span> : <span>Canal no definido</span>}
                                       <span>{lead.source}</span>
                                       <span>Sesion: {lead.sessionId}</span>
                                     </div>
@@ -2284,6 +2295,18 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
 
                                 <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
                                   <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Correo</label>
+                                    <Input value={lead.email || ''} onChange={(e) => updateLeadLocally(lead.id, { email: e.target.value })} placeholder="cliente@correo.com" className="text-sm" />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Telefono / WhatsApp</label>
+                                    <Input value={lead.phone || ''} onChange={(e) => updateLeadLocally(lead.id, { phone: e.target.value })} placeholder="+591 ..." className="text-sm" />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Telegram</label>
+                                    <Input value={lead.telegramHandle || ''} onChange={(e) => updateLeadLocally(lead.id, { telegramHandle: e.target.value })} placeholder="@usuario" className="text-sm" />
+                                  </div>
+                                  <div>
                                     <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Estado</label>
                                     <select
                                       value={lead.leadStatus}
@@ -2308,6 +2331,20 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                                     </select>
                                   </div>
                                   <div>
+                                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Canal preferido</label>
+                                    <select
+                                      value={lead.preferredContactChannel || ''}
+                                      onChange={(e) => updateLeadLocally(lead.id, { preferredContactChannel: e.target.value || null })}
+                                      className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                                    >
+                                      <option value="">Sin definir</option>
+                                      <option value="whatsapp">WhatsApp</option>
+                                      <option value="phone">Telefono</option>
+                                      <option value="email">Correo</option>
+                                      <option value="telegram">Telegram</option>
+                                    </select>
+                                  </div>
+                                  <div>
                                     <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Responsable</label>
                                     <Input value={lead.ownerName || ''} onChange={(e) => updateLeadLocally(lead.id, { ownerName: e.target.value })} placeholder="Ej. Ventas / Gerencia" className="text-sm" />
                                   </div>
@@ -2318,6 +2355,22 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false }: AdminP
                                   <div>
                                     <label className="mb-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Proximo contacto</label>
                                     <Input type="datetime-local" value={formatDateTimeLocalValue(lead.nextFollowUpAt)} onChange={(e) => updateLeadLocally(lead.id, { nextFollowUpAt: e.target.value ? new Date(e.target.value).toISOString() : null })} className="text-sm" />
+                                  </div>
+                                  <div className="xl:col-span-3">
+                                    <label className="flex items-center gap-2 text-sm text-zinc-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={lead.contactConsent}
+                                        onChange={(e) =>
+                                          updateLeadLocally(lead.id, {
+                                            contactConsent: e.target.checked,
+                                            contactConsentAt: e.target.checked ? new Date().toISOString() : null,
+                                          })
+                                        }
+                                      />
+                                      El cliente autorizo contacto posterior por el canal indicado
+                                    </label>
+                                    {lead.contactConsentAt ? <p className="mt-1 text-xs text-zinc-500">Consentimiento registrado: {new Date(lead.contactConsentAt).toLocaleString()}</p> : null}
                                   </div>
                                 </div>
 

@@ -33,6 +33,9 @@ export async function notifyTelegramHumanHandoff(input: {
   visitorName: string
   visitorEmail?: string | null
   visitorPhone?: string | null
+  visitorTelegram?: string | null
+  preferredContactChannel?: string | null
+  contactConsent?: boolean
   serviceType?: string | null
   projectLocation?: string | null
   projectIdea?: string | null
@@ -63,6 +66,9 @@ export async function notifyTelegramHumanHandoff(input: {
     `Nombre: ${input.visitorName || 'Visitante'}`,
     input.visitorEmail ? `Email: ${input.visitorEmail}` : null,
     input.visitorPhone ? `Telefono: ${input.visitorPhone}` : null,
+    input.visitorTelegram ? `Telegram: ${input.visitorTelegram}` : null,
+    input.preferredContactChannel ? `Canal preferido: ${input.preferredContactChannel}` : null,
+    input.contactConsent ? 'Autorizo contacto: si' : 'Autorizo contacto: no confirmado',
     input.serviceType ? `Servicio: ${input.serviceType}` : null,
     input.projectLocation ? `Ubicacion: ${input.projectLocation}` : null,
     input.projectIdea ? `Idea del proyecto: ${input.projectIdea}` : null,

@@ -77,6 +77,10 @@ model LeadCapture {
   name             String?
   email            String?
   phone            String?
+  telegramHandle   String?
+  preferredContactChannel String?
+  contactConsent   Boolean  @default(false)
+  contactConsentAt DateTime?
   serviceType      String?
   projectType      String?
   projectLocation  String?

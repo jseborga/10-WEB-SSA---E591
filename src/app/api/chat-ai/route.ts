@@ -8,6 +8,8 @@ import {
   extractEmail,
   extractLeadDataWithAi,
   extractPhone,
+  extractTelegramHandle,
+  inferContactConsent,
 } from '@/lib/chat-sales'
 
 type HistoryMessage = {
@@ -32,6 +34,59 @@ function shouldEscalateToHuman(message: string, fallbackUsed: boolean) {
   return /(contacto|humano|asesor|agente|llamar|llamada|whatsapp|telefono|cotizacion|presupuesto|precio|reunion|visita|email|correo)/.test(
     normalized,
   )
+}
+
+function normalizePreferredContactChannel(value: string | null | undefined) {
+  const normalized = normalizeText(value)
+
+  if (!normalized) {
+    return ''
+  }
+
+  if (/(whatsapp|wsp|wa)/.test(normalized)) {
+    return 'whatsapp'
+  }
+
+  if (/(telegram|tg)/.test(normalized)) {
+    return 'telegram'
+  }
+
+  if (/(correo|email|mail)/.test(normalized)) {
+    return 'email'
+  }
+
+  if (/(telefono|teléfono|phone|llamada|call)/.test(normalized)) {
+    return 'phone'
+  }
+
+  return ''
+}
+
+function buildContactCollectionRules(language: string) {
+  if (language === 'en') {
+    return [
+      'Lead capture rules:',
+      '- Ask for phone or WhatsApp, email, and optional Telegram handle when missing.',
+      '- Ask which contact channel the visitor prefers.',
+      '- Ask for explicit permission before saying the team will contact them.',
+    ].join('\n')
+  }
+
+  if (language === 'pt') {
+    return [
+      'Regras de captacao:',
+      '- Peca telefone ou WhatsApp, email e Telegram opcional quando faltarem.',
+      '- Pergunte qual canal de contato a pessoa prefere.',
+      '- Peca autorizacao explicita antes de afirmar que a equipe vai contata-la.',
+    ].join('\n')
+  }
+
+  return [
+    'Reglas de captacion:',
+    '- Pide telefono o WhatsApp, correo y Telegram opcional cuando falten.',
+    '- Pregunta cual canal de contacto prefiere la persona.',
+    '- Pide autorizacion explicita antes de confirmar que el equipo la contactara.',
+  ].join('\n')
 }
 
 function getHandoffNote(language: string, delivered: boolean) {
@@ -114,6 +169,8 @@ export async function POST(request: Request) {
       systemPrompt,
       '',
       buildLeadSalesInstructions(language),
+      '',
+      buildContactCollectionRules(language),
       '',
       'Datos actuales de la empresa y el sitio:',
       `- Empresa: ${siteSettings?.companyName || config.companyName}`,
@@ -216,6 +273,9 @@ export async function POST(request: Request) {
       name: typeof name === 'string' ? name.trim() : '',
       email: typeof email === 'string' ? email.trim() : '',
       phone: '',
+      telegramHandle: '',
+      preferredContactChannel: '',
+      contactConsent: false,
       serviceType: '',
       projectType: '',
       projectLocation: '',
@@ -255,10 +315,23 @@ export async function POST(request: Request) {
       leadSuggestion.phone = extractPhone(`${message}\n${transcript}`) || leadSuggestion.phone
     }
 
-    const hasContactMethod = Boolean((leadSuggestion.email || '').trim() || (leadSuggestion.phone || '').trim())
+    if (!leadSuggestion.telegramHandle) {
+      leadSuggestion.telegramHandle = extractTelegramHandle(`${message}\n${transcript}`) || leadSuggestion.telegramHandle
+    }
+
+    leadSuggestion.preferredContactChannel =
+      normalizePreferredContactChannel(leadSuggestion.preferredContactChannel) ||
+      normalizePreferredContactChannel(`${message}\n${transcript}`) ||
+      (leadSuggestion.phone ? 'whatsapp' : leadSuggestion.email ? 'email' : leadSuggestion.telegramHandle ? 'telegram' : '')
+
+    if (!leadSuggestion.contactConsent) {
+      leadSuggestion.contactConsent = inferContactConsent(`${message}\n${transcript}`)
+    }
+
+    const hasContactMethod = Boolean((leadSuggestion.email || '').trim() || (leadSuggestion.phone || '').trim() || (leadSuggestion.telegramHandle || '').trim())
     const hasProjectIntent = Boolean((leadSuggestion.projectIdea || '').trim() || (leadSuggestion.serviceType || '').trim())
     const needsHuman = shouldEscalateToHuman(message, usedFallback) || Boolean(leadSuggestion.needsHuman)
-    const qualified = hasContactMethod && hasProjectIntent
+    const qualified = hasContactMethod && hasProjectIntent && Boolean(leadSuggestion.contactConsent)
 
     if (sessionId) {
       await db.leadCapture.upsert({
@@ -267,6 +340,10 @@ export async function POST(request: Request) {
           name: leadSuggestion.name || (typeof name === 'string' ? name.trim() : '') || undefined,
           email: leadSuggestion.email || (typeof email === 'string' ? email.trim() : '') || undefined,
           phone: leadSuggestion.phone || undefined,
+          telegramHandle: leadSuggestion.telegramHandle || undefined,
+          preferredContactChannel: leadSuggestion.preferredContactChannel || undefined,
+          contactConsent: leadSuggestion.contactConsent ? true : undefined,
+          contactConsentAt: leadSuggestion.contactConsent ? new Date() : undefined,
           serviceType: leadSuggestion.serviceType || undefined,
           projectType: leadSuggestion.projectType || undefined,
           projectLocation: leadSuggestion.projectLocation || undefined,
@@ -281,6 +358,10 @@ export async function POST(request: Request) {
           name: leadSuggestion.name || (typeof name === 'string' ? name.trim() : '') || null,
           email: leadSuggestion.email || (typeof email === 'string' ? email.trim() : '') || null,
           phone: leadSuggestion.phone || null,
+          telegramHandle: leadSuggestion.telegramHandle || null,
+          preferredContactChannel: leadSuggestion.preferredContactChannel || null,
+          contactConsent: Boolean(leadSuggestion.contactConsent),
+          contactConsentAt: leadSuggestion.contactConsent ? new Date() : null,
           serviceType: leadSuggestion.serviceType || null,
           projectType: leadSuggestion.projectType || null,
           projectLocation: leadSuggestion.projectLocation || null,
@@ -302,6 +383,9 @@ export async function POST(request: Request) {
           visitorName: typeof name === 'string' && name.trim() ? name.trim() : 'Visitante',
           visitorEmail: leadSuggestion.email || (typeof email === 'string' && email.trim() ? email.trim() : null),
           visitorPhone: leadSuggestion.phone || null,
+          visitorTelegram: leadSuggestion.telegramHandle || null,
+          preferredContactChannel: leadSuggestion.preferredContactChannel || null,
+          contactConsent: Boolean(leadSuggestion.contactConsent),
           serviceType: leadSuggestion.serviceType || leadSuggestion.projectType || null,
           projectLocation: leadSuggestion.projectLocation || null,
           projectIdea: leadSuggestion.projectIdea || null,
