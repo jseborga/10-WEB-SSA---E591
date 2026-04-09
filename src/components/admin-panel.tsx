@@ -23,6 +23,8 @@ interface Project {
   area: string | null
   images: string | null
   mainImage?: string | null
+  mainImageAlt?: string | null
+  mainImageCaption?: string | null
   mainImageMobile?: string | null
   gallery?: string | null
   galleryMobile?: string | null
@@ -33,6 +35,9 @@ interface Project {
   facebookUrl?: string | null
   linkedinUrl?: string | null
   youtubeUrl?: string | null
+  seoTitle?: string | null
+  seoDescription?: string | null
+  seoKeywords?: string | null
   status?: string | null
   featured?: boolean
   showOnHomepage?: boolean
@@ -252,6 +257,8 @@ type ProjectFormState = {
   year: string
   area: string
   mainImage: string
+  mainImageAlt: string
+  mainImageCaption: string
   mainImageMobile: string
   gallery: string
   galleryMobile: string
@@ -262,6 +269,9 @@ type ProjectFormState = {
   facebookUrl: string
   linkedinUrl: string
   youtubeUrl: string
+  seoTitle: string
+  seoDescription: string
+  seoKeywords: string
   status: string
   featured: boolean
   showOnHomepage: boolean
@@ -332,6 +342,8 @@ const emptyProjectForm: ProjectFormState = {
   year: '',
   area: '',
   mainImage: '',
+  mainImageAlt: '',
+  mainImageCaption: '',
   mainImageMobile: '',
   gallery: '',
   galleryMobile: '',
@@ -342,6 +354,9 @@ const emptyProjectForm: ProjectFormState = {
   facebookUrl: '',
   linkedinUrl: '',
   youtubeUrl: '',
+  seoTitle: '',
+  seoDescription: '',
+  seoKeywords: '',
   status: 'completed',
   featured: false,
   showOnHomepage: false,
@@ -489,6 +504,12 @@ function getHeroPreviewStyles(siteForm: SiteFormState) {
 
 function removeUrlFromList(value: string | null | undefined, urlToRemove: string) {
   return parseUrlList(value).filter((item) => item !== urlToRemove).join('\n')
+}
+
+function mergeUniqueUrls(currentValue: string | null | undefined, nextUrls: string[], position: 'prepend' | 'append' = 'prepend') {
+  const current = parseUrlList(currentValue)
+  const merged = position === 'prepend' ? [...nextUrls, ...current] : [...current, ...nextUrls]
+  return Array.from(new Set(merged.filter(Boolean))).join('\n')
 }
 
 function parseStoredJson<T>(value: string | null | undefined, fallback: T): T {
@@ -655,6 +676,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [salesPromptLoading, setSalesPromptLoading] = useState(false)
   const [projectImageAssistLoading, setProjectImageAssistLoading] = useState(false)
   const [publicationImageAssistLoading, setPublicationImageAssistLoading] = useState(false)
+  const [projectEditorStep, setProjectEditorStep] = useState<'overview' | 'media' | 'seo' | 'publish'>('overview')
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
   const [automationActionId, setAutomationActionId] = useState<string | null>(null)
   const [session, setSession] = useState<SessionState>({
@@ -746,6 +768,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     [projectForm.facebookUrl, projectForm.instagramUrl, projectForm.linkedinUrl, projectForm.referenceUrl, projectForm.youtubeUrl],
   )
   const pendingReviews = useMemo(() => reviews.filter((review) => review.status === 'pending'), [reviews])
+  const eligibleHomepageProjects = useMemo(
+    () =>
+      projects.filter((project) => project.showOnHomepage && (project.mainImage || project.mainImageMobile || project.videoUrl)),
+    [projects],
+  )
   const leadSummary = useMemo(() => {
     const dueToday = chatLeads.filter((lead) => isLeadFollowUpDue(lead.nextFollowUpAt) && !['won', 'lost', 'archived'].includes(lead.leadStatus)).length
 
@@ -1317,6 +1344,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           year: projectForm.year ? parseInt(projectForm.year, 10) : null,
           area: projectForm.area,
           mainImage: projectForm.mainImage,
+          mainImageAlt: projectForm.mainImageAlt,
+          mainImageCaption: projectForm.mainImageCaption,
           mainImageMobile: projectForm.mainImageMobile,
           gallery: parseGalleryUrls(projectForm.gallery),
           galleryMobile: parseGalleryUrls(projectForm.galleryMobile),
@@ -1327,6 +1356,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           facebookUrl: projectForm.facebookUrl,
           linkedinUrl: projectForm.linkedinUrl,
           youtubeUrl: projectForm.youtubeUrl,
+          seoTitle: projectForm.seoTitle,
+          seoDescription: projectForm.seoDescription,
+          seoKeywords: projectForm.seoKeywords,
           status: projectForm.status,
           featured: projectForm.featured,
           showOnHomepage: projectForm.showOnHomepage,
@@ -1367,6 +1399,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           area: projectForm.area,
           client: projectForm.client,
           referenceUrl: projectForm.referenceUrl,
+          seoTitle: projectForm.seoTitle,
+          seoDescription: projectForm.seoDescription,
+          seoKeywords: projectForm.seoKeywords,
+          mainImageAlt: projectForm.mainImageAlt,
+          mainImageCaption: projectForm.mainImageCaption,
           hasDesktopImage: Boolean(projectForm.mainImage.trim()),
           hasMobileImage: Boolean(projectForm.mainImageMobile.trim()),
           galleryCount: parseUrlList(projectForm.gallery).length,
@@ -1395,9 +1432,26 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             ? suggestion.fullDescription.trim()
             : current.fullDescription,
         category: typeof suggestion.category === 'string' && suggestion.category.trim() ? suggestion.category.trim() : current.category,
+        seoTitle: typeof suggestion.seoTitle === 'string' && suggestion.seoTitle.trim() ? suggestion.seoTitle.trim() : current.seoTitle,
+        seoDescription:
+          typeof suggestion.seoDescription === 'string' && suggestion.seoDescription.trim()
+            ? suggestion.seoDescription.trim()
+            : current.seoDescription,
+        seoKeywords:
+          typeof suggestion.seoKeywords === 'string' && suggestion.seoKeywords.trim()
+            ? suggestion.seoKeywords.trim()
+            : current.seoKeywords,
+        mainImageAlt:
+          typeof suggestion.mainImageAlt === 'string' && suggestion.mainImageAlt.trim()
+            ? suggestion.mainImageAlt.trim()
+            : current.mainImageAlt,
+        mainImageCaption:
+          typeof suggestion.mainImageCaption === 'string' && suggestion.mainImageCaption.trim()
+            ? suggestion.mainImageCaption.trim()
+            : current.mainImageCaption,
       }))
 
-      toast.success('La IA actualizó el texto del proyecto')
+      toast.success('La IA actualizo texto, SEO y metadatos de imagen del proyecto')
     } catch {
       toast.error('No se pudo generar la sugerencia con IA')
     } finally {
@@ -1564,6 +1618,17 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     } catch { toast.error('Error') }
   }
 
+  const startNewProjectEditor = () => {
+    setEditingProject(null)
+    setProjectForm({
+      ...emptyProjectForm,
+      category: projectCategoryOptions[0] || emptyProjectForm.category,
+    })
+    setProjectImageVariants(null)
+    setProjectEditorStep('overview')
+    setShowProjectDialog(true)
+  }
+
   const openEditProject = (project: Project) => {
     setEditingProject(project)
     setProjectImageVariants(null)
@@ -1586,6 +1651,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       year: project.year?.toString() || '',
       area: project.area || '',
       mainImage: project.mainImage || project.images || '',
+      mainImageAlt: project.mainImageAlt || '',
+      mainImageCaption: project.mainImageCaption || '',
       mainImageMobile: project.mainImageMobile || '',
       gallery,
       galleryMobile: (() => {
@@ -1605,12 +1672,33 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       facebookUrl: project.facebookUrl || '',
       linkedinUrl: project.linkedinUrl || '',
       youtubeUrl: project.youtubeUrl || '',
+      seoTitle: project.seoTitle || '',
+      seoDescription: project.seoDescription || '',
+      seoKeywords: project.seoKeywords || '',
       status: project.status || 'completed',
       featured: Boolean(project.featured),
       showOnHomepage: Boolean(project.showOnHomepage),
       published: Boolean(project.published),
     })
+    setProjectEditorStep('overview')
     setShowProjectDialog(true)
+  }
+
+  const handleAddProjectToHero = (project: Project, device: 'desktop' | 'mobile') => {
+    const candidateUrl = device === 'desktop' ? project.mainImage || '' : project.mainImageMobile || project.mainImage || ''
+
+    if (!candidateUrl.trim()) {
+      toast.error(device === 'desktop' ? 'Ese proyecto no tiene imagen desktop disponible' : 'Ese proyecto no tiene imagen mobile disponible')
+      return
+    }
+
+    setSiteForm((current) => ({
+      ...current,
+      heroImages: device === 'desktop' ? mergeUniqueUrls(current.heroImages, [candidateUrl]) : current.heroImages,
+      heroImagesMobile: device === 'mobile' ? mergeUniqueUrls(current.heroImagesMobile || current.heroImages, [candidateUrl]) : current.heroImagesMobile,
+    }))
+    setActiveTab('site-config')
+    toast.success(`Imagen del proyecto agregada a la portada ${device === 'desktop' ? 'desktop' : 'mobile'}`)
   }
 
   const handleSavePublication = async (published: boolean) => {
@@ -2083,6 +2171,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         location: typeof payload.location === 'string' ? payload.location : '',
         year: typeof payload.year === 'string' ? payload.year : '',
         mainImage: imageUrls[0] || '',
+        mainImageAlt: typeof payload.mainImageAlt === 'string' ? payload.mainImageAlt : '',
+        mainImageCaption: typeof payload.mainImageCaption === 'string' ? payload.mainImageCaption : '',
         gallery: imageUrls.slice(1).join('\n'),
         videoUrl,
         client: typeof payload.client === 'string' ? payload.client : '',
@@ -2091,10 +2181,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         facebookUrl: typeof payload.facebookUrl === 'string' ? payload.facebookUrl : '',
         linkedinUrl: typeof payload.linkedinUrl === 'string' ? payload.linkedinUrl : '',
         youtubeUrl: typeof payload.youtubeUrl === 'string' ? payload.youtubeUrl : '',
+        seoTitle: typeof payload.seoTitle === 'string' ? payload.seoTitle : '',
+        seoDescription: typeof payload.seoDescription === 'string' ? payload.seoDescription : '',
+        seoKeywords: typeof payload.seoKeywords === 'string' ? payload.seoKeywords : '',
         showOnHomepage: Boolean(payload.showOnHomepage),
         published: Boolean(payload.publishNow),
       })
       setProjectImageVariants(null)
+      setProjectEditorStep('overview')
       setShowProjectDialog(true)
       setActiveTab('projects')
       toast.success('Borrador de proyecto cargado para edición')
@@ -2121,6 +2215,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         year: project.year ? String(project.year) : '',
         area: project.area || '',
         mainImage: project.mainImage || '',
+        mainImageAlt: project.mainImageAlt || '',
+        mainImageCaption: project.mainImageCaption || '',
         mainImageMobile: project.mainImageMobile || '',
         gallery: parseUrlList(project.gallery).join('\n'),
         galleryMobile: parseUrlList(project.galleryMobile).join('\n'),
@@ -2131,6 +2227,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         facebookUrl: project.facebookUrl || '',
         linkedinUrl: project.linkedinUrl || '',
         youtubeUrl: project.youtubeUrl || '',
+        seoTitle: project.seoTitle || '',
+        seoDescription: project.seoDescription || '',
+        seoKeywords: project.seoKeywords || '',
         status: project.status || '',
         featured: Boolean(project.featured),
         showOnHomepage: Boolean(project.showOnHomepage),
@@ -2150,6 +2249,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       setEditingProject(project)
       setProjectForm(nextForm)
       setProjectImageVariants(null)
+      setProjectEditorStep('media')
       setShowProjectDialog(true)
       setActiveTab('projects')
       toast.success('Solicitud de material cargada en el proyecto')
@@ -2410,15 +2510,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           <p className="mt-1 text-sm text-zinc-500">Editor asistido para textos, medios y publicación. Mantén cada proyecto listo para desktop, mobile y ficha pública.</p>
                         </div>
                         <Button
-                          onClick={() => {
-                            setEditingProject(null)
-                            setProjectForm({
-                              ...emptyProjectForm,
-                              category: projectCategoryOptions[0] || emptyProjectForm.category,
-                            })
-                            setProjectImageVariants(null)
-                            setShowProjectDialog(true)
-                          }}
+                          onClick={startNewProjectEditor}
                           className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm"
                         >
                           <Plus className="w-4 h-4 mr-1" />{t.admin.newProject}
@@ -2654,6 +2746,61 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               setSiteForm((current) => ({ ...current, heroImagesMobile: removeUrlFromList(current.heroImagesMobile, item.url) }))
                             }
                           />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Portada desde proyectos</h3>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              Gestiona la portada aqui, sin mezclarla con el editor del proyecto. Solo aparecen proyectos marcados para portada.
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] text-zinc-600">
+                            {eligibleHomepageProjects.length} proyectos disponibles
+                          </span>
+                        </div>
+                        <div className="grid gap-3">
+                          {eligibleHomepageProjects.length > 0 ? (
+                            eligibleHomepageProjects.map((project) => (
+                              <div key={`hero-project-${project.id}`} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-sm font-medium text-zinc-900">{project.title}</p>
+                                      {project.featured ? <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] text-violet-700">Destacado</span> : null}
+                                    </div>
+                                    <p className="mt-1 text-xs text-zinc-500">{[project.category, project.location, project.year ? String(project.year) : ''].filter(Boolean).join(' • ')}</p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="text-xs"
+                                      disabled={!project.mainImage}
+                                      onClick={() => handleAddProjectToHero(project, 'desktop')}
+                                    >
+                                      Desktop a portada
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="text-xs"
+                                      disabled={!project.mainImageMobile && !project.mainImage}
+                                      onClick={() => handleAddProjectToHero(project, 'mobile')}
+                                    >
+                                      Mobile a portada
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-5 text-xs text-zinc-500">
+                              Marca proyectos con “Mostrar imagen en la portada principal” para poder reutilizar sus medios aqui.
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -4368,9 +4515,33 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
       {/* Project Dialog */}
       <Dialog open={showProjectDialog} onOpenChange={setShowProjectDialog}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader><DialogTitle>{editingProject ? t.admin.editProject : t.admin.newProject}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
+        <DialogContent className="h-[100dvh] w-[100vw] max-w-none rounded-none border-0 p-0">
+          <div className="flex h-full flex-col bg-white">
+            <DialogHeader className="border-b border-zinc-200 px-5 py-4 sm:px-6">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <DialogTitle>{editingProject ? t.admin.editProject : t.admin.newProject}</DialogTitle>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'overview', label: '1. Ficha' },
+                    { key: 'media', label: '2. Medios' },
+                    { key: 'seo', label: '3. SEO y enlaces' },
+                    { key: 'publish', label: '4. Publicacion' },
+                  ].map((step) => (
+                    <button
+                      key={step.key}
+                      type="button"
+                      onClick={() => setProjectEditorStep(step.key as typeof projectEditorStep)}
+                      className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                        projectEditorStep === step.key ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                      }`}
+                    >
+                      {step.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </DialogHeader>
+          <div className="space-y-4 py-4 max-h-[calc(100dvh-144px)] overflow-y-auto px-5 pr-4 sm:px-6">
             <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -4445,6 +4616,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 </div>
               ) : null}
             </div>
+            {projectEditorStep === 'overview' && (
+              <>
             <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
               <Sparkles className="h-4 w-4 text-sky-700" />
               Ficha editorial
@@ -4524,6 +4697,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 </div>
               ) : null}
             </div>
+              </>
+            )}
+            {projectEditorStep === 'seo' && (
+              <>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
               <div>
                 <p className="text-sm font-medium text-zinc-900">Referencias y difusion</p>
@@ -4573,6 +4750,44 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 <p className="text-xs text-zinc-500">Aun no hay links asociados a este proyecto.</p>
               )}
             </div>
+            <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900">SEO e imagen principal</p>
+                  <p className="mt-1 text-xs text-zinc-500">Optimiza titulo SEO, descripcion, keywords y metadatos editoriales de la imagen principal.</p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => void handleAssistProjectWithAi()} disabled={projectAiLoading} className="text-xs">
+                  {projectAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                  Completar con IA
+                </Button>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Titulo SEO</label>
+                <Input value={projectForm.seoTitle} onChange={e => setProjectForm({ ...projectForm, seoTitle: e.target.value })} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Descripcion SEO</label>
+                <Textarea value={projectForm.seoDescription} onChange={e => setProjectForm({ ...projectForm, seoDescription: e.target.value })} rows={3} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Keywords</label>
+                <Input value={projectForm.seoKeywords} onChange={e => setProjectForm({ ...projectForm, seoKeywords: e.target.value })} placeholder="ingenieria, construccion, arquitectura" className="text-sm" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-medium text-zinc-700 mb-1 block">Alt de imagen principal</label>
+                  <Textarea value={projectForm.mainImageAlt} onChange={e => setProjectForm({ ...projectForm, mainImageAlt: e.target.value })} rows={3} className="text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-700 mb-1 block">Caption editorial</label>
+                  <Textarea value={projectForm.mainImageCaption} onChange={e => setProjectForm({ ...projectForm, mainImageCaption: e.target.value })} rows={3} className="text-sm" />
+                </div>
+              </div>
+            </div>
+              </>
+            )}
+            {projectEditorStep === 'media' && (
+              <>
             <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
               <ImageIcon className="h-4 w-4 text-sky-700" />
               Medios y formatos
@@ -4742,6 +4957,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 onRemove={() => setProjectForm((current) => ({ ...current, videoUrl: '' }))}
               />
             </div>
+              </>
+            )}
+            {projectEditorStep === 'publish' && (
+              <>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div>
                 <p className="text-sm font-medium text-zinc-900">Salida y visibilidad</p>
@@ -4762,13 +4981,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-3 text-xs text-zinc-500">
               Consejo editorial: usa al menos una portada limpia, una variante mobile y una galeria breve que explique el alcance del proyecto.
             </div>
+              </>
+            )}
             <p className="text-xs text-zinc-500">Puedes pegar URLs externas o subir archivos. Las subidas quedan guardadas en el volumen del servidor.</p>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-zinc-200 px-5 py-4 sm:px-6">
             <Button variant="outline" onClick={() => setShowProjectDialog(false)} className="text-sm">{t.admin.cancel}</Button>
             <Button onClick={() => void handleSaveProject(false)} disabled={!projectForm.title || loading || Boolean(uploadingField)} variant="outline" className="text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar borrador'}</Button>
             <Button onClick={() => void handleSaveProject(true)} disabled={!projectForm.title || loading || Boolean(uploadingField) || !projectPublishValidation.ready} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Validar y publicar'}</Button>
           </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

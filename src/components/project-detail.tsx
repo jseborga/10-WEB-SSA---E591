@@ -22,6 +22,8 @@ interface Project {
   year: number | null
   area: string | null
   mainImage?: string | null
+  mainImageAlt?: string | null
+  mainImageCaption?: string | null
   mainImageMobile?: string | null
   gallery?: string | null
   galleryMobile?: string | null
@@ -139,7 +141,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
             <div className="relative aspect-[16/9] sm:aspect-[21/9] rounded-lg overflow-hidden bg-zinc-900">
               <Image
                 src={allImages[currentImageIndex]}
-                alt={getTitle()}
+                alt={project.mainImageAlt || getTitle()}
                 fill
                 className="object-cover"
                 onLoad={() => setIsLoading(false)}
@@ -170,6 +172,10 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 </>
               )}
             </div>
+
+            {project.mainImageCaption && (
+              <p className="mt-3 text-sm text-zinc-400">{project.mainImageCaption}</p>
+            )}
 
             {/* Thumbnails */}
             {allImages.length > 1 && (

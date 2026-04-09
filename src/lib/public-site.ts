@@ -14,6 +14,8 @@ export interface PublicProject {
   year: number | null
   area: string | null
   mainImage?: string | null
+  mainImageAlt?: string | null
+  mainImageCaption?: string | null
   mainImageMobile?: string | null
   gallery?: string | null
   galleryMobile?: string | null
@@ -24,6 +26,9 @@ export interface PublicProject {
   facebookUrl?: string | null
   linkedinUrl?: string | null
   youtubeUrl?: string | null
+  seoTitle?: string | null
+  seoDescription?: string | null
+  seoKeywords?: string | null
   status?: string | null
   showOnHomepage?: boolean
   published?: boolean

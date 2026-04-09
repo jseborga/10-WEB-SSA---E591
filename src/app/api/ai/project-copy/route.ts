@@ -8,6 +8,11 @@ type ProjectCopyResponse = {
   description?: string
   fullDescription?: string
   category?: string
+  seoTitle?: string
+  seoDescription?: string
+  seoKeywords?: string
+  mainImageAlt?: string
+  mainImageCaption?: string
 }
 
 function extractJsonBlock(raw: string) {
@@ -37,6 +42,11 @@ function normalizeSuggestion(data: unknown) {
     description: toValue('description'),
     fullDescription: toValue('fullDescription'),
     category: toValue('category'),
+    seoTitle: toValue('seoTitle'),
+    seoDescription: toValue('seoDescription'),
+    seoKeywords: toValue('seoKeywords'),
+    mainImageAlt: toValue('mainImageAlt'),
+    mainImageCaption: toValue('mainImageCaption'),
   }
 
   return result
@@ -69,6 +79,11 @@ export async function POST(request: Request) {
       area: typeof body.area === 'string' ? body.area.trim() : '',
       client: typeof body.client === 'string' ? body.client.trim() : '',
       referenceUrl: typeof body.referenceUrl === 'string' ? body.referenceUrl.trim() : '',
+      seoTitle: typeof body.seoTitle === 'string' ? body.seoTitle.trim() : '',
+      seoDescription: typeof body.seoDescription === 'string' ? body.seoDescription.trim() : '',
+      seoKeywords: typeof body.seoKeywords === 'string' ? body.seoKeywords.trim() : '',
+      mainImageAlt: typeof body.mainImageAlt === 'string' ? body.mainImageAlt.trim() : '',
+      mainImageCaption: typeof body.mainImageCaption === 'string' ? body.mainImageCaption.trim() : '',
       hasDesktopImage: Boolean(body.hasDesktopImage),
       hasMobileImage: Boolean(body.hasMobileImage),
       galleryCount: typeof body.galleryCount === 'number' ? body.galleryCount : 0,
@@ -91,7 +106,12 @@ export async function POST(request: Request) {
       '  "title": "Titulo mejorado",',
       '  "description": "Descripcion corta de 1 o 2 frases",',
       '  "fullDescription": "Descripcion amplia de 1 a 3 parrafos cortos",',
-      '  "category": "categoria recomendada en minusculas"',
+      '  "category": "categoria recomendada en minusculas",',
+      '  "seoTitle": "Titulo SEO breve",',
+      '  "seoDescription": "Descripcion SEO de 1 o 2 frases",',
+      '  "seoKeywords": "palabras, clave, separadas, por, coma",',
+      '  "mainImageAlt": "Texto alternativo descriptivo de la imagen principal",',
+      '  "mainImageCaption": "Caption editorial corto para la imagen principal"',
       '}',
       '',
       'Datos actuales del proyecto:',
