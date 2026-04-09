@@ -3564,7 +3564,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-4">
                         <div>
                           <h3 className="text-sm font-medium text-zinc-900">IA operativa para CRM y automatizaciones</h3>
-                          <p className="mt-1 text-xs text-zinc-500">Usa Gemini como motor barato para resúmenes, clasificación y ayuda comercial. Si falla o no hay crédito, el sistema cae al proveedor de respaldo.</p>
+                          <p className="mt-1 text-xs text-zinc-500">Usa Gemini como motor barato para resúmenes, clasificación y ayuda comercial. Si falla o no hay crédito, el sistema cae al proveedor de respaldo sin pedirte duplicar credenciales.</p>
                         </div>
                         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                           <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4">
@@ -3585,15 +3585,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                   {providers.find(p => p.id === aiForm.automationProvider)?.models.map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
                               </div>
-                              <div>
-                                <label className="text-xs font-medium text-zinc-700 mb-1 block">API Key</label>
-                                <Input type="password" value={aiForm.automationApiKey} onChange={e => setAiForm({ ...aiForm, automationApiKey: e.target.value })} className="text-sm" />
-                              </div>
-                              <div>
-                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Base URL</label>
-                                <Input value={aiForm.automationApiBaseUrl} onChange={e => setAiForm({ ...aiForm, automationApiBaseUrl: e.target.value })} className="text-sm" />
-                              </div>
                             </div>
+                            <p className="text-xs text-zinc-500">
+                              Reutiliza la API principal si eliges el mismo proveedor. Si cambias de proveedor, tomará la variable de entorno correspondiente de Easypanel si existe.
+                            </p>
                           </div>
                           <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4">
                             <div>
@@ -3613,15 +3608,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                   {providers.find(p => p.id === aiForm.automationFallbackProvider)?.models.map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
                               </div>
-                              <div>
-                                <label className="text-xs font-medium text-zinc-700 mb-1 block">API Key</label>
-                                <Input type="password" value={aiForm.automationFallbackApiKey} onChange={e => setAiForm({ ...aiForm, automationFallbackApiKey: e.target.value })} className="text-sm" />
-                              </div>
-                              <div>
-                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Base URL</label>
-                                <Input value={aiForm.automationFallbackApiBaseUrl} onChange={e => setAiForm({ ...aiForm, automationFallbackApiBaseUrl: e.target.value })} className="text-sm" />
-                              </div>
                             </div>
+                            <p className="text-xs text-zinc-500">
+                              Si el fallback es `OpenRouter`, usará tu configuración global o `OPENROUTER_API_KEY` y `OPENROUTER_BASE_URL` si ya las tienes en Easypanel.
+                            </p>
                           </div>
                         </div>
                       </div>

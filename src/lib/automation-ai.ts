@@ -54,10 +54,13 @@ function buildProviderConfig(
   },
   defaults: AutomationConfigSource,
 ): AutomationProviderConfig {
+  const targetProvider = trimValue(input.provider) || trimValue(defaults.provider) || 'google'
+  const sameAsPrimary = normalizeProvider(targetProvider) === normalizeProvider(defaults.provider)
+
   return {
-    provider: trimValue(input.provider) || trimValue(defaults.provider) || 'google',
-    apiKey: trimValue(input.apiKey) || trimValue(defaults.apiKey) || null,
-    apiBaseUrl: trimValue(input.apiBaseUrl) || trimValue(defaults.apiBaseUrl) || null,
+    provider: targetProvider,
+    apiKey: trimValue(input.apiKey) || (sameAsPrimary ? trimValue(defaults.apiKey) : '') || null,
+    apiBaseUrl: trimValue(input.apiBaseUrl) || (sameAsPrimary ? trimValue(defaults.apiBaseUrl) : '') || null,
     model: trimValue(input.model) || trimValue(defaults.model) || null,
     systemPrompt:
       trimValue(defaults.systemPrompt) ||
