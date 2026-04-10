@@ -583,6 +583,25 @@ function mergeUniqueUrls(currentValue: string | null | undefined, nextUrls: stri
   return Array.from(new Set(merged.filter(Boolean))).join('\n')
 }
 
+function replaceUrlsInValue(
+  currentValue: string | null | undefined,
+  replacements: Array<{ sourceUrl: string; url: string }>,
+) {
+  const replacementMap = new Map(
+    replacements
+      .filter((item) => item.sourceUrl.trim() && item.url.trim())
+      .map((item) => [item.sourceUrl.trim(), item.url.trim()]),
+  )
+
+  return parseUrlList(currentValue)
+    .map((item) => replacementMap.get(item) || item)
+    .join('\n')
+}
+
+function isRemoteHttpUrl(value: string | null | undefined) {
+  return /^https?:\/\//i.test((value || '').trim())
+}
+
 function parseStoredJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value?.trim()) {
     return fallback
@@ -762,6 +781,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [managementReportMeta, setManagementReportMeta] = useState<{ provider?: string | null; model?: string | null } | null>(null)
   const [managementReportLoading, setManagementReportLoading] = useState(false)
   const [projectImageAssistLoading, setProjectImageAssistLoading] = useState(false)
+  const [heroImageAssistLoading, setHeroImageAssistLoading] = useState(false)
   const [publicationImageAssistLoading, setPublicationImageAssistLoading] = useState(false)
   const [projectEditorStep, setProjectEditorStep] = useState<'overview' | 'media' | 'seo' | 'publish'>('overview')
   const [telegramView, setTelegramView] = useState<'config' | 'logs'>('config')
@@ -778,8 +798,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [adminUsername, setAdminUsername] = useState('admin')
   const [adminPassword, setAdminPassword] = useState('')
   const [projectImageTreatment, setProjectImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
+  const [heroImageTreatment, setHeroImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('editorial')
   const [publicationImageTreatment, setPublicationImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
+  const [dragLeadId, setDragLeadId] = useState<string | null>(null)
+  const [dragLeadColumn, setDragLeadColumn] = useState<string | null>(null)
   const [projectImageVariants, setProjectImageVariants] = useState<PreparedImageResult | null>(null)
+  const [heroImageVariants, setHeroImageVariants] = useState<PreparedImageResult | null>(null)
   const [publicationImageVariants, setPublicationImageVariants] = useState<PreparedImageResult | null>(null)
 
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
@@ -932,9 +956,38 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       }
     })
   }, [chatLeads, contacts, users])
-  const visibleChatLeads = useMemo(() => {
+  const sortedChatLeads = useMemo(() => {
     const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 } as const
-    return [...chatLeads]
+
+    return [...chatLeads].sort((a, b) => {
+      if (crmSort === 'priority') {
+        const priorityDelta = (priorityRank[a.priority as keyof typeof priorityRank] ?? 99) - (priorityRank[b.priority as keyof typeof priorityRank] ?? 99)
+        if (priorityDelta !== 0) {
+          return priorityDelta
+        }
+      }
+
+      if (crmSort === 'recent') {
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      }
+
+      const aDue = isLeadFollowUpDue(a.nextFollowUpAt)
+      const bDue = isLeadFollowUpDue(b.nextFollowUpAt)
+      if (aDue !== bDue) {
+        return aDue ? -1 : 1
+      }
+
+      const aNext = a.nextFollowUpAt ? new Date(a.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+      const bNext = b.nextFollowUpAt ? new Date(b.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+      if (aNext !== bNext) {
+        return aNext - bNext
+      }
+
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
+  }, [chatLeads, crmSort])
+  const visibleChatLeads = useMemo(() => {
+    return sortedChatLeads
       .filter((lead) => {
         if (leadFilter === 'all') return true
         if (leadFilter === 'attention') {
@@ -943,33 +996,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
         return lead.leadStatus === leadFilter
       })
-      .sort((a, b) => {
-        if (crmSort === 'priority') {
-          const priorityDelta = (priorityRank[a.priority as keyof typeof priorityRank] ?? 99) - (priorityRank[b.priority as keyof typeof priorityRank] ?? 99)
-          if (priorityDelta !== 0) {
-            return priorityDelta
-          }
-        }
-
-        if (crmSort === 'recent') {
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        }
-
-        const aDue = isLeadFollowUpDue(a.nextFollowUpAt)
-        const bDue = isLeadFollowUpDue(b.nextFollowUpAt)
-        if (aDue !== bDue) {
-          return aDue ? -1 : 1
-        }
-
-        const aNext = a.nextFollowUpAt ? new Date(a.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
-        const bNext = b.nextFollowUpAt ? new Date(b.nextFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
-        if (aNext !== bNext) {
-          return aNext - bNext
-        }
-
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      })
-  }, [chatLeads, crmSort, leadFilter])
+  }, [leadFilter, sortedChatLeads])
   const visibleContacts = useMemo(() => {
     const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 } as const
 
@@ -1056,13 +1083,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   }, [projects, publications, pendingReviews, contacts.length, chatLeads, chatConversations.length, siteAnalytics])
   const crmBoardColumns = useMemo(
     () => [
-      { value: 'new', label: 'Nuevos', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'new') },
-      { value: 'contacted', label: 'Contactados', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'contacted') },
-      { value: 'proposal', label: 'Cotización', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'proposal') },
-      { value: 'won', label: 'Ganados', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'won') },
-      { value: 'lost', label: 'Perdidos', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'lost') },
+      { value: 'new', label: 'Nuevos', items: sortedChatLeads.filter((lead) => lead.leadStatus === 'new') },
+      { value: 'contacted', label: 'Contactados', items: sortedChatLeads.filter((lead) => lead.leadStatus === 'contacted') },
+      { value: 'proposal', label: 'Cotización', items: sortedChatLeads.filter((lead) => lead.leadStatus === 'proposal') },
+      { value: 'won', label: 'Ganados', items: sortedChatLeads.filter((lead) => lead.leadStatus === 'won') },
+      { value: 'lost', label: 'Perdidos', items: sortedChatLeads.filter((lead) => lead.leadStatus === 'lost') },
     ],
-    [visibleChatLeads],
+    [sortedChatLeads],
   )
 
   const authCopy = useMemo(() => {
@@ -1435,6 +1462,22 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     return data.url as string
   }
 
+  const importRemoteMediaUrls = async (urls: string[]) => {
+    const response = await fetch('/api/media/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls }),
+    })
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok || !Array.isArray(data.items) || data.items.length === 0) {
+      throw new Error(data.error || 'No se pudieron guardar los archivos remotos')
+    }
+
+    return data.items as Array<{ sourceUrl: string; url: string; contentType?: string | null }>
+  }
+
   const handleProjectUpload = async (files: FileList | null, target: 'mainImage' | 'mainImageMobile' | 'gallery' | 'galleryMobile' | 'videoUrl') => {
     if (!files || files.length === 0) return
 
@@ -1544,6 +1587,156 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       toast.error(error instanceof Error ? error.message : 'No se pudo subir el archivo')
     } finally {
       setUploadingField(null)
+    }
+  }
+
+  const handleProjectRemoteImport = async (target: 'mainImage' | 'mainImageMobile' | 'gallery' | 'galleryMobile' | 'videoUrl') => {
+    const sourceValue =
+      target === 'mainImage'
+        ? projectForm.mainImage
+        : target === 'mainImageMobile'
+          ? projectForm.mainImageMobile
+          : target === 'gallery'
+            ? projectForm.gallery
+            : target === 'galleryMobile'
+              ? projectForm.galleryMobile
+              : projectForm.videoUrl
+
+    const remoteUrls = parseUrlList(sourceValue).filter(isRemoteHttpUrl)
+
+    if (remoteUrls.length === 0) {
+      toast.error('Pega primero una URL remota válida para guardarla localmente')
+      return
+    }
+
+    setUploadingField(`import-${target}`)
+
+    try {
+      const importedItems = await importRemoteMediaUrls(remoteUrls)
+
+      if (target === 'mainImage') {
+        setProjectImageVariants(null)
+      }
+
+      setProjectForm((current) => {
+        if (target === 'gallery') {
+          return {
+            ...current,
+            gallery: replaceUrlsInValue(current.gallery, importedItems),
+          }
+        }
+
+        if (target === 'galleryMobile') {
+          return {
+            ...current,
+            galleryMobile: replaceUrlsInValue(current.galleryMobile, importedItems),
+          }
+        }
+
+        if (target === 'mainImage') {
+          return {
+            ...current,
+            mainImage: importedItems[0]?.url || current.mainImage,
+          }
+        }
+
+        if (target === 'mainImageMobile') {
+          return {
+            ...current,
+            mainImageMobile: importedItems[0]?.url || current.mainImageMobile,
+          }
+        }
+
+        return {
+          ...current,
+          videoUrl: importedItems[0]?.url || current.videoUrl,
+        }
+      })
+
+      toast.success(`${importedItems.length} archivo(s) guardados en la biblioteca local`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudieron importar los medios')
+    } finally {
+      setUploadingField(null)
+    }
+  }
+
+  const handleSiteHeroRemoteImport = async (target: 'heroImages' | 'heroImagesMobile') => {
+    const sourceValue = target === 'heroImages' ? siteForm.heroImages : siteForm.heroImagesMobile
+    const remoteUrls = parseUrlList(sourceValue).filter(isRemoteHttpUrl)
+
+    if (remoteUrls.length === 0) {
+      toast.error('Pega primero una URL remota válida para guardarla localmente')
+      return
+    }
+
+    setUploadingField(`import-${target}`)
+
+    try {
+      const importedItems = await importRemoteMediaUrls(remoteUrls)
+
+      setSiteForm((current) =>
+        target === 'heroImages'
+          ? {
+              ...current,
+              heroImages: replaceUrlsInValue(current.heroImages, importedItems),
+            }
+          : {
+              ...current,
+              heroImagesMobile: replaceUrlsInValue(current.heroImagesMobile, importedItems),
+            },
+      )
+
+      if (target === 'heroImages') {
+        setHeroImageVariants(null)
+      }
+
+      toast.success(`${importedItems.length} medio(s) de portada guardados localmente`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudieron importar los medios del hero')
+    } finally {
+      setUploadingField(null)
+    }
+  }
+
+  const handlePrepareHeroImage = async () => {
+    const sourceUrl = parseUrlList(siteForm.heroImages)[0] || ''
+
+    if (!sourceUrl.trim()) {
+      toast.error('Carga primero una imagen desktop en la portada')
+      return
+    }
+
+    if (isVideoUrl(sourceUrl)) {
+      toast.error('La preparación IA del hero funciona sobre imágenes, no sobre videos')
+      return
+    }
+
+    setHeroImageAssistLoading(true)
+    try {
+      const response = await fetch('/api/ai/image-variants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceUrl,
+          target: 'hero',
+          treatment: heroImageTreatment,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data.result) {
+        toast.error(data.error || 'No se pudieron preparar las variantes para la portada')
+        return
+      }
+
+      setHeroImageVariants(data.result)
+      toast.success('Variantes desktop/mobile listas para la portada')
+    } catch {
+      toast.error('No se pudieron preparar las variantes para la portada')
+    } finally {
+      setHeroImageAssistLoading(false)
     }
   }
 
@@ -2336,6 +2529,25 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
   const handleAutoAssignContact = async (contact: Contact, notifyOwner = true) => {
     await handleSaveContact(contact, { autoAssign: true, notifyOwner })
+  }
+
+  const handleMoveLeadToStatus = async (lead: ChatLead, nextStatus: ChatLead['leadStatus']) => {
+    if (lead.leadStatus === nextStatus) {
+      setDragLeadId(null)
+      setDragLeadColumn(null)
+      return
+    }
+
+    const nextLead = {
+      ...lead,
+      leadStatus: nextStatus,
+      lastContactedAt: nextStatus === 'contacted' && !lead.lastContactedAt ? new Date().toISOString() : lead.lastContactedAt,
+    }
+
+    updateLeadLocally(lead.id, nextLead)
+    setDragLeadId(null)
+    setDragLeadColumn(null)
+    await handleSaveLead(nextLead)
   }
 
   const handleGenerateCrmSummary = async (target: 'lead' | 'contact', id: string) => {
@@ -3306,11 +3518,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
                           <div className="flex items-center justify-between gap-3">
                             <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes hero desktop</label>
-                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                            {uploadingField === 'heroImages' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                              Subir medios
-                              <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImages')} />
-                            </label>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-8 px-3 text-xs"
+                                onClick={() => void handleSiteHeroRemoteImport('heroImages')}
+                                disabled={uploadingField === 'import-heroImages' || !parseUrlList(siteForm.heroImages).some(isRemoteHttpUrl)}
+                              >
+                                {uploadingField === 'import-heroImages' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+                                Guardar URLs local
+                              </Button>
+                              <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                                {uploadingField === 'heroImages' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                Subir medios
+                                <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImages')} />
+                              </label>
+                            </div>
                           </div>
                           <Textarea
                             value={siteForm.heroImages}
@@ -3329,11 +3553,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
                           <div className="flex items-center justify-between gap-3">
                             <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes hero mobile</label>
-                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                            {uploadingField === 'heroImagesMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                              Subir medios
-                              <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImagesMobile')} />
-                            </label>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-8 px-3 text-xs"
+                                onClick={() => void handleSiteHeroRemoteImport('heroImagesMobile')}
+                                disabled={uploadingField === 'import-heroImagesMobile' || !parseUrlList(siteForm.heroImagesMobile).some(isRemoteHttpUrl)}
+                              >
+                                {uploadingField === 'import-heroImagesMobile' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+                                Guardar URLs local
+                              </Button>
+                              <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                                {uploadingField === 'heroImagesMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                Subir medios
+                                <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={e => void handleSiteHeroUpload(e.target.files, 'heroImagesMobile')} />
+                              </label>
+                            </div>
                           </div>
                           <Textarea
                             value={siteForm.heroImagesMobile}
@@ -3350,9 +3586,106 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                             }
                           />
                         </div>
-                      </div>
+                        </div>
 
-                      <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                        <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <h3 className="text-sm font-medium text-sky-950">Preparar portada con IA</h3>
+                              <p className="mt-1 text-xs text-sky-800">
+                                Toma la primera imagen desktop del hero, la mejora para una portada profesional y genera salida desktop/mobile.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void handlePrepareHeroImage()}
+                              disabled={heroImageAssistLoading || !heroPreviewImage || isVideoUrl(heroPreviewImage)}
+                              className="border-sky-200 bg-white text-sky-900 hover:bg-sky-100"
+                            >
+                              {heroImageAssistLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                              {heroImageAssistLoading ? 'Preparando...' : 'Preparar variantes'}
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(['enhanced', 'editorial', 'monochrome', 'original'] as const).map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => setHeroImageTreatment(option)}
+                                className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                                  heroImageTreatment === option
+                                    ? 'border-sky-600 bg-sky-600 text-white'
+                                    : 'border-sky-200 bg-white text-sky-900 hover:bg-sky-100'
+                                }`}
+                              >
+                                {option === 'enhanced' ? 'Mejorada' : option === 'editorial' ? 'Editorial' : option === 'monochrome' ? 'Monocromo' : 'Original'}
+                              </button>
+                            ))}
+                          </div>
+                          {heroImageVariants ? (
+                            <div className="space-y-3">
+                              <MediaPreviewGrid
+                                items={[
+                                  { url: heroImageVariants.desktop.url, label: `Hero desktop ${heroImageVariants.desktop.width}x${heroImageVariants.desktop.height}` },
+                                  { url: heroImageVariants.mobile.url, label: `Hero mobile ${heroImageVariants.mobile.width}x${heroImageVariants.mobile.height}` },
+                                ]}
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="text-xs"
+                                  onClick={() =>
+                                    setSiteForm((current) => ({
+                                      ...current,
+                                      heroImages: heroPreviewImage
+                                        ? replaceUrlsInValue(current.heroImages, [{ sourceUrl: heroPreviewImage, url: heroImageVariants.desktop.url }]) || heroImageVariants.desktop.url
+                                        : mergeUniqueUrls(current.heroImages, [heroImageVariants.desktop.url]),
+                                      heroImagesMobile: current.heroImagesMobile
+                                        ? replaceUrlsInValue(current.heroImagesMobile, [{ sourceUrl: heroPreviewMobileImage || heroPreviewImage, url: heroImageVariants.mobile.url }]) || heroImageVariants.mobile.url
+                                        : heroImageVariants.mobile.url,
+                                    }))
+                                  }
+                                >
+                                  Aplicar a portada
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="text-xs"
+                                  onClick={() =>
+                                    setSiteForm((current) => ({
+                                      ...current,
+                                      heroImages: heroPreviewImage
+                                        ? replaceUrlsInValue(current.heroImages, [{ sourceUrl: heroPreviewImage, url: heroImageVariants.desktop.url }]) || heroImageVariants.desktop.url
+                                        : mergeUniqueUrls(current.heroImages, [heroImageVariants.desktop.url]),
+                                    }))
+                                  }
+                                >
+                                  Solo desktop
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="text-xs"
+                                  onClick={() =>
+                                    setSiteForm((current) => ({
+                                      ...current,
+                                      heroImagesMobile: current.heroImagesMobile
+                                        ? replaceUrlsInValue(current.heroImagesMobile, [{ sourceUrl: heroPreviewMobileImage || heroPreviewImage, url: heroImageVariants.mobile.url }]) || heroImageVariants.mobile.url
+                                        : heroImageVariants.mobile.url,
+                                    }))
+                                  }
+                                >
+                                  Solo mobile
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <h3 className="text-sm font-medium text-zinc-900">Portada desde proyectos</h3>
@@ -3840,9 +4173,40 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           </div>
                         </div>
 
+                        <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/70 px-4 py-3 text-xs text-zinc-500">
+                          Tablero activo: arrastra un lead entre columnas para cambiar su estado sin abrir la ficha completa.
+                        </div>
+
                         <div className="grid gap-3 xl:grid-cols-5">
                           {crmBoardColumns.map((column) => (
-                            <div key={column.value} className="rounded-2xl bg-zinc-50 p-3">
+                            <div
+                              key={column.value}
+                              className={`rounded-2xl p-3 transition-colors ${
+                                dragLeadColumn === column.value ? 'bg-sky-50 ring-2 ring-sky-300' : 'bg-zinc-50'
+                              }`}
+                              onDragOver={(event) => {
+                                event.preventDefault()
+                                if (dragLeadId) {
+                                  setDragLeadColumn(column.value)
+                                }
+                              }}
+                              onDragLeave={() => {
+                                if (dragLeadColumn === column.value) {
+                                  setDragLeadColumn(null)
+                                }
+                              }}
+                              onDrop={(event) => {
+                                event.preventDefault()
+                                const leadId = dragLeadId || event.dataTransfer.getData('text/plain')
+                                const lead = chatLeads.find((item) => item.id === leadId)
+                                if (lead) {
+                                  void handleMoveLeadToStatus(lead, column.value as ChatLead['leadStatus'])
+                                } else {
+                                  setDragLeadId(null)
+                                  setDragLeadColumn(null)
+                                }
+                              }}
+                            >
                               <div className="mb-3 flex items-center justify-between gap-3">
                                 <button type="button" onClick={() => setLeadFilter(column.value as typeof leadFilter)} className="text-left text-sm font-medium text-zinc-900 hover:text-zinc-700">
                                   {column.label}
@@ -3851,7 +4215,20 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               </div>
                               <div className="space-y-3">
                                 {column.items.slice(0, 4).map((lead) => (
-                                  <div key={`board-${lead.id}`} className="rounded-xl border border-zinc-200 bg-white p-3">
+                                  <div
+                                    key={`board-${lead.id}`}
+                                    draggable
+                                    onDragStart={(event) => {
+                                      event.dataTransfer.effectAllowed = 'move'
+                                      event.dataTransfer.setData('text/plain', lead.id)
+                                      setDragLeadId(lead.id)
+                                    }}
+                                    onDragEnd={() => {
+                                      setDragLeadId(null)
+                                      setDragLeadColumn(null)
+                                    }}
+                                    className={`rounded-xl border border-zinc-200 bg-white p-3 ${dragLeadId === lead.id ? 'cursor-grabbing opacity-60' : 'cursor-grab'}`}
+                                  >
                                     <div className="flex items-start justify-between gap-3">
                                       <div className="min-w-0">
                                         <p className="truncate text-sm font-medium text-zinc-900">{lead.name || 'Lead sin nombre'}</p>
@@ -5488,11 +5865,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Imagen principal</label>
-                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                  {uploadingField === 'mainImage' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Subir imagen
-                  <input type="file" accept="image/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'mainImage')} />
-                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void handleProjectRemoteImport('mainImage')}
+                    disabled={uploadingField === 'import-mainImage' || !isRemoteHttpUrl(projectForm.mainImage)}
+                  >
+                    {uploadingField === 'import-mainImage' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+                    Guardar URL local
+                  </Button>
+                  <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                    {uploadingField === 'mainImage' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Subir imagen
+                    <input type="file" accept="image/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'mainImage')} />
+                  </label>
+                </div>
               </div>
               <Input value={projectForm.mainImage} onChange={e => setProjectForm({ ...projectForm, mainImage: e.target.value })} placeholder="/api/media/archivo.jpg o https://..." className="text-sm" />
               <MediaPreviewGrid
@@ -5504,11 +5893,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Imagen principal mobile</label>
-                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                  {uploadingField === 'mainImageMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Subir imagen
-                  <input type="file" accept="image/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'mainImageMobile')} />
-                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void handleProjectRemoteImport('mainImageMobile')}
+                    disabled={uploadingField === 'import-mainImageMobile' || !isRemoteHttpUrl(projectForm.mainImageMobile)}
+                  >
+                    {uploadingField === 'import-mainImageMobile' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+                    Guardar URL local
+                  </Button>
+                  <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                    {uploadingField === 'mainImageMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Subir imagen
+                    <input type="file" accept="image/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'mainImageMobile')} />
+                  </label>
+                </div>
               </div>
               <Input value={projectForm.mainImageMobile} onChange={e => setProjectForm({ ...projectForm, mainImageMobile: e.target.value })} placeholder="/api/media/archivo-mobile.jpg o https://..." className="text-sm" />
               <MediaPreviewGrid
@@ -5605,11 +6006,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Galeria</label>
-                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                  {uploadingField === 'gallery' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Subir varias imagenes
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'gallery')} />
-                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void handleProjectRemoteImport('gallery')}
+                    disabled={uploadingField === 'import-gallery' || !parseUrlList(projectForm.gallery).some(isRemoteHttpUrl)}
+                  >
+                    {uploadingField === 'import-gallery' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+                    Guardar URLs local
+                  </Button>
+                  <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                    {uploadingField === 'gallery' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Subir varias imagenes
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'gallery')} />
+                  </label>
+                </div>
               </div>
               <Textarea value={projectForm.gallery} onChange={e => setProjectForm({ ...projectForm, gallery: e.target.value })} rows={4} placeholder="Una URL por linea" className="text-sm" />
               <MediaPreviewGrid
@@ -5621,11 +6034,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Galeria mobile</label>
-                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                  {uploadingField === 'galleryMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Subir varias imagenes
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'galleryMobile')} />
-                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void handleProjectRemoteImport('galleryMobile')}
+                    disabled={uploadingField === 'import-galleryMobile' || !parseUrlList(projectForm.galleryMobile).some(isRemoteHttpUrl)}
+                  >
+                    {uploadingField === 'import-galleryMobile' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+                    Guardar URLs local
+                  </Button>
+                  <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                    {uploadingField === 'galleryMobile' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Subir varias imagenes
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'galleryMobile')} />
+                  </label>
+                </div>
               </div>
               <Textarea value={projectForm.galleryMobile} onChange={e => setProjectForm({ ...projectForm, galleryMobile: e.target.value })} rows={4} placeholder="Opcional. Una URL por linea para movil" className="text-sm" />
               <MediaPreviewGrid
@@ -5637,11 +6062,23 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 flex items-center gap-1"><Video className="w-3 h-3" /> Video del proyecto</label>
-                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                  {uploadingField === 'videoUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  Subir video
-                  <input type="file" accept="video/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'videoUrl')} />
-                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void handleProjectRemoteImport('videoUrl')}
+                    disabled={uploadingField === 'import-videoUrl' || !isRemoteHttpUrl(projectForm.videoUrl)}
+                  >
+                    {uploadingField === 'import-videoUrl' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Link2 className="mr-1 h-4 w-4" />}
+                    Guardar URL local
+                  </Button>
+                  <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                    {uploadingField === 'videoUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Subir video
+                    <input type="file" accept="video/*" className="hidden" onChange={e => void handleProjectUpload(e.target.files, 'videoUrl')} />
+                  </label>
+                </div>
               </div>
               <Input value={projectForm.videoUrl} onChange={e => setProjectForm({ ...projectForm, videoUrl: e.target.value })} placeholder="/api/media/archivo.mp4 o https://..." className="text-sm" />
               <MediaPreviewGrid
