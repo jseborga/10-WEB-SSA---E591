@@ -46,12 +46,26 @@ export async function PUT(
       displayName: string | null
       role: string
       active: boolean
+      telegramChatId: string | null
+      contactPhone: string | null
+      workloadCapacity: number
+      receiveLeadAlerts: boolean
       passwordHash?: string
     } = {
       username: nextUsername,
       displayName: typeof body.displayName === 'string' ? body.displayName.trim() || null : current.displayName,
       role: sanitizeRole(body.role ?? current.role),
       active: typeof body.active === 'boolean' ? body.active : current.active,
+      telegramChatId:
+        typeof body.telegramChatId === 'string' ? body.telegramChatId.trim() || null : current.telegramChatId,
+      contactPhone:
+        typeof body.contactPhone === 'string' ? body.contactPhone.trim() || null : current.contactPhone,
+      workloadCapacity:
+        typeof body.workloadCapacity === 'number' && Number.isFinite(body.workloadCapacity)
+          ? Math.max(1, Math.round(body.workloadCapacity))
+          : current.workloadCapacity,
+      receiveLeadAlerts:
+        typeof body.receiveLeadAlerts === 'boolean' ? body.receiveLeadAlerts : current.receiveLeadAlerts,
     }
 
     if (typeof body.password === 'string' && body.password.trim().length >= 6) {
@@ -67,6 +81,10 @@ export async function PUT(
         displayName: true,
         role: true,
         active: true,
+        telegramChatId: true,
+        contactPhone: true,
+        workloadCapacity: true,
+        receiveLeadAlerts: true,
         createdAt: true,
         updatedAt: true,
       },

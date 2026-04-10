@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from 'react'
 import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone } from 'lucide-react'
 import { toast } from 'sonner'
+import { sendAnalyticsEvent } from '@/lib/browser-analytics'
 import { useLanguage } from '@/lib/language-context'
 import { PublicPublication, PublicSiteSettings, getLocalizedPublicationValue } from '@/lib/public-site'
 import { SiteHeader } from '@/components/site-header'
@@ -106,6 +107,12 @@ export function ContactPageClient({ siteSettings, publication }: ContactPageClie
         phone: '',
         subject: '',
         message: '',
+      })
+      sendAnalyticsEvent({
+        eventType: 'contact-submit',
+        payload: {
+          subject: formState.subject,
+        },
       })
       toast.success(contactCopy.success)
     } catch {

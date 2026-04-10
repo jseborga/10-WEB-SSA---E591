@@ -150,8 +150,55 @@ interface AdminUser {
   displayName?: string | null
   role: 'admin' | 'editor'
   active: boolean
+  telegramChatId?: string | null
+  contactPhone?: string | null
+  workloadCapacity: number
+  receiveLeadAlerts: boolean
   createdAt: string
   updatedAt: string
+}
+
+interface SiteAnalyticsData {
+  overview: {
+    totalSessions: number
+    totalPageViews: number
+    averageDurationSeconds: number
+    averagePageViews: number
+    uniqueReferrers: number
+    eventsTracked: number
+  }
+  topPages: Array<{ label: string; value: number }>
+  topReferrers: Array<{ label: string; value: number }>
+  topCountries: Array<{ label: string; value: number }>
+  topCampaigns: Array<{ label: string; value: number }>
+  recentVisitors: Array<{
+    id: string
+    sessionId: string
+    landingPath: string
+    currentPath: string
+    ipAddress: string
+    location: string
+    referrer: string
+    pageViews: number
+    durationSeconds: number
+    lastSeenAt: string
+    campaign: string | null
+    entryDevice: string
+  }>
+  recentEvents: Array<{
+    id: string
+    eventType: string
+    path: string
+    referrer: string
+    ipAddress: string
+    durationMs: number | null
+    createdAt: string
+  }>
+  eventBreakdown: Array<{ label: string; value: number }>
+  engagementSummary: {
+    engagementEvents: number
+    pageViewEvents: number
+  }
 }
 
 interface SiteSettings {
@@ -325,6 +372,10 @@ type UserFormState = {
   password: string
   role: 'admin' | 'editor'
   active: boolean
+  telegramChatId: string
+  contactPhone: string
+  workloadCapacity: string
+  receiveLeadAlerts: boolean
 }
 
 type MediaPreviewItem = {
@@ -423,6 +474,10 @@ const emptyUserForm: UserFormState = {
   password: '',
   role: 'editor',
   active: true,
+  telegramChatId: '',
+  contactPhone: '',
+  workloadCapacity: '10',
+  receiveLeadAlerts: true,
 }
 
 function createMenuItemDraft(label = 'Nuevo item'): MenuItemConfig {
@@ -560,6 +615,18 @@ function getTelegramHref(handle: string | null | undefined) {
   return normalized ? `https://t.me/${normalized}` : ''
 }
 
+function formatDurationShort(seconds: number | null | undefined) {
+  const total = Math.max(0, Math.round(seconds || 0))
+
+  if (total < 60) {
+    return `${total}s`
+  }
+
+  const minutes = Math.floor(total / 60)
+  const remainder = total % 60
+  return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`
+}
+
 function getPreviewItemTitle(item: MediaPreviewItem) {
   if (item.label?.trim()) {
     return item.label.trim()
@@ -674,6 +741,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [chatLeads, setChatLeads] = useState<ChatLead[]>([])
   const [chatConversations, setChatConversations] = useState<ChatConversationLog[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [siteAnalytics, setSiteAnalytics] = useState<SiteAnalyticsData | null>(null)
   const [reviews, setReviews] = useState<ApprovalItemType[]>([])
   const [automationLogs, setAutomationLogs] = useState<AutomationLogEntry[]>([])
   const [chatConfig, setChatConfig] = useState<ChatConfigType | null>(null)
@@ -690,9 +758,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [publicationAiLoading, setPublicationAiLoading] = useState(false)
   const [siteSeoLoading, setSiteSeoLoading] = useState(false)
   const [salesPromptLoading, setSalesPromptLoading] = useState(false)
+  const [managementReport, setManagementReport] = useState('')
+  const [managementReportMeta, setManagementReportMeta] = useState<{ provider?: string | null; model?: string | null } | null>(null)
+  const [managementReportLoading, setManagementReportLoading] = useState(false)
   const [projectImageAssistLoading, setProjectImageAssistLoading] = useState(false)
   const [publicationImageAssistLoading, setPublicationImageAssistLoading] = useState(false)
   const [projectEditorStep, setProjectEditorStep] = useState<'overview' | 'media' | 'seo' | 'publish'>('overview')
+  const [telegramView, setTelegramView] = useState<'config' | 'logs'>('config')
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
   const [automationActionId, setAutomationActionId] = useState<string | null>(null)
   const [session, setSession] = useState<SessionState>({
@@ -838,6 +910,28 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
     return Array.from(values).sort((a, b) => a.localeCompare(b, 'es'))
   }, [chatLeads, contacts, users])
+  const userWorkloadStats = useMemo(() => {
+    return users.map((user) => {
+      const label = (user.displayName || user.username || '').trim()
+      const openLeadsCount = chatLeads.filter(
+        (lead) => lead.ownerName?.trim() === label && !['won', 'lost', 'archived'].includes(lead.leadStatus),
+      ).length
+      const openContactsCount = contacts.filter(
+        (contact) => contact.ownerName?.trim() === label && !['won', 'lost', 'archived'].includes(contact.status),
+      ).length
+      const totalAssigned = openLeadsCount + openContactsCount
+      const capacity = Math.max(1, user.workloadCapacity || 1)
+
+      return {
+        label,
+        username: user.username,
+        load: totalAssigned,
+        capacity,
+        ratio: totalAssigned / capacity,
+        telegramChatId: user.telegramChatId || '',
+      }
+    })
+  }, [chatLeads, contacts, users])
   const visibleChatLeads = useMemo(() => {
     const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 } as const
     return [...chatLeads]
@@ -955,8 +1049,21 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       openLeads: chatLeads.filter((lead) => !['won', 'lost', 'archived'].includes(lead.leadStatus)).length,
       mediaCount,
       chatSessions: chatConversations.length,
+      totalSessions: siteAnalytics?.overview.totalSessions || 0,
+      totalPageViews: siteAnalytics?.overview.totalPageViews || 0,
+      averageDurationSeconds: siteAnalytics?.overview.averageDurationSeconds || 0,
     }
-  }, [projects, publications, pendingReviews, contacts.length, chatLeads, chatConversations.length])
+  }, [projects, publications, pendingReviews, contacts.length, chatLeads, chatConversations.length, siteAnalytics])
+  const crmBoardColumns = useMemo(
+    () => [
+      { value: 'new', label: 'Nuevos', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'new') },
+      { value: 'contacted', label: 'Contactados', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'contacted') },
+      { value: 'proposal', label: 'Cotización', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'proposal') },
+      { value: 'won', label: 'Ganados', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'won') },
+      { value: 'lost', label: 'Perdidos', items: visibleChatLeads.filter((lead) => lead.leadStatus === 'lost') },
+    ],
+    [visibleChatLeads],
+  )
 
   const authCopy = useMemo(() => {
     if (language === 'en') {
@@ -1019,7 +1126,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const loadAdminData = async () => {
     try {
       const isAdminUser = session.role === 'admin'
-      const [projectsRes, publicationsRes, contactsRes, leadsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes] = await Promise.all([
+      const [projectsRes, publicationsRes, contactsRes, leadsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes, trafficRes] = await Promise.all([
         fetch('/api/projects', { cache: 'no-store' }),
         fetch('/api/publications', { cache: 'no-store' }),
         fetch('/api/contact', { cache: 'no-store' }),
@@ -1031,14 +1138,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         isAdminUser ? fetch('/api/telegram/config', { cache: 'no-store' }) : Promise.resolve(null),
         fetch('/api/automation/reviews', { cache: 'no-store' }),
         fetch('/api/automation/logs', { cache: 'no-store' }),
+        fetch('/api/admin/site-analytics', { cache: 'no-store' }),
       ])
 
-      if ([projectsRes, publicationsRes, contactsRes, leadsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes].some(response => response?.status === 401)) {
+      if ([projectsRes, publicationsRes, contactsRes, leadsRes, conversationsRes, configRes, siteRes, usersRes, telegramRes, reviewsRes, logsRes, trafficRes].some(response => response?.status === 401)) {
         setSession(current => ({ ...current, authenticated: false, role: null, username: null, root: false }))
         return
       }
 
-      const [projectsData, publicationsData, contactsData, leadsData, conversationsData, configData, siteData, usersData, telegramData, reviewsData, logsData] = await Promise.all([
+      const [projectsData, publicationsData, contactsData, leadsData, conversationsData, configData, siteData, usersData, telegramData, reviewsData, logsData, trafficData] = await Promise.all([
         projectsRes.json(),
         publicationsRes.json(),
         contactsRes.json(),
@@ -1050,6 +1158,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         telegramRes ? telegramRes.json() : Promise.resolve(emptyTelegramForm),
         reviewsRes.json(),
         logsRes.json(),
+        trafficRes.json(),
       ])
 
       setProjects(Array.isArray(projectsData) ? projectsData : [])
@@ -1058,6 +1167,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       setChatLeads(Array.isArray(leadsData) ? leadsData : [])
       setChatConversations(Array.isArray(conversationsData) ? conversationsData : [])
       setUsers(Array.isArray(usersData) ? usersData : [])
+      setSiteAnalytics(trafficData?.overview ? trafficData : null)
       setReviews(Array.isArray(reviewsData) ? reviewsData : [])
       setAutomationLogs(Array.isArray(logsData) ? logsData : [])
       setChatConfig(configData)
@@ -1173,6 +1283,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   }, [isOpen, session.authenticated, session.role])
 
   useEffect(() => {
+    if (activeTab === 'logs') {
+      setTelegramView('logs')
+      setActiveTab('telegram')
+      return
+    }
+
     if (session.role !== 'admin' && ['site-config', 'ai-config', 'telegram', 'logs', 'users'].includes(activeTab)) {
       setActiveTab('analytics')
     }
@@ -1953,7 +2069,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userForm),
+        body: JSON.stringify({
+          ...userForm,
+          workloadCapacity: Number.parseInt(userForm.workloadCapacity, 10) || 10,
+        }),
       })
 
       if (res.ok) {
@@ -2102,34 +2221,40 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     setContacts((current) => current.map((contact) => (contact.id === contactId ? { ...contact, ...patch } : contact)))
   }
 
-  const handleSaveLead = async (lead: ChatLead) => {
+  const buildLeadPayload = (lead: ChatLead) => ({
+    name: lead.name,
+    email: lead.email,
+    phone: lead.phone,
+    telegramHandle: lead.telegramHandle,
+    preferredContactChannel: lead.preferredContactChannel,
+    contactConsent: lead.contactConsent,
+    contactConsentAt: lead.contactConsentAt,
+    serviceType: lead.serviceType,
+    projectType: lead.projectType,
+    projectLocation: lead.projectLocation,
+    projectIdea: lead.projectIdea,
+    summary: lead.summary,
+    leadStatus: lead.leadStatus,
+    priority: lead.priority,
+    ownerName: lead.ownerName,
+    nextAction: lead.nextAction,
+    nextFollowUpAt: lead.nextFollowUpAt || null,
+    lastContactedAt: lead.lastContactedAt || null,
+    internalNotes: lead.internalNotes,
+    needsHuman: lead.needsHuman,
+    qualified: lead.qualified,
+  })
+
+  const handleSaveLead = async (lead: ChatLead, options?: { autoAssign?: boolean; notifyOwner?: boolean }) => {
     setLeadSavingId(lead.id)
     try {
       const response = await fetch(`/api/admin/chat-leads/${lead.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: lead.name,
-          email: lead.email,
-          phone: lead.phone,
-          telegramHandle: lead.telegramHandle,
-          preferredContactChannel: lead.preferredContactChannel,
-          contactConsent: lead.contactConsent,
-          contactConsentAt: lead.contactConsentAt,
-          serviceType: lead.serviceType,
-          projectType: lead.projectType,
-          projectLocation: lead.projectLocation,
-          projectIdea: lead.projectIdea,
-          summary: lead.summary,
-          leadStatus: lead.leadStatus,
-          priority: lead.priority,
-          ownerName: lead.ownerName,
-          nextAction: lead.nextAction,
-          nextFollowUpAt: lead.nextFollowUpAt || null,
-          lastContactedAt: lead.lastContactedAt || null,
-          internalNotes: lead.internalNotes,
-          needsHuman: lead.needsHuman,
-          qualified: lead.qualified,
+          ...buildLeadPayload(lead),
+          autoAssign: options?.autoAssign === true,
+          notifyOwner: options?.notifyOwner === true,
         }),
       })
 
@@ -2141,7 +2266,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       }
 
       updateLeadLocally(lead.id, data)
-      toast.success('Seguimiento actualizado')
+      toast.success(options?.autoAssign ? 'Lead asignado y actualizado' : 'Seguimiento actualizado')
     } catch {
       toast.error('No se pudo guardar el seguimiento')
     } finally {
@@ -2159,27 +2284,33 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     await handleSaveLead(nextLead)
   }
 
-  const handleSaveContact = async (contact: Contact) => {
+  const buildContactPayload = (contact: Contact) => ({
+    name: contact.name,
+    email: contact.email,
+    phone: contact.phone,
+    subject: contact.subject,
+    message: contact.message,
+    isRead: contact.isRead,
+    status: contact.status,
+    priority: contact.priority,
+    ownerName: contact.ownerName,
+    nextAction: contact.nextAction,
+    nextFollowUpAt: contact.nextFollowUpAt || null,
+    lastContactedAt: contact.lastContactedAt || null,
+    internalNotes: contact.internalNotes,
+    aiSummary: contact.aiSummary,
+  })
+
+  const handleSaveContact = async (contact: Contact, options?: { autoAssign?: boolean; notifyOwner?: boolean }) => {
     setContactSavingId(contact.id)
     try {
       const response = await fetch(`/api/admin/contacts/${contact.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: contact.name,
-          email: contact.email,
-          phone: contact.phone,
-          subject: contact.subject,
-          message: contact.message,
-          isRead: contact.isRead,
-          status: contact.status,
-          priority: contact.priority,
-          ownerName: contact.ownerName,
-          nextAction: contact.nextAction,
-          nextFollowUpAt: contact.nextFollowUpAt || null,
-          lastContactedAt: contact.lastContactedAt || null,
-          internalNotes: contact.internalNotes,
-          aiSummary: contact.aiSummary,
+          ...buildContactPayload(contact),
+          autoAssign: options?.autoAssign === true,
+          notifyOwner: options?.notifyOwner === true,
         }),
       })
 
@@ -2191,12 +2322,20 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       }
 
       updateContactLocally(contact.id, data)
-      toast.success('Contacto actualizado')
+      toast.success(options?.autoAssign ? 'Contacto asignado y actualizado' : 'Contacto actualizado')
     } catch {
       toast.error('No se pudo guardar el contacto')
     } finally {
       setContactSavingId(null)
     }
+  }
+
+  const handleAutoAssignLead = async (lead: ChatLead, notifyOwner = true) => {
+    await handleSaveLead(lead, { autoAssign: true, notifyOwner })
+  }
+
+  const handleAutoAssignContact = async (contact: Contact, notifyOwner = true) => {
+    await handleSaveContact(contact, { autoAssign: true, notifyOwner })
   }
 
   const handleGenerateCrmSummary = async (target: 'lead' | 'contact', id: string) => {
@@ -2226,6 +2365,32 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       toast.error('No se pudo generar el resumen IA')
     } finally {
       setCrmSummaryTarget(null)
+    }
+  }
+
+  const handleGenerateManagementReport = async () => {
+    setManagementReportLoading(true)
+    try {
+      const response = await fetch('/api/admin/management-report', {
+        method: 'POST',
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data?.report) {
+        toast.error(data.error || 'No se pudo generar el informe gerencial')
+        return
+      }
+
+      setManagementReport(data.report)
+      setManagementReportMeta({
+        provider: data.provider,
+        model: data.model,
+      })
+      toast.success(`Informe generado con ${data.provider || 'IA'}`)
+    } catch {
+      toast.error('No se pudo generar el informe gerencial')
+    } finally {
+      setManagementReportLoading(false)
     }
   }
 
@@ -2442,7 +2607,6 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           { key: 'site-config' as TabType, label: 'Sitio', icon: Globe },
           { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot },
           { key: 'telegram' as TabType, label: 'Telegram', icon: Send },
-          { key: 'logs' as TabType, label: 'Logs', icon: FileText },
           { key: 'users' as TabType, label: 'Usuarios', icon: Users },
         ]
       : []),
@@ -2571,32 +2735,38 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       <div className={fullPage ? 'p-4 sm:p-6 lg:p-8' : 'p-4 sm:p-6'}>
                   {activeTab === 'analytics' && (
                     <div className="space-y-6">
-                      <div>
-                        <h2 className="text-2xl font-light text-zinc-900">Resumen general</h2>
-                        <p className="mt-2 text-sm text-zinc-500">Vista operativa del contenido, leads, automatizaciones y estado general del sitio.</p>
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <h2 className="text-2xl font-light text-zinc-900">Resumen general</h2>
+                          <p className="mt-2 text-sm text-zinc-500">Vista operativa del contenido, leads, automatizaciones, tráfico y estado general del sitio.</p>
+                        </div>
+                        <Button type="button" variant="outline" className="text-xs sm:text-sm" onClick={() => void handleGenerateManagementReport()} disabled={managementReportLoading}>
+                          {managementReportLoading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Bot className="mr-1 h-4 w-4" />}
+                          Informe IA
+                        </Button>
                       </div>
 
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        <button type="button" onClick={() => setActiveTab('projects')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Proyectos</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.publishedProjects}</p>
                           <p className="mt-2 text-xs text-zinc-500">{analyticsSummary.draftProjects} en borrador</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => { setLeadFilter('attention'); setActiveTab('crm') }} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Leads abiertos</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.openLeads}</p>
                           <p className="mt-2 text-xs text-zinc-500">{analyticsSummary.qualifiedLeads} calificados</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('publications')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Paginas publicadas</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.publishedPages}</p>
                           <p className="mt-2 text-xs text-zinc-500">{publications.length} paginas totales</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => { setRequestFilter('pending'); setActiveTab('requests') }} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Revisiones</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.pendingReviewsCount}</p>
                           <p className="mt-2 text-xs text-zinc-500">Pendientes de aprobacion</p>
-                        </div>
+                        </button>
                       </div>
 
                       <div className="grid gap-4 xl:grid-cols-2">
@@ -2645,6 +2815,125 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               <span>Contactos por formulario</span>
                               <span className="font-medium text-zinc-900">{analyticsSummary.totalContacts}</span>
                             </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-medium text-zinc-900">Tráfico del sitio</h3>
+                              <p className="mt-1 text-xs text-zinc-500">Sesiones, permanencia, campañas y procedencia de visitantes.</p>
+                            </div>
+                            <button type="button" onClick={() => setActiveTab('crm')} className="rounded-full border border-zinc-200 px-3 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50">
+                              Ver CRM
+                            </button>
+                          </div>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">Sesiones</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{analyticsSummary.totalSessions}</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">Page views</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{analyticsSummary.totalPageViews}</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">Permanencia media</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{formatDurationShort(analyticsSummary.averageDurationSeconds)}</p>
+                            </div>
+                            <div className="rounded-xl bg-zinc-50 p-4">
+                              <p className="text-xs text-zinc-500">Referrers únicos</p>
+                              <p className="mt-2 text-2xl font-light text-zinc-900">{siteAnalytics?.overview.uniqueReferrers || 0}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                            <div className="rounded-xl border border-zinc-200 p-4">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Top páginas</p>
+                              <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                                {(siteAnalytics?.topPages || []).slice(0, 5).map((item) => (
+                                  <div key={`page-${item.label}`} className="flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2">
+                                    <span className="truncate">{item.label}</span>
+                                    <span className="text-xs text-zinc-500">{item.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-zinc-200 p-4">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Campañas y origen</p>
+                              <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                                {(siteAnalytics?.topCampaigns || []).slice(0, 5).map((item) => (
+                                  <div key={`campaign-${item.label}`} className="flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2">
+                                    <span className="truncate">{item.label}</span>
+                                    <span className="text-xs text-zinc-500">{item.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-zinc-200 p-4">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Referrers</p>
+                              <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                                {(siteAnalytics?.topReferrers || []).slice(0, 5).map((item) => (
+                                  <div key={`ref-${item.label}`} className="flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2">
+                                    <span className="truncate">{item.label}</span>
+                                    <span className="text-xs text-zinc-500">{item.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-zinc-200 p-4">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Países / ubicación</p>
+                              <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                                {(siteAnalytics?.topCountries || []).slice(0, 5).map((item) => (
+                                  <div key={`country-${item.label}`} className="flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2">
+                                    <span className="truncate">{item.label}</span>
+                                    <span className="text-xs text-zinc-500">{item.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-medium text-zinc-900">Visitantes recientes</h3>
+                              <p className="mt-1 text-xs text-zinc-500">IP, procedencia, dispositivo y tiempo de estancia capturado.</p>
+                            </div>
+                            <button type="button" onClick={() => { setTelegramView('logs'); setActiveTab('telegram') }} className="rounded-full border border-zinc-200 px-3 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50">
+                              Telegram
+                            </button>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {(siteAnalytics?.recentVisitors || []).slice(0, 8).map((visitor) => (
+                              <div key={visitor.id} className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 text-sm">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="font-medium text-zinc-900">{visitor.ipAddress}</span>
+                                  <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">{visitor.entryDevice}</span>
+                                </div>
+                                <div className="mt-2 space-y-1 text-xs text-zinc-600">
+                                  <p>{visitor.location}</p>
+                                  <p>{visitor.landingPath} → {visitor.currentPath}</p>
+                                  <p>{visitor.referrer} • {formatDurationShort(visitor.durationSeconds)} • {visitor.pageViews} vistas</p>
+                                  {visitor.campaign ? <p>Campaña: {visitor.campaign}</p> : null}
+                                </div>
+                              </div>
+                            ))}
+                            {managementReport ? (
+                              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <h4 className="text-sm font-medium text-zinc-900">Informe gerencial IA</h4>
+                                  <span className="text-[11px] text-zinc-500">{[managementReportMeta?.provider, managementReportMeta?.model].filter(Boolean).join(' • ')}</span>
+                                </div>
+                                <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-700">{managementReport}</div>
+                              </div>
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-6 text-sm text-zinc-500">
+                                Genera un informe IA para convertir este panel en un resumen ejecutivo comercial y de tráfico.
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -3498,26 +3787,26 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       </div>
 
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        <button type="button" onClick={() => setLeadFilter('all')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Abiertos</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{analyticsSummary.openLeads}</p>
                           <p className="mt-2 text-xs text-zinc-500">Leads activos en gestión comercial</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => setLeadFilter('attention')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Por atender</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{leadSummary.dueToday}</p>
                           <p className="mt-2 text-xs text-zinc-500">Seguimientos vencidos o para hoy</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => setLeadFilter('attention')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Requieren humano</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{leadSummary.needsHuman}</p>
                           <p className="mt-2 text-xs text-zinc-500">Conversaciones listas para derivación</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => { setTelegramView('logs'); setActiveTab('telegram') }} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Sesiones chat</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{chatConversations.length}</p>
                           <p className="mt-2 text-xs text-zinc-500">Memoria reciente y contexto comercial</p>
-                        </div>
+                        </button>
                       </div>
 
                       <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
@@ -3549,6 +3838,49 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               </button>
                             ))}
                           </div>
+                        </div>
+
+                        <div className="grid gap-3 xl:grid-cols-5">
+                          {crmBoardColumns.map((column) => (
+                            <div key={column.value} className="rounded-2xl bg-zinc-50 p-3">
+                              <div className="mb-3 flex items-center justify-between gap-3">
+                                <button type="button" onClick={() => setLeadFilter(column.value as typeof leadFilter)} className="text-left text-sm font-medium text-zinc-900 hover:text-zinc-700">
+                                  {column.label}
+                                </button>
+                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-zinc-500">{column.items.length}</span>
+                              </div>
+                              <div className="space-y-3">
+                                {column.items.slice(0, 4).map((lead) => (
+                                  <div key={`board-${lead.id}`} className="rounded-xl border border-zinc-200 bg-white p-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-medium text-zinc-900">{lead.name || 'Lead sin nombre'}</p>
+                                        <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{lead.summary || lead.projectIdea || 'Sin resumen todavía'}</p>
+                                      </div>
+                                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${lead.priority === 'urgent' ? 'bg-red-100 text-red-700' : lead.priority === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-600'}`}>
+                                        {lead.priority}
+                                      </span>
+                                    </div>
+                                    <div className="mt-3 space-y-1 text-[11px] text-zinc-500">
+                                      <p>{lead.ownerName || 'Sin responsable'}</p>
+                                      <p>{lead.nextAction || 'Sin próxima acción'}</p>
+                                      <p>{lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt).toLocaleString() : 'Sin seguimiento'}</p>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      {getWhatsappHref(lead.phone) ? <a href={getWhatsappHref(lead.phone)} target="_blank" rel="noreferrer" className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">WhatsApp</a> : null}
+                                      <button type="button" onClick={() => void handleGenerateCrmSummary('lead', lead.id)} className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
+                                        IA
+                                      </button>
+                                      <button type="button" onClick={() => void handleAutoAssignLead(lead, true)} className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50">
+                                        Asignar
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                                {column.items.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-200 px-3 py-5 text-center text-xs text-zinc-400">Sin casos</div> : null}
+                              </div>
+                            </div>
+                          ))}
                         </div>
 
                         <div className="grid gap-4">
@@ -3597,6 +3929,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                     <Button type="button" variant="outline" className="text-xs" onClick={() => void handleMarkLeadContactedNow(lead)} disabled={leadSavingId === lead.id}>
                                       {leadSavingId === lead.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
                                       Marcar contacto
+                                    </Button>
+                                    <Button type="button" variant="outline" className="text-xs" onClick={() => void handleAutoAssignLead(lead, true)} disabled={leadSavingId === lead.id}>
+                                      {leadSavingId === lead.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Users className="w-4 h-4 mr-1" />}
+                                      Asignar por carga
                                     </Button>
                                     <Button type="button" className="bg-zinc-900 hover:bg-zinc-800 text-xs" onClick={() => void handleSaveLead(lead)} disabled={leadSavingId === lead.id}>
                                       {leadSavingId === lead.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
@@ -3688,6 +4024,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                     <Button type="button" variant="outline" className="text-xs" onClick={() => void handleGenerateCrmSummary('contact', contact.id)} disabled={crmSummaryTarget === summaryKey}>
                                       {crmSummaryTarget === summaryKey ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Bot className="w-4 h-4 mr-1" />}
                                       Resumen IA
+                                    </Button>
+                                    <Button type="button" variant="outline" className="text-xs" onClick={() => void handleAutoAssignContact(contact, true)} disabled={contactSavingId === contact.id}>
+                                      {contactSavingId === contact.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Users className="w-4 h-4 mr-1" />}
+                                      Asignar por carga
                                     </Button>
                                     <Button type="button" className="bg-zinc-900 hover:bg-zinc-800 text-xs" onClick={() => void handleSaveContact(contact)} disabled={contactSavingId === contact.id}>
                                       {contactSavingId === contact.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
@@ -4367,22 +4707,22 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       </div>
 
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        <button type="button" onClick={() => setRequestFilter('pending')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Pendientes</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.pending}</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => setRequestFilter('approved')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Aprobadas</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.approved}</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => setRequestFilter('rejected')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Rechazadas</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.rejected}</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+                        </button>
+                        <button type="button" onClick={() => setRequestFilter('all')} className="rounded-2xl border border-zinc-200 bg-white p-5 text-left transition-colors hover:border-zinc-400 hover:bg-zinc-50">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Total</p>
                           <p className="mt-3 text-3xl font-light text-zinc-900">{requestSummary.total}</p>
-                        </div>
+                        </button>
                       </div>
 
                       <div className="grid gap-3">
@@ -4451,6 +4791,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           <p className="mt-2 text-sm text-zinc-500">Configura el bot, usuarios autorizados y el webhook para recibir material desde terreno.</p>
                         </div>
                         <div className="flex items-center gap-2">
+                          <div className="flex rounded-full border border-zinc-200 bg-white p-1">
+                            <button type="button" onClick={() => setTelegramView('config')} className={`rounded-full px-3 py-1 text-xs ${telegramView === 'config' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>
+                              Config
+                            </button>
+                            <button type="button" onClick={() => setTelegramView('logs')} className={`rounded-full px-3 py-1 text-xs ${telegramView === 'logs' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}>
+                              Logs
+                            </button>
+                          </div>
                           <Button variant="outline" onClick={() => void handleSyncTelegramWebhook()} disabled={automationActionId === 'telegram-sync'} className="text-xs sm:text-sm">
                             {automationActionId === 'telegram-sync' ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
                             Sincronizar webhook
@@ -4461,7 +4809,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
+                      {telegramView === 'config' && (
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h3 className="text-sm font-medium text-zinc-900">Bot de Telegram</h3>
@@ -4527,11 +4876,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-600">
                           Endpoint esperado: <span className="font-mono">/api/telegram/webhook</span>. Para máxima calidad de imagen, envía el archivo como documento. Las publicaciones llegan al tab <span className="font-medium">Solicitudes</span>.
                         </div>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {activeTab === 'logs' && (
+                  {(activeTab === 'logs' || (activeTab === 'telegram' && telegramView === 'logs')) && (
                     <div className="space-y-5">
                       <div>
                         <h2 className="text-2xl font-light text-zinc-900">Logs de automatización</h2>
@@ -4768,11 +5118,29 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               <option value="admin">Administrador</option>
                             </select>
                           </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Telegram chat ID</label>
+                            <Input value={userForm.telegramChatId} onChange={e => setUserForm({ ...userForm, telegramChatId: e.target.value })} className="text-sm" placeholder="123456789 o -100..." />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Teléfono / WhatsApp</label>
+                            <Input value={userForm.contactPhone} onChange={e => setUserForm({ ...userForm, contactPhone: e.target.value })} className="text-sm" placeholder="+591 ..." />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Capacidad de carga</label>
+                            <Input type="number" min="1" value={userForm.workloadCapacity} onChange={e => setUserForm({ ...userForm, workloadCapacity: e.target.value })} className="text-sm" />
+                          </div>
                         </div>
-                        <label className="flex items-center gap-2 text-sm text-zinc-700">
-                          <input type="checkbox" checked={userForm.active} onChange={e => setUserForm({ ...userForm, active: e.target.checked })} />
-                          Usuario activo
-                        </label>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="flex items-center gap-2 text-sm text-zinc-700">
+                            <input type="checkbox" checked={userForm.active} onChange={e => setUserForm({ ...userForm, active: e.target.checked })} />
+                            Usuario activo
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-zinc-700">
+                            <input type="checkbox" checked={userForm.receiveLeadAlerts} onChange={e => setUserForm({ ...userForm, receiveLeadAlerts: e.target.checked })} />
+                            Recibir asignaciones CRM
+                          </label>
+                        </div>
                         <Button onClick={handleSaveUser} disabled={loading || !userForm.username.trim() || (!editingUser && userForm.password.trim().length < 6)} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
                           <Save className="w-4 h-4 mr-1" />
                           {loading ? t.admin.saving : editingUser ? 'Actualizar usuario' : 'Crear usuario'}
@@ -4788,8 +5156,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                   <h3 className="font-medium text-sm truncate">{user.displayName || user.username}</h3>
                                   <span className={`text-xs px-2 py-0.5 rounded ${user.role === 'admin' ? 'bg-zinc-900 text-white' : 'bg-blue-100 text-blue-700'}`}>{user.role}</span>
                                   {!user.active && <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">inactivo</span>}
+                                  {!user.receiveLeadAlerts && <span className="text-xs px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">sin CRM</span>}
                                 </div>
                                 <p className="text-xs text-zinc-500 mt-1">@{user.username}</p>
+                                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+                                  <span>Capacidad {user.workloadCapacity}</span>
+                                  {user.telegramChatId ? <><span>•</span><span>Telegram listo</span></> : null}
+                                  {user.contactPhone ? <><span>•</span><span>{user.contactPhone}</span></> : null}
+                                  {userWorkloadStats.find((item) => item.username === user.username) ? <><span>•</span><span>Carga {userWorkloadStats.find((item) => item.username === user.username)?.load || 0}</span></> : null}
+                                </div>
                               </div>
                               <div className="flex gap-1">
                                 <button
@@ -4801,6 +5176,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                       password: '',
                                       role: user.role,
                                       active: user.active,
+                                      telegramChatId: user.telegramChatId || '',
+                                      contactPhone: user.contactPhone || '',
+                                      workloadCapacity: String(user.workloadCapacity || 10),
+                                      receiveLeadAlerts: user.receiveLeadAlerts,
                                     })
                                   }}
                                   className="p-1.5 hover:bg-zinc-100 rounded"

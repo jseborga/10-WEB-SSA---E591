@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAuthenticatedUser } from '@/lib/admin-auth'
+import { notifyUserAssignment, selectBestAssignableUser } from '@/lib/crm-routing'
 import { db } from '@/lib/db'
 
 function normalizeText(value: unknown) {
@@ -32,6 +33,15 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json().catch(() => ({}))
+    const currentContact = await db.contact.findUnique({ where: { id } })
+
+    if (!currentContact) {
+      return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 })
+    }
+
+    const requestedOwnerName = normalizeText(body.ownerName) || null
+    const autoAssigned = body.autoAssign === true ? await selectBestAssignableUser() : null
+    const ownerName = autoAssigned?.label || requestedOwnerName
 
     const contact = await db.contact.update({
       where: { id },
@@ -44,7 +54,7 @@ export async function PUT(
         isRead: body.isRead !== false,
         status: normalizeChoice(body.status, 'new', ['new', 'contacted', 'proposal', 'won', 'lost', 'archived']),
         priority: normalizeChoice(body.priority, 'normal', ['low', 'normal', 'high', 'urgent']),
-        ownerName: normalizeText(body.ownerName) || null,
+        ownerName,
         nextAction: normalizeText(body.nextAction) || null,
         nextFollowUpAt: normalizeDate(body.nextFollowUpAt),
         lastContactedAt: normalizeDate(body.lastContactedAt),
@@ -52,6 +62,21 @@ export async function PUT(
         aiSummary: normalizeText(body.aiSummary) || null,
       },
     })
+
+    if (body.notifyOwner === true && ownerName) {
+      await notifyUserAssignment({
+        ownerName,
+        title: `Contacto ${contact.name || contact.subject || contact.id}`,
+        summary: contact.aiSummary || contact.message,
+        contactName: contact.name,
+        contactPhone: contact.phone,
+        contactEmail: contact.email,
+        nextAction: contact.nextAction,
+        sourceLabel: currentContact.subject || 'formulario web',
+      }).catch((error) => {
+        console.error('Error notifying assigned contact owner:', error)
+      })
+    }
 
     return NextResponse.json(contact)
   } catch (error) {

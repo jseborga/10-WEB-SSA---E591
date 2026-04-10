@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SiteAnalyticsTracker } from "@/components/site-analytics-tracker";
 import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider } from "@/lib/language-context";
 import { ensureSiteSettings, getDefaultSiteSettings } from "@/lib/site-settings";
@@ -118,6 +119,7 @@ export default async function RootLayout({
         className="antialiased bg-white text-zinc-900"
       >
         <LanguageProvider>
+          <SiteAnalyticsTracker />
           {children}
           <Toaster />
         </LanguageProvider>

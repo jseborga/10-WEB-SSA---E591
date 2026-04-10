@@ -6,6 +6,7 @@ import { MessageCircle, X, Send, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { sendAnalyticsEvent } from '@/lib/browser-analytics'
 import { useLanguage } from '@/lib/language-context'
 
 interface Message {
@@ -263,6 +264,17 @@ export function ChatWidget() {
       else sendMessage()
     }
   }, [isJoined, handleJoin, sendMessage])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    sendAnalyticsEvent({
+      eventType: 'chat-open',
+      payload: {
+        provider: chatConfig?.provider || 'socket',
+      },
+    })
+  }, [chatConfig?.provider, isOpen])
 
   return (
     <>

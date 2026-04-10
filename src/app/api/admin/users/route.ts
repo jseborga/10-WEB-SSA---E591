@@ -22,6 +22,10 @@ export async function GET(request: Request) {
         displayName: true,
         role: true,
         active: true,
+        telegramChatId: true,
+        contactPhone: true,
+        workloadCapacity: true,
+        receiveLeadAlerts: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -69,6 +73,13 @@ export async function POST(request: Request) {
         passwordHash: hashUserPassword(password),
         role: sanitizeRole(body.role),
         active: body.active !== false,
+        telegramChatId: typeof body.telegramChatId === 'string' ? body.telegramChatId.trim() || null : null,
+        contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone.trim() || null : null,
+        workloadCapacity:
+          typeof body.workloadCapacity === 'number' && Number.isFinite(body.workloadCapacity)
+            ? Math.max(1, Math.round(body.workloadCapacity))
+            : 10,
+        receiveLeadAlerts: body.receiveLeadAlerts !== false,
       },
       select: {
         id: true,
@@ -76,6 +87,10 @@ export async function POST(request: Request) {
         displayName: true,
         role: true,
         active: true,
+        telegramChatId: true,
+        contactPhone: true,
+        workloadCapacity: true,
+        receiveLeadAlerts: true,
         createdAt: true,
         updatedAt: true,
       },
