@@ -36,10 +36,34 @@ export async function GET(request: Request) {
       }),
     ])
 
+    const linkedLeads = sessions.length
+      ? await db.leadCapture.findMany({
+          where: {
+            sessionId: {
+              in: sessions.map((session) => session.sessionId),
+            },
+          },
+          select: {
+            id: true,
+            sessionId: true,
+            name: true,
+            phone: true,
+            email: true,
+            serviceType: true,
+            projectType: true,
+            preferredContactChannel: true,
+            leadStatus: true,
+          },
+        })
+      : []
+
+    const leadBySessionId = new Map(linkedLeads.map((lead) => [lead.sessionId, lead]))
+
     const pageViewEvents = events.filter((event) => event.eventType === 'page-view')
     const engagementEvents = events.filter((event) => event.eventType === 'page-engagement')
     const totalDurationSeconds = sessions.reduce((sum, session) => sum + (session.durationSeconds || 0), 0)
     const totalPageViews = sessions.reduce((sum, session) => sum + (session.pageViews || 0), 0)
+    const identifiedSessions = sessions.filter((session) => leadBySessionId.has(session.sessionId)).length
 
     const response = {
       overview: {
@@ -49,10 +73,16 @@ export async function GET(request: Request) {
         averagePageViews: sessions.length ? Number((totalPageViews / sessions.length).toFixed(1)) : 0,
         uniqueReferrers: new Set(sessions.map((session) => session.referrer || 'directo')).size,
         eventsTracked: events.length,
+        identifiedSessions,
       },
       topPages: topEntries(pageViewEvents.map((event) => event.path || '/')),
       topReferrers: topEntries(sessions.map((session) => session.referrer || 'directo')),
       topCountries: topEntries(sessions.map((session) => session.countryHint || 'sin-pais')),
+      topCities: topEntries(
+        sessions.map((session) =>
+          [session.cityHint, session.countryHint].filter(Boolean).join(', ') || 'sin-ciudad',
+        ),
+      ),
       topCampaigns: topEntries(
         sessions.map(
           (session) => session.utmCampaign || session.utmSource || session.utmMedium || 'organico/directo',
@@ -64,6 +94,8 @@ export async function GET(request: Request) {
         landingPath: session.landingPath || '/',
         currentPath: session.currentPath || session.landingPath || '/',
         ipAddress: session.ipAddress || 'sin-ip',
+        countryHint: session.countryHint || null,
+        cityHint: session.cityHint || null,
         location: [session.cityHint, session.countryHint].filter(Boolean).join(', ') || 'sin-ubicacion',
         referrer: session.referrer || 'directo',
         pageViews: session.pageViews,
@@ -71,6 +103,14 @@ export async function GET(request: Request) {
         lastSeenAt: session.updatedAt,
         campaign: session.utmCampaign || session.utmSource || null,
         entryDevice: session.entryDevice || 'unknown',
+        leadId: leadBySessionId.get(session.sessionId)?.id || null,
+        leadName: leadBySessionId.get(session.sessionId)?.name || null,
+        leadPhone: leadBySessionId.get(session.sessionId)?.phone || null,
+        leadEmail: leadBySessionId.get(session.sessionId)?.email || null,
+        serviceType: leadBySessionId.get(session.sessionId)?.serviceType || null,
+        projectType: leadBySessionId.get(session.sessionId)?.projectType || null,
+        preferredContactChannel: leadBySessionId.get(session.sessionId)?.preferredContactChannel || null,
+        leadStatus: leadBySessionId.get(session.sessionId)?.leadStatus || null,
       })),
       recentEvents: events.slice(0, 30).map((event) => ({
         id: event.id,

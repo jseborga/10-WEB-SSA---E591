@@ -166,10 +166,12 @@ interface SiteAnalyticsData {
     averagePageViews: number
     uniqueReferrers: number
     eventsTracked: number
+    identifiedSessions: number
   }
   topPages: Array<{ label: string; value: number }>
   topReferrers: Array<{ label: string; value: number }>
   topCountries: Array<{ label: string; value: number }>
+  topCities: Array<{ label: string; value: number }>
   topCampaigns: Array<{ label: string; value: number }>
   recentVisitors: Array<{
     id: string
@@ -177,6 +179,8 @@ interface SiteAnalyticsData {
     landingPath: string
     currentPath: string
     ipAddress: string
+    countryHint: string | null
+    cityHint: string | null
     location: string
     referrer: string
     pageViews: number
@@ -184,6 +188,14 @@ interface SiteAnalyticsData {
     lastSeenAt: string
     campaign: string | null
     entryDevice: string
+    leadId: string | null
+    leadName: string | null
+    leadPhone: string | null
+    leadEmail: string | null
+    serviceType: string | null
+    projectType: string | null
+    preferredContactChannel: string | null
+    leadStatus: string | null
   }>
   recentEvents: Array<{
     id: string
@@ -646,6 +658,90 @@ function formatDurationShort(seconds: number | null | undefined) {
   return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`
 }
 
+const COUNTRY_CENTROIDS: Record<string, { lat: number; lon: number }> = {
+  bolivia: { lat: -16.29, lon: -63.59 },
+  bo: { lat: -16.29, lon: -63.59 },
+  argentina: { lat: -38.41, lon: -63.62 },
+  ar: { lat: -38.41, lon: -63.62 },
+  brasil: { lat: -14.24, lon: -51.93 },
+  brazil: { lat: -14.24, lon: -51.93 },
+  br: { lat: -14.24, lon: -51.93 },
+  chile: { lat: -35.67, lon: -71.54 },
+  cl: { lat: -35.67, lon: -71.54 },
+  peru: { lat: -9.19, lon: -75.02 },
+  pe: { lat: -9.19, lon: -75.02 },
+  paraguay: { lat: -23.44, lon: -58.44 },
+  py: { lat: -23.44, lon: -58.44 },
+  uruguay: { lat: -32.52, lon: -55.77 },
+  uy: { lat: -32.52, lon: -55.77 },
+  colombia: { lat: 4.57, lon: -74.3 },
+  co: { lat: 4.57, lon: -74.3 },
+  ecuador: { lat: -1.83, lon: -78.18 },
+  ec: { lat: -1.83, lon: -78.18 },
+  mexico: { lat: 23.63, lon: -102.55 },
+  mx: { lat: 23.63, lon: -102.55 },
+  usa: { lat: 39.82, lon: -98.58 },
+  'united states': { lat: 39.82, lon: -98.58 },
+  us: { lat: 39.82, lon: -98.58 },
+  canada: { lat: 56.13, lon: -106.35 },
+  ca: { lat: 56.13, lon: -106.35 },
+  spain: { lat: 40.46, lon: -3.75 },
+  espana: { lat: 40.46, lon: -3.75 },
+  españa: { lat: 40.46, lon: -3.75 },
+  es: { lat: 40.46, lon: -3.75 },
+  portugal: { lat: 39.4, lon: -8.22 },
+  pt: { lat: 39.4, lon: -8.22 },
+  france: { lat: 46.23, lon: 2.21 },
+  fr: { lat: 46.23, lon: 2.21 },
+  germany: { lat: 51.17, lon: 10.45 },
+  de: { lat: 51.17, lon: 10.45 },
+  italy: { lat: 41.87, lon: 12.57 },
+  it: { lat: 41.87, lon: 12.57 },
+  uk: { lat: 55.37, lon: -3.43 },
+  'united kingdom': { lat: 55.37, lon: -3.43 },
+  gb: { lat: 55.37, lon: -3.43 },
+  australia: { lat: -25.27, lon: 133.77 },
+  au: { lat: -25.27, lon: 133.77 },
+  india: { lat: 20.59, lon: 78.96 },
+  in: { lat: 20.59, lon: 78.96 },
+}
+
+function normalizeGeoKey(value: string | null | undefined) {
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function getCountryCentroid(label: string | null | undefined) {
+  const normalized = normalizeGeoKey(label)
+  return COUNTRY_CENTROIDS[normalized] || null
+}
+
+function projectMapPoint(lat: number, lon: number) {
+  const x = ((lon + 180) / 360) * 100
+  const y = ((90 - lat) / 180) * 100
+  return { x, y }
+}
+
+function buildTrafficMapPoints(siteAnalytics: SiteAnalyticsData | null) {
+  if (!siteAnalytics) return []
+
+  return (siteAnalytics.topCountries || [])
+    .map((item) => {
+      const centroid = getCountryCentroid(item.label)
+      if (!centroid) return null
+
+      return {
+        label: item.label,
+        count: item.value,
+        ...projectMapPoint(centroid.lat, centroid.lon),
+      }
+    })
+    .filter((item): item is { label: string; count: number; x: number; y: number } => Boolean(item))
+}
+
 function getPreviewItemTitle(item: MediaPreviewItem) {
   if (item.label?.trim()) {
     return item.label.trim()
@@ -1081,6 +1177,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       averageDurationSeconds: siteAnalytics?.overview.averageDurationSeconds || 0,
     }
   }, [projects, publications, pendingReviews, contacts.length, chatLeads, chatConversations.length, siteAnalytics])
+  const trafficMapPoints = useMemo(() => buildTrafficMapPoints(siteAnalytics), [siteAnalytics])
   const crmBoardColumns = useMemo(
     () => [
       { value: 'new', label: 'Nuevos', items: sortedChatLeads.filter((lead) => lead.leadStatus === 'new') },
@@ -3421,10 +3518,206 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           <h2 className="text-base font-light">Configuracion del sitio</h2>
                           <p className="text-xs text-zinc-500 mt-1">Edita marca, SEO, contacto, redes, portada y categorias configurables.</p>
                         </div>
-                        <Button onClick={handleSaveSiteConfig} disabled={loading} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm">
-                          <Save className="w-4 h-4 mr-1" />
-                          {loading ? t.admin.saving : 'Guardar sitio'}
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button type="button" variant="outline" className="text-xs sm:text-sm" onClick={() => void handleGenerateManagementReport()} disabled={managementReportLoading}>
+                            {managementReportLoading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Bot className="mr-1 h-4 w-4" />}
+                            Informe IA
+                          </Button>
+                          <Button onClick={handleSaveSiteConfig} disabled={loading} className="bg-zinc-900 hover:bg-zinc-800 text-xs sm:text-sm">
+                            <Save className="w-4 h-4 mr-1" />
+                            {loading ? t.admin.saving : 'Guardar sitio'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-5">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Analitica de acceso del sitio</h3>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              Metricas reales de acceso, IP, permanencia, eventos y cruce con leads que dejaron telefono, correo o WhatsApp en el chat.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setActiveTab('analytics')} className="rounded-full border border-zinc-200 px-3 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50">
+                              Ver Resumen
+                            </button>
+                            <button type="button" onClick={() => setActiveTab('crm')} className="rounded-full border border-zinc-200 px-3 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50">
+                              Ir al CRM
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-xl bg-zinc-50 p-4">
+                            <p className="text-xs text-zinc-500">Sesiones reales</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{siteAnalytics?.overview.totalSessions || 0}</p>
+                          </div>
+                          <div className="rounded-xl bg-zinc-50 p-4">
+                            <p className="text-xs text-zinc-500">Visitantes identificados</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{siteAnalytics?.overview.identifiedSessions || 0}</p>
+                            <p className="mt-1 text-[11px] text-zinc-500">Vinculados al chat/leads</p>
+                          </div>
+                          <div className="rounded-xl bg-zinc-50 p-4">
+                            <p className="text-xs text-zinc-500">Permanencia media</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{formatDurationShort(siteAnalytics?.overview.averageDurationSeconds || 0)}</p>
+                          </div>
+                          <div className="rounded-xl bg-zinc-50 p-4">
+                            <p className="text-xs text-zinc-500">Eventos registrados</p>
+                            <p className="mt-2 text-2xl font-light text-zinc-900">{siteAnalytics?.overview.eventsTracked || 0}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                          <div className="rounded-xl border border-zinc-200 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-zinc-900">Mapa aproximado de visitantes</p>
+                                <p className="mt-1 text-xs text-zinc-500">Basado en pais/ciudad reportado por el proxy o headers. Es una aproximacion comercial, no GPS exacto.</p>
+                              </div>
+                              <Globe className="h-4 w-4 text-zinc-400" />
+                            </div>
+                            <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.08),_transparent_55%),linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]">
+                              <div className="relative aspect-[16/8]">
+                                <div className="absolute inset-0 opacity-70">
+                                  <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-zinc-300" />
+                                  <div className="absolute inset-y-0 left-1/4 border-l border-dashed border-zinc-300" />
+                                  <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-zinc-300" />
+                                  <div className="absolute inset-y-0 left-3/4 border-l border-dashed border-zinc-300" />
+                                </div>
+                                {trafficMapPoints.map((point) => (
+                                  <div
+                                    key={`map-${point.label}`}
+                                    className="absolute -translate-x-1/2 -translate-y-1/2"
+                                    style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                                  >
+                                    <div className="relative">
+                                      <div className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-400/20 blur-md" />
+                                      <div className="relative flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-sky-500 shadow">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                {trafficMapPoints.length === 0 ? (
+                                  <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-400">
+                                    Aun no hay ubicaciones suficientes para dibujar el mapa.
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                              <div className="rounded-xl bg-zinc-50 p-3">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Top paises</p>
+                                <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                                  {(siteAnalytics?.topCountries || []).slice(0, 6).map((item) => (
+                                    <div key={`site-country-${item.label}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
+                                      <span className="truncate">{item.label}</span>
+                                      <span className="text-xs text-zinc-500">{item.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="rounded-xl bg-zinc-50 p-3">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Top ciudades</p>
+                                <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                                  {(siteAnalytics?.topCities || []).slice(0, 6).map((item) => (
+                                    <div key={`site-city-${item.label}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
+                                      <span className="truncate">{item.label}</span>
+                                      <span className="text-xs text-zinc-500">{item.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-zinc-200 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-zinc-900">Visitantes y leads vinculados</p>
+                                <p className="mt-1 text-xs text-zinc-500">Cruce por sessionId del chat para identificar telefono, correo y servicio solicitado.</p>
+                              </div>
+                              <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] text-zinc-600">
+                                {(siteAnalytics?.recentVisitors || []).length} registros
+                              </span>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              {(siteAnalytics?.recentVisitors || []).slice(0, 10).map((visitor) => (
+                                <div key={`site-visitor-${visitor.id}`} className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-medium text-zinc-900">{visitor.ipAddress}</p>
+                                      <p className="mt-1 text-[11px] text-zinc-500">{visitor.location} • {visitor.entryDevice}</p>
+                                    </div>
+                                    <span className="rounded-full bg-white px-2 py-1 text-[11px] text-zinc-600">{formatDurationShort(visitor.durationSeconds)}</span>
+                                  </div>
+                                  <div className="mt-3 space-y-1 text-xs text-zinc-600">
+                                    <p>{visitor.landingPath} → {visitor.currentPath}</p>
+                                    <p>{visitor.referrer} • {visitor.pageViews} vistas</p>
+                                    {visitor.campaign ? <p>Campaña: {visitor.campaign}</p> : null}
+                                  </div>
+                                  {visitor.leadName || visitor.leadPhone || visitor.leadEmail ? (
+                                    <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-950">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium">{visitor.leadName || 'Lead vinculado'}</span>
+                                        {visitor.leadStatus ? <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-sky-700">{visitor.leadStatus}</span> : null}
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                                        {visitor.leadPhone ? <span>{visitor.leadPhone}</span> : null}
+                                        {visitor.leadEmail ? <span>{visitor.leadEmail}</span> : null}
+                                        {visitor.serviceType ? <span>{visitor.serviceType}</span> : null}
+                                        {visitor.projectType ? <span>{visitor.projectType}</span> : null}
+                                      </div>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        {getWhatsappHref(visitor.leadPhone) ? <a href={getWhatsappHref(visitor.leadPhone)} target="_blank" rel="noreferrer" className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] text-sky-900 hover:bg-sky-100">WhatsApp</a> : null}
+                                        {getMailHref(visitor.leadEmail) ? <a href={getMailHref(visitor.leadEmail)} className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] text-sky-900 hover:bg-sky-100">Correo</a> : null}
+                                        <button type="button" onClick={() => setActiveTab('crm')} className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] text-sky-900 hover:bg-sky-100">
+                                          Abrir CRM
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                          <div className="rounded-xl border border-zinc-200 p-4">
+                            <p className="text-sm font-medium text-zinc-900">Registro de eventos</p>
+                            <p className="mt-1 text-xs text-zinc-500">Page views, permanencia, aperturas de chat y envíos del formulario.</p>
+                            <div className="mt-4 space-y-2">
+                              {(siteAnalytics?.recentEvents || []).slice(0, 12).map((event) => (
+                                <div key={`site-event-${event.id}`} className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="font-medium text-zinc-800">{event.eventType}</span>
+                                    <span>{new Date(event.createdAt).toLocaleString()}</span>
+                                  </div>
+                                  <div className="mt-1 space-y-0.5">
+                                    <p>{event.path}</p>
+                                    <p>{event.ipAddress} • {event.referrer}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {managementReport ? (
+                            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                              <div className="flex items-center justify-between gap-3">
+                                <h4 className="text-sm font-medium text-zinc-900">Informe gerencial IA</h4>
+                                <span className="text-[11px] text-zinc-500">{[managementReportMeta?.provider, managementReportMeta?.model].filter(Boolean).join(' • ')}</span>
+                              </div>
+                              <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-700">{managementReport}</div>
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/70 px-4 py-5 text-sm text-zinc-500">
+                              Genera un informe IA para resumir tráfico, leads y contenido desde esta misma pantalla.
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
