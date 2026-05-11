@@ -22,12 +22,25 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuItems, setMenuItems] = useState<MenuItemConfig[]>([])
   const isLight = tone === 'light'
+  const surfaceToneClass = isLight
+    ? 'border-white/35 bg-black/14 text-white hover:border-white/70 hover:bg-white hover:text-zinc-900'
+    : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-zinc-900 hover:text-white'
   const menuButtonClass = [
-    'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] uppercase tracking-[0.24em] transition-colors backdrop-blur-md',
-    isLight
-      ? 'border-white/40 bg-black/12 text-white hover:border-white/70 hover:bg-black/24'
-      : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
+    'inline-flex h-11 items-center justify-center gap-2 rounded-full border px-4 text-[10px] uppercase tracking-[0.24em] transition-colors backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 sm:text-[11px]',
+    surfaceToneClass,
   ].join(' ')
+  const iconButtonClass = [
+    'h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300',
+    surfaceToneClass,
+  ].join(' ')
+  const mobileHomeButtonClass = [
+    'fixed bottom-5 left-1/2 z-50 inline-flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full border shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 md:hidden',
+    surfaceToneClass,
+  ].join(' ')
+  const menuItemClass = isLight ? 'text-white/88 hover:text-white' : 'text-zinc-900/88 hover:text-zinc-950'
+  const menuItemTextClass = isLight ? 'text-white/88' : 'text-zinc-900/88'
+  const submenuItemClass = isLight ? 'text-white/66 hover:text-white' : 'text-zinc-700/80 hover:text-zinc-950'
+  const submenuTextClass = isLight ? 'text-white/66' : 'text-zinc-700/80'
   useEffect(() => {
     let active = true
 
@@ -67,12 +80,7 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
           <Link
             href="/"
             aria-label="Inicio"
-            className={[
-              'hidden h-11 w-11 items-center justify-center rounded-full border backdrop-blur-md transition-colors md:inline-flex',
-              isLight
-                ? 'border-white/35 bg-black/14 text-white hover:border-white/70 hover:bg-white hover:text-zinc-900'
-                : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-zinc-900 hover:text-white',
-            ].join(' ')}
+            className={`hidden md:inline-flex ${iconButtonClass}`}
           >
             <Home className="h-4 w-4" />
           </Link>
@@ -92,48 +100,50 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="mx-4 rounded-3xl border border-white/20 bg-black/18 px-4 py-4 backdrop-blur-xl sm:mx-6"
+            className="absolute inset-x-0 top-full"
           >
-            <div className="ml-auto flex max-w-7xl flex-col items-end gap-2">
-              {menuItems.map((item) => (
-                <div key={item.id} className="flex flex-col items-end gap-2">
-                  {item.href ? (
-                    <Link
-                      href={item.href}
-                      onClick={() => setIsMenuOpen(false)}
-                      target={item.openInNewTab ? '_blank' : undefined}
-                      rel={item.openInNewTab ? 'noreferrer' : undefined}
-                      className="text-sm text-white/92 transition-colors hover:text-white"
-                    >
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <span className="text-sm text-white/92">{item.label}</span>
-                  )}
-                  {item.children?.length ? (
-                    <div className="mr-2 flex flex-col items-end gap-1 border-r border-white/15 pr-3">
-                      {item.children.map((child) =>
-                        child.href ? (
-                          <Link
-                            key={child.id}
-                            href={child.href}
-                            onClick={() => setIsMenuOpen(false)}
-                            target={child.openInNewTab ? '_blank' : undefined}
-                            rel={child.openInNewTab ? 'noreferrer' : undefined}
-                            className="text-xs text-white/70 transition-colors hover:text-white"
-                          >
-                            {child.label}
-                          </Link>
-                        ) : (
-                          <span key={child.id} className="text-xs text-white/70">
-                            {child.label}
-                          </span>
-                        ),
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+            <div className="mx-auto flex max-w-7xl justify-end px-4 pt-3 sm:px-6">
+              <div className="flex w-fit max-w-[calc(100vw-2rem)] flex-col items-end gap-3 py-1 text-right">
+                {menuItems.map((item) => (
+                  <div key={item.id} className="flex flex-col items-end gap-2">
+                    {item.href ? (
+                      <Link
+                        href={item.href}
+                        onClick={() => setIsMenuOpen(false)}
+                        target={item.openInNewTab ? '_blank' : undefined}
+                        rel={item.openInNewTab ? 'noreferrer' : undefined}
+                        className={`inline-flex max-w-full justify-end text-right text-sm transition-colors ${menuItemClass}`}
+                      >
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <span className={`text-sm ${menuItemTextClass}`}>{item.label}</span>
+                    )}
+                    {item.children?.length ? (
+                      <div className="flex flex-col items-end gap-1 pr-2">
+                        {item.children.map((child) =>
+                          child.href ? (
+                            <Link
+                              key={child.id}
+                              href={child.href}
+                              onClick={() => setIsMenuOpen(false)}
+                              target={child.openInNewTab ? '_blank' : undefined}
+                              rel={child.openInNewTab ? 'noreferrer' : undefined}
+                              className={`inline-flex max-w-full justify-end text-right text-xs transition-colors ${submenuItemClass}`}
+                            >
+                              {child.label}
+                            </Link>
+                          ) : (
+                            <span key={child.id} className={`text-right text-xs ${submenuTextClass}`}>
+                              {child.label}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </div>
           </motion.div>
         )}
@@ -142,11 +152,11 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
     <Link
       href="/"
       aria-label="Inicio"
-      className="fixed bottom-5 left-1/2 z-50 inline-flex h-14 min-w-[76px] -translate-x-1/2 items-center justify-center rounded-full bg-black px-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.28)] transition-all duration-300 hover:bg-white hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 md:hidden"
+      className={mobileHomeButtonClass}
     >
-      <span className="h-3.5 w-3.5 rounded-full bg-current" />
+      <Home className="h-4 w-4" />
     </Link>
-    <ChatWidget />
+    <ChatWidget buttonTone={tone} />
     </>
   )
 }

@@ -42,6 +42,10 @@ const DEFAULT_CHAT_CONFIG: ChatConfig = {
   companyName: 'estudio591',
 }
 
+interface ChatWidgetProps {
+  buttonTone?: 'light' | 'dark'
+}
+
 function getSavedSession() {
   if (typeof window === 'undefined') return null
   const saved = localStorage.getItem('chat_session')
@@ -55,7 +59,7 @@ function normalizeMessages(input: Message[]) {
   }))
 }
 
-export function ChatWidget() {
+export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
   const [hasOpened, setHasOpened] = useState(false)
@@ -73,6 +77,13 @@ export function ChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const socketUrl = process.env.NEXT_PUBLIC_CHAT_SOCKET_URL?.trim() || '/?XTransformPort=3003'
   const socketPath = process.env.NEXT_PUBLIC_CHAT_SOCKET_PATH?.trim() || undefined
+  const isLightTone = buttonTone === 'light'
+  const floatingButtonClass = [
+    'fixed bottom-5 right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 sm:bottom-6 sm:right-6',
+    isLightTone
+      ? 'border-white/35 bg-black/14 text-white hover:border-white/70 hover:bg-white hover:text-zinc-900'
+      : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-zinc-900 hover:text-white',
+  ].join(' ')
 
   useEffect(() => {
     if (!isOpen || hasLoadedConfig) return
@@ -285,10 +296,10 @@ export function ChatWidget() {
           setIsOpen(nextOpen)
           if (nextOpen) setHasOpened(true)
         }}
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-zinc-900 text-white rounded-full shadow-lg hover:bg-zinc-800 transition-all duration-300 flex items-center justify-center"
+        className={floatingButtonClass}
         aria-label="Chat"
       >
-        {isOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />}
+        {isOpen ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
       </button>
 
       {/* Chat window */}

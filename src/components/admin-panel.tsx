@@ -880,6 +880,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [heroImageAssistLoading, setHeroImageAssistLoading] = useState(false)
   const [publicationImageAssistLoading, setPublicationImageAssistLoading] = useState(false)
   const [projectEditorStep, setProjectEditorStep] = useState<'overview' | 'media' | 'seo' | 'publish'>('overview')
+  const [siteView, setSiteView] = useState<'general' | 'seo' | 'hero' | 'contact' | 'analytics'>('general')
   const [telegramView, setTelegramView] = useState<'config' | 'logs'>('config')
   const [aiLangTab, setAiLangTab] = useState<'es' | 'en' | 'pt'>('es')
   const [automationActionId, setAutomationActionId] = useState<string | null>(null)
@@ -3201,9 +3202,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                   </div>
                                 ))}
                               </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
                         <div className="rounded-2xl border border-zinc-200 bg-white p-5">
                           <div className="flex items-start justify-between gap-3">
@@ -3530,7 +3531,29 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-5">
+                      <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-2">
+                        {[
+                          { key: 'general', label: 'General' },
+                          { key: 'seo', label: 'SEO' },
+                          { key: 'hero', label: 'Portada' },
+                          { key: 'contact', label: 'Contacto y redes' },
+                          { key: 'analytics', label: 'Estadísticas' },
+                        ].map((item) => (
+                          <button
+                            key={`site-view-${item.key}`}
+                            type="button"
+                            onClick={() => setSiteView(item.key as typeof siteView)}
+                            className={`rounded-full px-4 py-2 text-xs transition-colors ${
+                              siteView === item.key ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {siteView === 'analytics' && (
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-5">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <h3 className="text-sm font-medium text-zinc-900">Analitica de acceso del sitio</h3>
@@ -3718,8 +3741,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                             </div>
                           )}
                         </div>
-                      </div>
+                        </div>
+                      )}
 
+                      {siteView === 'general' && (
+                        <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-medium text-zinc-700 mb-1 block">Nombre comercial</label>
@@ -3735,8 +3761,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         <label className="text-xs font-medium text-zinc-700 mb-1 block">Eslogan</label>
                         <Input value={siteForm.tagline} onChange={e => setSiteForm({ ...siteForm, tagline: e.target.value })} className="text-sm" />
                       </div>
+                        </div>
+                      )}
 
-                      <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                      {siteView === 'seo' && (
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <h3 className="text-sm font-medium text-zinc-900">SEO y redes sociales</h3>
@@ -3767,34 +3796,38 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           <label className="text-xs font-medium text-zinc-700 mb-1 block">Palabras clave SEO</label>
                           <Input value={siteForm.seoKeywords} onChange={e => setSiteForm({ ...siteForm, seoKeywords: e.target.value })} placeholder="ingenieria, construccion, supervision, arquitectura, software, ERP" className="text-sm" />
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Logo cabecera</label>
-                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                              {uploadingField === 'logoUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                              Subir imagen
-                              <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'logoUrl')} />
-                            </label>
-                          </div>
-                          <Input value={siteForm.logoUrl} onChange={e => setSiteForm({ ...siteForm, logoUrl: e.target.value })} placeholder="/api/media/logo.png o https://..." className="text-sm" />
                         </div>
-                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <label className="text-xs font-medium text-zinc-700 mb-1 block">Favicon / icono</label>
-                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                              {uploadingField === 'faviconUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                              Subir icono
-                              <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'faviconUrl')} />
-                            </label>
-                          </div>
-                          <Input value={siteForm.faviconUrl} onChange={e => setSiteForm({ ...siteForm, faviconUrl: e.target.value })} placeholder="/api/media/favicon.png o https://..." className="text-sm" />
-                        </div>
-                      </div>
+                      )}
 
-                      <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                      {siteView === 'general' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <label className="text-xs font-medium text-zinc-700 mb-1 block">Logo cabecera</label>
+                              <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                                {uploadingField === 'logoUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                Subir imagen
+                                <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'logoUrl')} />
+                              </label>
+                            </div>
+                            <Input value={siteForm.logoUrl} onChange={e => setSiteForm({ ...siteForm, logoUrl: e.target.value })} placeholder="/api/media/logo.png o https://..." className="text-sm" />
+                          </div>
+                          <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <label className="text-xs font-medium text-zinc-700 mb-1 block">Favicon / icono</label>
+                              <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                                {uploadingField === 'faviconUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                Subir icono
+                                <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'faviconUrl')} />
+                              </label>
+                            </div>
+                            <Input value={siteForm.faviconUrl} onChange={e => setSiteForm({ ...siteForm, faviconUrl: e.target.value })} placeholder="/api/media/favicon.png o https://..." className="text-sm" />
+                          </div>
+                        </div>
+                      )}
+
+                      {siteView === 'seo' && (
+                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
                         <div className="flex items-center justify-between gap-3">
                           <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen para compartir enlaces</label>
                           <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
@@ -3805,9 +3838,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         </div>
                         <Input value={siteForm.socialShareImageUrl} onChange={e => setSiteForm({ ...siteForm, socialShareImageUrl: e.target.value })} placeholder="/api/media/seo-share.jpg o https://..." className="text-sm" />
                         <p className="text-xs text-zinc-500">Se usa al compartir el link en Facebook, WhatsApp, LinkedIn y otras plataformas. Recomendado: 1200 x 630 px.</p>
-                      </div>
+                        </div>
+                      )}
 
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      {siteView === 'hero' && (
+                        <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                         <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
                           <div className="flex items-center justify-between gap-3">
                             <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagenes hero desktop</label>
@@ -3836,6 +3872,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                             placeholder="Una URL por linea. Acepta imagenes o videos. Si esta vacio, se usan las imagenes principales de proyectos publicados."
                             className="text-sm"
                           />
+                          <p className="text-xs text-zinc-500">Puedes dejar la URL externa tal cual o usar <span className="font-medium">Guardar URLs local</span> para descargar el archivo al servidor antes de publicarlo.</p>
                           <MediaPreviewGrid
                             items={parseUrlList(siteForm.heroImages).map((url) => ({ url }))}
                             emptyLabel="Aun no hay medios desktop cargados."
@@ -3871,6 +3908,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                             placeholder="Opcional. Acepta imagenes o videos. Si esta vacio, mobile reutiliza los medios desktop."
                             className="text-sm"
                           />
+                          <p className="text-xs text-zinc-500">Para mobile puedes usar el mismo origen externo o guardar una copia local optimizada.</p>
                           <MediaPreviewGrid
                             items={parseUrlList(siteForm.heroImagesMobile).map((url) => ({ url }))}
                             emptyLabel="Si no cargas medios mobile, la web reutiliza los desktop."
@@ -4156,8 +4194,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           </div>
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
                           <div className="flex items-center justify-between gap-3">
                             <label className="text-xs font-medium text-zinc-700 block">Opacidad del hero</label>
@@ -4319,6 +4356,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           <p className="text-xs text-zinc-500">Para tu estilo actual usa: texto oscuro, modo mejorada u original y “mostrar imagen entera” si quieres respetar el encuadre.</p>
                         </div>
                       </div>
+                        </div>
+                      )}
+
+                      {siteView === 'contact' && (
+                        <div className="space-y-4">
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -4383,6 +4425,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           </div>
                         </div>
                       </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -6154,6 +6198,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
               <ImageIcon className="h-4 w-4 text-sky-700" />
               Medios y formatos
+            </div>
+            <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/70 px-4 py-3 text-xs text-zinc-500">
+              Puedes trabajar de dos maneras: pegar un enlace externo y usarlo directamente, o pulsar <span className="font-medium text-zinc-700">Guardar URL local</span> para descargarlo al servidor antes de publicar.
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
