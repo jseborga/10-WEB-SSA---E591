@@ -14,6 +14,8 @@ export function getDefaultSiteSettings() {
     socialShareImageUrl: '',
     heroImages: '',
     heroImagesMobile: '',
+    heroMessages: 'SSA Ingenieria\nSoluciones integrales\nConstruccion, supervision y diseno\nIngenieria y software para proyectos',
+    heroRotationMs: 8600,
     heroImageOpacity: 34,
     heroImageSaturation: 90,
     heroImageBrightness: 100,

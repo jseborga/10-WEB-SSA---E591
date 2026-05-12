@@ -1,3 +1,5 @@
+import { isVideoUrl, parseUrlList } from '@/lib/public-site'
+
 type SeoSiteSettings = {
   companyName?: string | null
   tagline?: string | null
@@ -8,6 +10,8 @@ type SeoSiteSettings = {
   logoUrl?: string | null
   faviconUrl?: string | null
   socialShareImageUrl?: string | null
+  heroImages?: string | null
+  heroImagesMobile?: string | null
   legalName?: string | null
   email?: string | null
   phone?: string | null
@@ -19,6 +23,13 @@ type SeoSiteSettings = {
   linkedinUrl?: string | null
   youtubeUrl?: string | null
   tiktokUrl?: string | null
+}
+
+type SeoProjectSource = {
+  mainImage?: string | null
+  mainImageMobile?: string | null
+  gallery?: string | null
+  galleryMobile?: string | null
 }
 
 const FALLBACK_SITE_URL =
@@ -74,12 +85,48 @@ export function getSeoKeywords(siteSettings?: SeoSiteSettings | null) {
     .filter(Boolean)
 }
 
+function getFirstShareableImage(candidates: Array<string | null | undefined>, siteSettings?: SeoSiteSettings | null) {
+  for (const candidate of candidates) {
+    const absoluteUrl = toAbsoluteUrl(candidate, siteSettings)
+
+    if (absoluteUrl && !isVideoUrl(absoluteUrl)) {
+      return absoluteUrl
+    }
+  }
+
+  return undefined
+}
+
 export function getSeoImage(siteSettings?: SeoSiteSettings | null) {
+  const heroImages = [
+    ...parseUrlList(siteSettings?.heroImages),
+    ...parseUrlList(siteSettings?.heroImagesMobile),
+  ]
+
   return (
-    toAbsoluteUrl(siteSettings?.socialShareImageUrl, siteSettings) ||
+    getFirstShareableImage([siteSettings?.socialShareImageUrl], siteSettings) ||
+    getFirstShareableImage(heroImages, siteSettings) ||
     toAbsoluteUrl(siteSettings?.logoUrl, siteSettings) ||
     toAbsoluteUrl(siteSettings?.faviconUrl, siteSettings) ||
     toAbsoluteUrl('/logo.svg', siteSettings)
+  )
+}
+
+export function getProjectSeoImage(project?: SeoProjectSource | null, siteSettings?: SeoSiteSettings | null) {
+  if (!project) {
+    return getSeoImage(siteSettings)
+  }
+
+  const projectGallery = [
+    ...parseUrlList(project.gallery),
+    ...parseUrlList(project.galleryMobile),
+  ]
+
+  return (
+    getFirstShareableImage(
+      [project.mainImage, project.mainImageMobile, ...projectGallery],
+      siteSettings,
+    ) || getSeoImage(siteSettings)
   )
 }
 
@@ -125,4 +172,3 @@ export function getWebsiteJsonLd(siteSettings?: SeoSiteSettings | null) {
     inLanguage: ['es', 'en', 'pt'],
   }
 }
-

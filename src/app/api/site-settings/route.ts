@@ -54,6 +54,8 @@ export async function PUT(request: Request) {
         socialShareImageUrl: body.socialShareImageUrl ?? currentSettings.socialShareImageUrl,
         heroImages: body.heroImages ?? currentSettings.heroImages,
         heroImagesMobile: body.heroImagesMobile ?? currentSettings.heroImagesMobile,
+        heroMessages: body.heroMessages ?? currentSettings.heroMessages,
+        heroRotationMs: clampInteger(body.heroRotationMs, currentSettings.heroRotationMs, 2500, 20000),
         heroImageOpacity: clampInteger(body.heroImageOpacity, currentSettings.heroImageOpacity, 5, 70),
         heroImageSaturation: clampInteger(body.heroImageSaturation, currentSettings.heroImageSaturation, 0, 160),
         heroImageBrightness: clampInteger(body.heroImageBrightness, currentSettings.heroImageBrightness, 70, 150),

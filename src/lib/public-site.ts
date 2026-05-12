@@ -57,10 +57,17 @@ export interface PublicSiteSettings {
   companyName?: string | null
   legalName?: string | null
   tagline?: string | null
+  siteUrl?: string | null
+  seoTitle?: string | null
+  seoDescription?: string | null
+  seoKeywords?: string | null
   logoUrl?: string | null
   faviconUrl?: string | null
+  socialShareImageUrl?: string | null
   heroImages?: string | null
   heroImagesMobile?: string | null
+  heroMessages?: string | null
+  heroRotationMs?: number | null
   heroImageOpacity?: number | null
   heroImageSaturation?: number | null
   heroImageBrightness?: number | null

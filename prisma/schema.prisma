@@ -162,6 +162,8 @@ model SiteSettings {
   socialShareImageUrl String?
   heroImages   String?
   heroImagesMobile     String?
+  heroMessages         String?
+  heroRotationMs       Int      @default(8600)
   heroImageOpacity    Int      @default(34)
   heroImageSaturation Int      @default(90)
   heroImageBrightness Int      @default(100)

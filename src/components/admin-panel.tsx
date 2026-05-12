@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 import { type MenuItemConfig, parseMenuConfig, serializeMenuConfig, buildPublicationHref } from '@/lib/menu-config'
-import { formatCategoryLabel, getProjectCategories, isVideoUrl, parseUrlList } from '@/lib/public-site'
+import { formatCategoryLabel, getProjectCategories, isVideoUrl, parseLineList, parseUrlList } from '@/lib/public-site'
 
 interface Project {
   id: string
@@ -226,6 +226,8 @@ interface SiteSettings {
   socialShareImageUrl: string
   heroImages: string
   heroImagesMobile: string
+  heroMessages: string
+  heroRotationMs: string
   heroImageOpacity: string
   heroImageSaturation: string
   heroImageBrightness: string
@@ -456,6 +458,8 @@ const emptySiteForm: SiteFormState = {
   socialShareImageUrl: '',
   heroImages: '',
   heroImagesMobile: '',
+  heroMessages: '',
+  heroRotationMs: '8600',
   heroImageOpacity: '34',
   heroImageSaturation: '90',
   heroImageBrightness: '100',
@@ -935,6 +939,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     () => parseUrlList(siteForm.heroImagesMobile)[0] || heroPreviewImage,
     [heroPreviewImage, siteForm.heroImagesMobile],
   )
+  const heroPreviewMessages = useMemo(() => parseLineList(siteForm.heroMessages), [siteForm.heroMessages])
+  const heroPreviewMessage = heroPreviewMessages[0] || siteForm.companyName || 'SSA Ingenieria'
+  const heroSharePreviewImage = useMemo(
+    () =>
+      [...parseUrlList(siteForm.heroImages), ...parseUrlList(siteForm.heroImagesMobile)].find((url) => !isVideoUrl(url)) || '',
+    [siteForm.heroImages, siteForm.heroImagesMobile],
+  )
   const heroPreviewStyles = useMemo(() => getHeroPreviewStyles(siteForm), [siteForm])
   const projectMediaSummary = useMemo(
     () => ({
@@ -1322,6 +1333,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         socialShareImageUrl: siteData.socialShareImageUrl || '',
         heroImages: siteData.heroImages || '',
         heroImagesMobile: siteData.heroImagesMobile || '',
+        heroMessages: siteData.heroMessages || '',
+        heroRotationMs: String(siteData.heroRotationMs ?? 8600),
         heroImageOpacity: String(siteData.heroImageOpacity ?? 34),
         heroImageSaturation: String(siteData.heroImageSaturation ?? 90),
         heroImageBrightness: String(siteData.heroImageBrightness ?? 100),
@@ -2322,6 +2335,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       const normalizedSiteForm = {
         ...siteForm,
         menuConfig: serializeMenuConfig(menuItems),
+        heroRotationMs: clampIntegerString(siteForm.heroRotationMs, 8600, 2500, 20000),
         heroImageOpacity: clampIntegerString(siteForm.heroImageOpacity, 34, 5, 70),
         heroImageSaturation: clampIntegerString(siteForm.heroImageSaturation, 90, 0, 160),
         heroImageBrightness: clampIntegerString(siteForm.heroImageBrightness, 100, 70, 150),
@@ -3830,14 +3844,33 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
                         <div className="flex items-center justify-between gap-3">
                           <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen para compartir enlaces</label>
-                          <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                            {uploadingField === 'socialShareImageUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                            Subir imagen
-                            <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'socialShareImageUrl')} />
-                          </label>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-8 px-3 text-xs"
+                              onClick={() => {
+                                if (!heroSharePreviewImage) {
+                                  toast.error('Carga primero una imagen de portada para usarla como SEO')
+                                  return
+                                }
+
+                                setSiteForm((current) => ({ ...current, socialShareImageUrl: heroSharePreviewImage }))
+                                toast.success('La imagen SEO ahora usa la portada')
+                              }}
+                              disabled={!heroSharePreviewImage}
+                            >
+                              Usar portada
+                            </Button>
+                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                              {uploadingField === 'socialShareImageUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              Subir imagen
+                              <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'socialShareImageUrl')} />
+                            </label>
+                          </div>
                         </div>
                         <Input value={siteForm.socialShareImageUrl} onChange={e => setSiteForm({ ...siteForm, socialShareImageUrl: e.target.value })} placeholder="/api/media/seo-share.jpg o https://..." className="text-sm" />
-                        <p className="text-xs text-zinc-500">Se usa al compartir el link en Facebook, WhatsApp, LinkedIn y otras plataformas. Recomendado: 1200 x 630 px.</p>
+                        <p className="text-xs text-zinc-500">Se usa al compartir el link en Facebook, WhatsApp, LinkedIn y otras plataformas. Recomendado: 1200 x 630 px. Si lo dejas vacio, la web toma la primera imagen valida de la portada.</p>
                         </div>
                       )}
 
@@ -3865,6 +3898,11 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               </label>
                             </div>
                           </div>
+                          <MediaPreviewGrid
+                            items={parseUrlList(siteForm.heroImages).map((url) => ({ url }))}
+                            emptyLabel="Aun no hay medios desktop cargados."
+                            onRemove={(item) => setSiteForm((current) => ({ ...current, heroImages: removeUrlFromList(current.heroImages, item.url) }))}
+                          />
                           <Textarea
                             value={siteForm.heroImages}
                             onChange={e => setSiteForm({ ...siteForm, heroImages: e.target.value })}
@@ -3873,11 +3911,6 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                             className="text-sm"
                           />
                           <p className="text-xs text-zinc-500">Puedes dejar la URL externa tal cual o usar <span className="font-medium">Guardar URLs local</span> para descargar el archivo al servidor antes de publicarlo.</p>
-                          <MediaPreviewGrid
-                            items={parseUrlList(siteForm.heroImages).map((url) => ({ url }))}
-                            emptyLabel="Aun no hay medios desktop cargados."
-                            onRemove={(item) => setSiteForm((current) => ({ ...current, heroImages: removeUrlFromList(current.heroImages, item.url) }))}
-                          />
                         </div>
 
                         <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
@@ -3901,6 +3934,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                               </label>
                             </div>
                           </div>
+                          <MediaPreviewGrid
+                            items={parseUrlList(siteForm.heroImagesMobile).map((url) => ({ url }))}
+                            emptyLabel="Si no cargas medios mobile, la web reutiliza los desktop."
+                            onRemove={(item) =>
+                              setSiteForm((current) => ({ ...current, heroImagesMobile: removeUrlFromList(current.heroImagesMobile, item.url) }))
+                            }
+                          />
                           <Textarea
                             value={siteForm.heroImagesMobile}
                             onChange={e => setSiteForm({ ...siteForm, heroImagesMobile: e.target.value })}
@@ -3909,13 +3949,6 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                             className="text-sm"
                           />
                           <p className="text-xs text-zinc-500">Para mobile puedes usar el mismo origen externo o guardar una copia local optimizada.</p>
-                          <MediaPreviewGrid
-                            items={parseUrlList(siteForm.heroImagesMobile).map((url) => ({ url }))}
-                            emptyLabel="Si no cargas medios mobile, la web reutiliza los desktop."
-                            onRemove={(item) =>
-                              setSiteForm((current) => ({ ...current, heroImagesMobile: removeUrlFromList(current.heroImagesMobile, item.url) }))
-                            }
-                          />
                         </div>
                         </div>
 
@@ -4087,7 +4120,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h3 className="text-sm font-medium text-zinc-900">Vista previa del hero</h3>
-                            <p className="text-xs text-zinc-500 mt-1">La home publica queda solo con imagen y menu.</p>
+                            <p className="text-xs text-zinc-500 mt-1">La home publica queda con carrusel, mensaje tipeado, boton de compartir y menu.</p>
                           </div>
                           {!heroPreviewImage && !heroPreviewMobileImage ? <span className="text-xs text-zinc-500">Sube una imagen para ver la previsualizacion</span> : null}
                         </div>
@@ -4127,16 +4160,35 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                       className="absolute inset-0"
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
                                     />
-                                    <div className="absolute right-4 top-4 flex items-center gap-2">
-                                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
-                                        <Globe className="h-4 w-4" />
+                                     <div className="absolute right-4 top-4 flex items-center gap-2">
+                                       <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
+                                         <Globe className="h-4 w-4" />
                                       </div>
                                       <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
-                                        <span>Menu</span>
-                                      </div>
-                                    </div>
-                                  </>
-                                ) : (
+                                         <span>Menu</span>
+                                       </div>
+                                     </div>
+                                     <div className="absolute bottom-4 left-4 max-w-[70%] space-y-2">
+                                       {siteForm.heroShowCompanyName ? (
+                                         <p className={`text-[10px] uppercase tracking-[0.26em] ${heroPreviewStyles.textTone === 'light' ? 'text-white/82' : 'text-zinc-900/78'}`}>
+                                           {siteForm.companyName || 'SSA Ingenieria'}
+                                         </p>
+                                       ) : null}
+                                       <div
+                                         className={`inline-flex max-w-full items-end gap-2 rounded-[22px] border px-4 py-3 backdrop-blur-md ${
+                                           heroPreviewStyles.textTone === 'light'
+                                             ? 'border-white/25 bg-black/18 text-white'
+                                             : 'border-white/55 bg-white/72 text-zinc-950'
+                                         }`}
+                                       >
+                                         <span className="whitespace-pre-wrap break-words text-base font-light leading-tight">
+                                           {heroPreviewMessage}
+                                         </span>
+                                         <span className="inline-block h-5 w-[2px] rounded-full bg-current/80" />
+                                       </div>
+                                     </div>
+                                   </>
+                                 ) : (
                                   <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-400">Sin imagen</div>
                                 )}
                               </div>
@@ -4177,20 +4229,67 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                       className="absolute inset-0"
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
                                     />
-                                    <div className="absolute right-4 top-4 flex items-center gap-2">
-                                      <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
-                                        <Globe className="h-4 w-4" />
+                                     <div className="absolute right-4 top-4 flex items-center gap-2">
+                                       <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
+                                         <Globe className="h-4 w-4" />
                                       </div>
                                       <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
-                                        <span>Menu</span>
-                                      </div>
-                                    </div>
-                                  </>
-                                ) : (
+                                         <span>Menu</span>
+                                       </div>
+                                     </div>
+                                     <div className="absolute bottom-4 left-4 max-w-[78%] space-y-2">
+                                       {siteForm.heroShowCompanyName ? (
+                                         <p className={`text-[10px] uppercase tracking-[0.26em] ${heroPreviewStyles.textTone === 'light' ? 'text-white/82' : 'text-zinc-900/78'}`}>
+                                           {siteForm.companyName || 'SSA Ingenieria'}
+                                         </p>
+                                       ) : null}
+                                       <div
+                                         className={`inline-flex max-w-full items-end gap-2 rounded-[22px] border px-4 py-3 backdrop-blur-md ${
+                                           heroPreviewStyles.textTone === 'light'
+                                             ? 'border-white/25 bg-black/18 text-white'
+                                             : 'border-white/55 bg-white/72 text-zinc-950'
+                                         }`}
+                                       >
+                                         <span className="whitespace-pre-wrap break-words text-sm font-light leading-tight">
+                                           {heroPreviewMessage}
+                                         </span>
+                                         <span className="inline-block h-4 w-[2px] rounded-full bg-current/80" />
+                                       </div>
+                                     </div>
+                                   </>
+                                 ) : (
                                   <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-400">Sin imagen</div>
                                 )}
                               </div>
                             </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                            <label className="text-xs font-medium text-zinc-700 block">Tiempo por imagen</label>
+                            <Input
+                              type="number"
+                              min="2500"
+                              max="20000"
+                              step="100"
+                              value={siteForm.heroRotationMs}
+                              onChange={e => setSiteForm({ ...siteForm, heroRotationMs: e.target.value })}
+                              className="text-sm"
+                            />
+                            <p className="text-xs text-zinc-500">Controla cuantos milisegundos permanece cada imagen del hero. Ejemplo: 8600 = 8.6 segundos.</p>
+                          </div>
+
+                          <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
+                            <label className="text-xs font-medium text-zinc-700 block">Mensajes tipeados</label>
+                            <Textarea
+                              value={siteForm.heroMessages}
+                              onChange={e => setSiteForm({ ...siteForm, heroMessages: e.target.value })}
+                              rows={4}
+                              placeholder={'Una frase por linea.\nSSA Ingenieria\nSoluciones integrales\nConstruccion, supervision y diseno'}
+                              className="text-sm"
+                            />
+                            <p className="text-xs text-zinc-500">La portada elige una frase aleatoria para cada cambio de imagen y la muestra con efecto de tipeo.</p>
                           </div>
                         </div>
                       </div>
@@ -6190,6 +6289,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   <Textarea value={projectForm.mainImageCaption} onChange={e => setProjectForm({ ...projectForm, mainImageCaption: e.target.value })} rows={3} className="text-sm" />
                 </div>
               </div>
+              <p className="text-xs text-zinc-500">
+                La pagina publica del proyecto usa la imagen principal como tarjeta social al compartir el enlace <span className="font-mono">/proyectos/id-del-proyecto</span>.
+              </p>
             </div>
               </>
             )}

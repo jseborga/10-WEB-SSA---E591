@@ -3,8 +3,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight, Link2, Instagram, Facebook, Linkedin, Youtube } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight, Link2, Instagram, Facebook, Linkedin, Youtube, Share2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
+import { parseUrlList } from '@/lib/public-site'
+import { shareLink } from '@/lib/share'
 
 interface Project {
   id: string
@@ -82,14 +85,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   const allImages = useMemo(() => {
     const rawGallery = isMobile ? project.galleryMobile || project.gallery : project.gallery
     const leadImage = isMobile ? project.mainImageMobile || project.mainImage : project.mainImage
-    let galleryImages: string[] = []
-    if (rawGallery) {
-      try {
-        galleryImages = JSON.parse(rawGallery)
-      } catch {
-        galleryImages = []
-      }
-    }
+    const galleryImages = parseUrlList(rawGallery)
     return leadImage
       ? [leadImage, ...galleryImages]
       : galleryImages.length > 0 
@@ -117,6 +113,44 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
       ].filter((item) => item.href.trim()),
     [project.facebookUrl, project.instagramUrl, project.linkedinUrl, project.referenceUrl, project.youtubeUrl],
   )
+  const shareCopy =
+    language === 'en'
+      ? {
+          share: 'Share project',
+          open: 'Open page',
+          copied: 'Project link copied',
+          error: 'Could not share the project',
+        }
+      : language === 'pt'
+        ? {
+            share: 'Compartilhar projeto',
+            open: 'Abrir pagina',
+            copied: 'Link do projeto copiado',
+            error: 'Nao foi possivel compartilhar o projeto',
+          }
+        : {
+            share: 'Compartir proyecto',
+            open: 'Abrir pagina',
+            copied: 'Enlace del proyecto copiado',
+            error: 'No se pudo compartir el proyecto',
+          }
+  const shareUrl = typeof window !== 'undefined' ? new URL(`/proyectos/${project.id}`, window.location.origin).toString() : `/proyectos/${project.id}`
+
+  const handleShareProject = useCallback(async () => {
+    try {
+      const result = await shareLink({
+        title: getTitle(),
+        text: project.description || getTitle(),
+        url: shareUrl,
+      })
+
+      if (result === 'copied') {
+        toast.success(shareCopy.copied)
+      }
+    } catch {
+      toast.error(shareCopy.error)
+    }
+  }, [getTitle, project.description, shareCopy.copied, shareCopy.error, shareUrl])
 
   return (
     <motion.div
@@ -214,7 +248,26 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
             <div className="lg:col-span-2">
               <span className="text-xs text-zinc-400 uppercase tracking-wider">{getCategoryLabel()}</span>
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-light text-white mt-2 mb-4">{getTitle()}</h1>
-              
+              <div className="mb-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleShareProject()}
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  {shareCopy.share}
+                </button>
+                <a
+                  href={`/proyectos/${project.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  {shareCopy.open}
+                </a>
+              </div>
+               
               <p className="text-sm sm:text-base text-zinc-300 leading-relaxed mb-6">
                 {getFullDescription()}
               </p>
