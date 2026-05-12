@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAuthenticatedUser } from '@/lib/admin-auth'
 import { generateImageVariants, type ImageTreatment, type ImageVariantTarget } from '@/lib/image-variants'
 
-const VALID_TARGETS: ImageVariantTarget[] = ['project', 'publication', 'hero']
+const VALID_TARGETS: ImageVariantTarget[] = ['project', 'publication', 'hero', 'social']
 const VALID_TREATMENTS: ImageTreatment[] = ['original', 'enhanced', 'editorial', 'monochrome']
 
 export async function POST(request: Request) {

@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 import { type MenuItemConfig, parseMenuConfig, serializeMenuConfig, buildPublicationHref } from '@/lib/menu-config'
 import { formatCategoryLabel, getProjectCategories, isVideoUrl, parseLineList, parseUrlList } from '@/lib/public-site'
+import { getSeoDescription, getSeoTitle, getSiteUrl } from '@/lib/seo'
 
 interface Project {
   id: string
@@ -357,7 +358,7 @@ type PublicationFormState = {
 }
 
 type PreparedImageResult = {
-  target: 'project' | 'publication' | 'hero'
+  target: 'project' | 'publication' | 'hero' | 'social'
   treatment: 'original' | 'enhanced' | 'editorial' | 'monochrome'
   original: {
     url: string
@@ -900,6 +901,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [projectAiLoading, setProjectAiLoading] = useState(false)
   const [publicationAiLoading, setPublicationAiLoading] = useState(false)
   const [siteSeoLoading, setSiteSeoLoading] = useState(false)
+  const [siteSocialImageAssistLoading, setSiteSocialImageAssistLoading] = useState(false)
   const [salesPromptLoading, setSalesPromptLoading] = useState(false)
   const [managementReport, setManagementReport] = useState('')
   const [managementReportMeta, setManagementReportMeta] = useState<{ provider?: string | null; model?: string | null } | null>(null)
@@ -925,11 +927,13 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [projectImageTreatment, setProjectImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
   const [heroImageTreatment, setHeroImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('editorial')
   const [publicationImageTreatment, setPublicationImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
+  const [siteSocialImageTreatment, setSiteSocialImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('editorial')
   const [dragLeadId, setDragLeadId] = useState<string | null>(null)
   const [dragLeadColumn, setDragLeadColumn] = useState<string | null>(null)
   const [projectImageVariants, setProjectImageVariants] = useState<PreparedImageResult | null>(null)
   const [heroImageVariants, setHeroImageVariants] = useState<PreparedImageResult | null>(null)
   const [publicationImageVariants, setPublicationImageVariants] = useState<PreparedImageResult | null>(null)
+  const [siteSocialImageVariants, setSiteSocialImageVariants] = useState<PreparedImageResult | null>(null)
 
   const [projectForm, setProjectForm] = useState<ProjectFormState>(emptyProjectForm)
   const [publicationForm, setPublicationForm] = useState<PublicationFormState>(emptyPublicationForm)
@@ -970,6 +974,20 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       [...parseUrlList(siteForm.heroImages), ...parseUrlList(siteForm.heroImagesMobile)].find((url) => !isVideoUrl(url)) || '',
     [siteForm.heroImages, siteForm.heroImagesMobile],
   )
+  const seoPreviewImage = useMemo(() => {
+    const explicit = siteForm.socialShareImageUrl.trim()
+    return explicit || heroSharePreviewImage
+  }, [heroSharePreviewImage, siteForm.socialShareImageUrl])
+  const seoPreviewTitle = useMemo(() => getSeoTitle(siteForm), [siteForm])
+  const seoPreviewDescription = useMemo(() => getSeoDescription(siteForm), [siteForm])
+  const seoPreviewUrl = useMemo(() => getSiteUrl(siteForm), [siteForm])
+  const seoPreviewHost = useMemo(() => {
+    try {
+      return new URL(seoPreviewUrl).host.replace(/^www\./, '')
+    } catch {
+      return seoPreviewUrl.replace(/^https?:\/\//, '')
+    }
+  }, [seoPreviewUrl])
   const heroPreviewStyles = useMemo(() => getHeroPreviewStyles(siteForm), [siteForm])
   const projectMediaSummary = useMemo(
     () => ({
@@ -1872,6 +1890,47 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       toast.error('No se pudieron preparar las variantes para la portada')
     } finally {
       setHeroImageAssistLoading(false)
+    }
+  }
+
+  const handlePrepareSiteSocialImage = async () => {
+    const sourceUrl = siteForm.socialShareImageUrl.trim() || heroSharePreviewImage
+
+    if (!sourceUrl) {
+      toast.error('Carga primero una imagen SEO o una portada para optimizarla')
+      return
+    }
+
+    if (isVideoUrl(sourceUrl)) {
+      toast.error('La optimizacion SEO funciona sobre imagenes, no sobre videos')
+      return
+    }
+
+    setSiteSocialImageAssistLoading(true)
+    try {
+      const response = await fetch('/api/ai/image-variants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceUrl,
+          target: 'social',
+          treatment: siteSocialImageTreatment,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data.result) {
+        toast.error(data.error || 'No se pudo optimizar la imagen SEO')
+        return
+      }
+
+      setSiteSocialImageVariants(data.result)
+      toast.success('Variantes SEO listas para compartir')
+    } catch {
+      toast.error('No se pudo optimizar la imagen SEO')
+    } finally {
+      setSiteSocialImageAssistLoading(false)
     }
   }
 
@@ -3865,36 +3924,157 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       )}
 
                       {siteView === 'seo' && (
-                        <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen para compartir enlaces</label>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="h-8 px-3 text-xs"
-                              onClick={() => {
-                                if (!heroSharePreviewImage) {
-                                  toast.error('Carga primero una imagen de portada para usarla como SEO')
-                                  return
-                                }
+                        <div className="space-y-4">
+                          <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen para compartir enlaces</label>
+                                <p className="text-xs text-zinc-500">Se usa al compartir el link en Google, WhatsApp, Facebook, LinkedIn y otras plataformas.</p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => {
+                                    if (!heroSharePreviewImage) {
+                                      toast.error('Carga primero una imagen de portada para usarla como SEO')
+                                      return
+                                    }
 
-                                setSiteForm((current) => ({ ...current, socialShareImageUrl: heroSharePreviewImage }))
-                                toast.success('La imagen SEO ahora usa la portada')
-                              }}
-                              disabled={!heroSharePreviewImage}
-                            >
-                              Usar portada
-                            </Button>
-                            <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
-                              {uploadingField === 'socialShareImageUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                              Subir imagen
-                              <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'socialShareImageUrl')} />
-                            </label>
+                                    setSiteForm((current) => ({ ...current, socialShareImageUrl: heroSharePreviewImage }))
+                                    toast.success('La imagen SEO ahora usa la portada')
+                                  }}
+                                  disabled={!heroSharePreviewImage}
+                                >
+                                  Usar portada
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => void handlePrepareSiteSocialImage()}
+                                  disabled={siteSocialImageAssistLoading || !(siteForm.socialShareImageUrl.trim() || heroSharePreviewImage)}
+                                >
+                                  {siteSocialImageAssistLoading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1 h-4 w-4" />}
+                                  {siteSocialImageAssistLoading ? 'Optimizando...' : 'Optimizar con IA'}
+                                </Button>
+                                <label className="inline-flex items-center gap-2 text-xs text-zinc-600 cursor-pointer">
+                                  {uploadingField === 'socialShareImageUrl' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                  Subir imagen
+                                  <input type="file" accept="image/*" className="hidden" onChange={e => void handleSiteAssetUpload(e.target.files, 'socialShareImageUrl')} />
+                                </label>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {(['editorial', 'enhanced', 'original', 'monochrome'] as const).map((option) => (
+                                <button
+                                  key={`seo-share-${option}`}
+                                  type="button"
+                                  onClick={() => setSiteSocialImageTreatment(option)}
+                                  className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                                    siteSocialImageTreatment === option
+                                      ? 'border-zinc-900 bg-zinc-900 text-white'
+                                      : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                                  }`}
+                                >
+                                  {option === 'enhanced' ? 'Mejorada' : option === 'editorial' ? 'Editorial' : option === 'monochrome' ? 'Monocromo' : 'Original'}
+                                </button>
+                              ))}
+                            </div>
+                            <Input value={siteForm.socialShareImageUrl} onChange={e => setSiteForm({ ...siteForm, socialShareImageUrl: e.target.value })} placeholder="/api/media/seo-share.jpg o https://..." className="text-sm" />
+                            <p className="text-xs text-zinc-500">Recomendado para SEO social: 1200 x 630 px, foco centrado y sin texto pegado a los bordes. Si lo dejas vacio, la web toma la primera imagen valida de la portada.</p>
+
+                            {siteSocialImageVariants ? (
+                              <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3">
+                                <MediaPreviewGrid
+                                  items={[
+                                    { url: siteSocialImageVariants.desktop.url, label: `SEO share ${siteSocialImageVariants.desktop.width}x${siteSocialImageVariants.desktop.height}` },
+                                    { url: siteSocialImageVariants.mobile.url, label: `Mobile safe crop ${siteSocialImageVariants.mobile.width}x${siteSocialImageVariants.mobile.height}` },
+                                  ]}
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="text-xs"
+                                    onClick={() => {
+                                      setSiteForm((current) => ({ ...current, socialShareImageUrl: siteSocialImageVariants.desktop.url }))
+                                      toast.success('La imagen SEO optimizada ya esta seleccionada')
+                                    }}
+                                  >
+                                    Aplicar imagen SEO
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="text-xs"
+                                    onClick={() => {
+                                      setSiteForm((current) => ({
+                                        ...current,
+                                        socialShareImageUrl: siteSocialImageVariants.desktop.url,
+                                        heroImages: mergeUniqueUrls(current.heroImages, [siteSocialImageVariants.desktop.url]),
+                                      }))
+                                      toast.success('La variante SEO tambien se agrego a la portada')
+                                    }}
+                                  >
+                                    Aplicar y guardar en portada
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
-                        </div>
-                        <Input value={siteForm.socialShareImageUrl} onChange={e => setSiteForm({ ...siteForm, socialShareImageUrl: e.target.value })} placeholder="/api/media/seo-share.jpg o https://..." className="text-sm" />
-                        <p className="text-xs text-zinc-500">Se usa al compartir el link en Facebook, WhatsApp, LinkedIn y otras plataformas. Recomendado: 1200 x 630 px. Si lo dejas vacio, la web toma la primera imagen valida de la portada.</p>
+
+                          <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                            <div>
+                              <h3 className="text-sm font-medium text-zinc-900">Vista previa SEO</h3>
+                              <p className="mt-1 text-xs text-zinc-500">La metadata SEO es una sola para desktop y mobile. Lo que cambia entre dispositivos es el ancho visible y el recorte aparente de la imagen, por eso conviene mantener el foco centrado.</p>
+                            </div>
+
+                            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+                              <div className="space-y-3">
+                                <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                                  <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Google desktop</p>
+                                  <div className="mt-3 space-y-1">
+                                    <p className="truncate text-sm text-emerald-700">{seoPreviewHost}</p>
+                                    <p className="line-clamp-2 text-xl leading-6 text-blue-700">{seoPreviewTitle}</p>
+                                    <p className="line-clamp-3 text-sm leading-6 text-zinc-600">{seoPreviewDescription}</p>
+                                  </div>
+                                </div>
+                                <div className="max-w-[390px] rounded-xl border border-zinc-200 bg-white p-4">
+                                  <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Google mobile</p>
+                                  <div className="mt-3 space-y-1">
+                                    <p className="truncate text-[11px] text-emerald-700">{seoPreviewHost}</p>
+                                    <p className="line-clamp-2 text-base leading-5 text-blue-700">{seoPreviewTitle}</p>
+                                    <p className="line-clamp-4 text-xs leading-5 text-zinc-600">{seoPreviewDescription}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="rounded-xl border border-zinc-200 bg-white p-3">
+                                  <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Tarjeta social</p>
+                                  <div className="mt-3 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+                                    <div className="relative aspect-[1.91/1] bg-zinc-100">
+                                      {seoPreviewImage ? (
+                                        <img src={seoPreviewImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                                      ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-400">Sin imagen</div>
+                                      )}
+                                    </div>
+                                    <div className="space-y-1 px-3 py-3">
+                                      <p className="truncate text-[11px] uppercase tracking-[0.16em] text-zinc-500">{seoPreviewHost}</p>
+                                      <p className="line-clamp-2 text-sm font-medium leading-5 text-zinc-900">{seoPreviewTitle}</p>
+                                      <p className="line-clamp-2 text-xs leading-5 text-zinc-600">{seoPreviewDescription}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 p-3 text-xs leading-6 text-zinc-600">
+                                  La misma metadata sirve para toda la pagina. Para mobile no se crea otro SEO distinto; se optimiza la misma URL con titulo, descripcion e imagen que funcionen bien en pantallas angostas.
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       )}
 

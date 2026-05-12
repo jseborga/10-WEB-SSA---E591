@@ -2,7 +2,7 @@ import path from 'path'
 import sharp from 'sharp'
 import { createStoredFileName, readStoredFile, saveUploadedFile } from '@/lib/media-storage'
 
-export type ImageVariantTarget = 'project' | 'publication' | 'hero'
+export type ImageVariantTarget = 'project' | 'publication' | 'hero' | 'social'
 export type ImageTreatment = 'original' | 'enhanced' | 'editorial' | 'monochrome'
 
 type VariantSize = {
@@ -21,6 +21,10 @@ const TARGET_SIZES: Record<ImageVariantTarget, { desktop: VariantSize; mobile: V
   },
   publication: {
     desktop: { width: 1600, height: 900 },
+    mobile: { width: 1080, height: 1350 },
+  },
+  social: {
+    desktop: { width: 1200, height: 630 },
     mobile: { width: 1080, height: 1350 },
   },
 }
