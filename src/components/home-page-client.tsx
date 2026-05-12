@@ -13,6 +13,7 @@ import { shareLink } from '@/lib/share'
 interface HomePageClientProps {
   initialProjects?: PublicProject[]
   siteSettings?: PublicSiteSettings
+  aiHeroMessages?: string[]
 }
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number) {
@@ -36,18 +37,27 @@ function shuffleItems<T>(items: T[]) {
   return next
 }
 
-function pickMessageForScene(messages: string[], key: string) {
+function getUniqueMessages(messages: string[]) {
+  return Array.from(new Set(messages.map((message) => message.trim()).filter(Boolean)))
+}
+
+function pickRandomMessage(messages: string[], seedKey: string, seed: number) {
   if (messages.length === 0) {
     return ''
   }
 
+  if (messages.length === 1) {
+    return messages[0]
+  }
+
+  const compositeKey = `${seedKey}:${seed}`
   let hash = 0
 
-  for (const char of key) {
+  for (const char of compositeKey) {
     hash = (hash * 31 + char.charCodeAt(0)) >>> 0
   }
 
-  return messages[hash % messages.length]
+  return messages[hash % messages.length] || messages[0]
 }
 
 interface TypedHeroMessageProps {
@@ -59,8 +69,10 @@ interface TypedHeroMessageProps {
   shareCopied: boolean
   shareLabel: string
   copiedLabel: string
+  companyLabelClass: string
+  commandTextClass: string
+  messageTextClass: string
   shareButtonClass: string
-  messageSurfaceClass: string
   onShare: () => void
 }
 
@@ -73,8 +85,10 @@ function TypedHeroMessage({
   shareCopied,
   shareLabel,
   copiedLabel,
+  companyLabelClass,
+  commandTextClass,
+  messageTextClass,
   shareButtonClass,
-  messageSurfaceClass,
   onShare,
 }: TypedHeroMessageProps) {
   const [typedLength, setTypedLength] = useState(0)
@@ -120,26 +134,30 @@ function TypedHeroMessage({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 12 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="pointer-events-auto max-w-[min(92vw,42rem)] space-y-3"
+          className="pointer-events-auto max-w-[min(92vw,34rem)] space-y-3"
         >
           {showCompanyName ? (
-            <p className={`text-[11px] uppercase tracking-[0.28em] ${tone === 'light' ? 'text-white/78' : 'text-zinc-900/78'}`}>
+            <p className={`font-mono text-[10px] uppercase tracking-[0.18em] ${companyLabelClass}`}>
               {companyName}
             </p>
           ) : null}
-          <div className={`inline-flex max-w-full items-end gap-2 rounded-[24px] border px-4 py-3 backdrop-blur-md sm:px-5 sm:py-4 ${messageSurfaceClass}`}>
-            <span className="whitespace-pre-wrap break-words text-xl font-light leading-tight sm:text-3xl lg:text-4xl">
+          <div className="inline-flex max-w-full items-end gap-2">
+            <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${commandTextClass}`}>
+              ssa@obra:~$
+            </span>
+            <span className={`whitespace-pre-wrap break-words font-mono text-sm uppercase leading-tight sm:text-lg lg:text-xl ${messageTextClass}`}>
               {message.slice(0, typedLength)}
             </span>
-            <span className="inline-block h-5 w-[2px] shrink-0 animate-pulse rounded-full bg-current/80 sm:h-7" />
+            <span className={`inline-block h-4 w-[2px] shrink-0 animate-pulse rounded-full sm:h-5 ${tone === 'light' ? 'bg-lime-200/85' : 'bg-emerald-950/80'}`} />
           </div>
           <button
             type="button"
             onClick={onShare}
-            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] uppercase tracking-[0.22em] backdrop-blur-md transition-colors ${shareButtonClass}`}
+            className={`inline-flex h-8 w-8 items-center justify-center transition-colors ${shareButtonClass}`}
+            aria-label={shareCopied ? copiedLabel : shareLabel}
+            title={shareCopied ? copiedLabel : shareLabel}
           >
             {shareCopied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-            <span>{shareCopied ? copiedLabel : shareLabel}</span>
           </button>
         </motion.div>
       ) : null}
@@ -150,9 +168,11 @@ function TypedHeroMessage({
 export default function HomePageClient({
   initialProjects = [],
   siteSettings,
+  aiHeroMessages = [],
 }: HomePageClientProps) {
   const { language } = useLanguage()
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
+  const [heroMessageSeed, setHeroMessageSeed] = useState(() => Math.floor(Math.random() * 1_000_000_000))
   const [isMobile, setIsMobile] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
 
@@ -197,20 +217,20 @@ export default function HomePageClient({
   const activeHeroItem = heroImages[resolvedHeroIndex] || ''
   const heroMessages = useMemo(() => {
     const configuredMessages = parseLineList(siteSettings?.heroMessages)
-
-    if (configuredMessages.length > 0) {
-      return configuredMessages
-    }
-
-    return [
+    const combined = getUniqueMessages([
+      ...aiHeroMessages,
+      ...configuredMessages,
       siteSettings?.companyName?.trim() || 'SSA Ingenieria',
       siteSettings?.tagline?.trim() || 'Soluciones integrales',
-    ].filter(Boolean)
-  }, [siteSettings?.companyName, siteSettings?.heroMessages, siteSettings?.tagline])
+    ])
+
+    return combined
+  }, [aiHeroMessages, siteSettings?.companyName, siteSettings?.heroMessages, siteSettings?.tagline])
   const heroRotationMs = clampNumber(siteSettings?.heroRotationMs, 8600, 2500, 20000)
   const heroTone = siteSettings?.heroTextTone === 'light' ? 'light' : 'dark'
   const advanceHero = () => {
     setActiveHeroIndex((current) => (current + 1) % Math.max(heroImages.length, 1))
+    setHeroMessageSeed(Math.floor(Math.random() * 1_000_000_000))
   }
 
   useEffect(() => {
@@ -239,10 +259,6 @@ export default function HomePageClient({
   const activeHeroOpacity = heroImageTreatment === 'original' ? 1 : heroImageOpacity / 100
   const activeHeroGrayscale = heroImageTreatment === 'monochrome' ? 100 : Math.max(0, Math.round(100 - heroImageSaturation * 0.38))
   const activeHeroSaturation = Math.max(0.9, heroImageSaturation / 100)
-  const activeHeroMessage = useMemo(
-    () => pickMessageForScene(heroMessages, `${resolvedHeroIndex}-${activeHeroItem}`),
-    [activeHeroItem, heroMessages, resolvedHeroIndex],
-  )
   const companyName = siteSettings?.companyName?.trim() || 'SSA Ingenieria'
   const shareCopy =
     language === 'en'
@@ -262,14 +278,26 @@ export default function HomePageClient({
             copied: 'Enlace copiado',
             error: 'No se pudo compartir el sitio',
           }
-  const heroMessageSurfaceClass =
+  const activeHeroMessage = useMemo(
+    () => pickRandomMessage(heroMessages, `${resolvedHeroIndex}-${activeHeroItem}`, heroMessageSeed),
+    [activeHeroItem, heroMessageSeed, heroMessages, resolvedHeroIndex],
+  )
+  const heroCompanyLabelClass =
     heroTone === 'light'
-      ? 'border-white/25 bg-black/18 text-white shadow-[0_18px_48px_rgba(0,0,0,0.22)]'
-      : 'border-white/55 bg-white/72 text-zinc-950 shadow-[0_18px_48px_rgba(15,23,42,0.12)]'
+      ? 'text-white/72 [text-shadow:0_0_10px_rgba(255,255,255,0.18)]'
+      : 'text-zinc-900/68 [text-shadow:0_0_10px_rgba(255,255,255,0.16)]'
+  const heroCommandTextClass =
+    heroTone === 'light'
+      ? 'text-lime-200/72 [text-shadow:0_0_12px_rgba(190,242,100,0.28)]'
+      : 'text-emerald-950/62 [text-shadow:0_0_8px_rgba(255,255,255,0.16)]'
+  const heroMessageTextClass =
+    heroTone === 'light'
+      ? 'text-lime-100 [text-shadow:0_0_12px_rgba(217,249,157,0.3)]'
+      : 'text-emerald-950 [text-shadow:0_0_10px_rgba(255,255,255,0.18)]'
   const heroShareButtonClass =
     heroTone === 'light'
-      ? 'border-white/25 bg-black/18 text-white hover:border-white/45 hover:bg-black/28'
-      : 'border-white/55 bg-white/72 text-zinc-950 hover:border-white hover:bg-white'
+      ? 'text-white/78 hover:text-white'
+      : 'text-zinc-950/74 hover:text-zinc-950'
 
   const handleShareSite = async () => {
     if (typeof window === 'undefined') {
@@ -373,8 +401,10 @@ export default function HomePageClient({
                 shareCopied={shareCopied}
                 shareLabel={shareCopy.share}
                 copiedLabel={shareCopy.copied}
+                companyLabelClass={heroCompanyLabelClass}
+                commandTextClass={heroCommandTextClass}
+                messageTextClass={heroMessageTextClass}
                 shareButtonClass={heroShareButtonClass}
-                messageSurfaceClass={heroMessageSurfaceClass}
                 onShare={() => void handleShareSite()}
               />
             ) : null}

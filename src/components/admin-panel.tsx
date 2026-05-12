@@ -4265,7 +4265,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
                                     />
                                      <div className="absolute right-4 top-4 flex items-center gap-2">
-                                       <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
+                                       <div className="inline-flex h-8 w-8 items-center justify-center text-white/78">
                                          <Globe className="h-4 w-4" />
                                       </div>
                                       <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
@@ -4274,21 +4274,18 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                      </div>
                                      <div className="absolute bottom-4 left-4 max-w-[70%] space-y-2">
                                        {siteForm.heroShowCompanyName ? (
-                                         <p className={`text-[10px] uppercase tracking-[0.26em] ${heroPreviewStyles.textTone === 'light' ? 'text-white/82' : 'text-zinc-900/78'}`}>
+                                         <p className={`font-mono text-[10px] uppercase tracking-[0.18em] ${heroPreviewStyles.textTone === 'light' ? 'text-white/74' : 'text-zinc-900/68'}`}>
                                            {siteForm.companyName || 'SSA Ingenieria'}
                                          </p>
                                        ) : null}
-                                       <div
-                                         className={`inline-flex max-w-full items-end gap-2 rounded-[22px] border px-4 py-3 backdrop-blur-md ${
-                                           heroPreviewStyles.textTone === 'light'
-                                             ? 'border-white/25 bg-black/18 text-white'
-                                             : 'border-white/55 bg-white/72 text-zinc-950'
-                                         }`}
-                                       >
-                                         <span className="whitespace-pre-wrap break-words text-base font-light leading-tight">
+                                       <div className="inline-flex max-w-full items-end gap-2">
+                                         <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${heroPreviewStyles.textTone === 'light' ? 'text-lime-200/70' : 'text-emerald-950/60'}`}>
+                                           ssa@obra:~$
+                                         </span>
+                                         <span className={`whitespace-pre-wrap break-words font-mono text-sm uppercase leading-tight ${heroPreviewStyles.textTone === 'light' ? 'text-lime-100' : 'text-emerald-950'}`}>
                                            {heroPreviewMessage}
                                          </span>
-                                         <span className="inline-block h-5 w-[2px] rounded-full bg-current/80" />
+                                         <span className={`inline-block h-4 w-[2px] rounded-full ${heroPreviewStyles.textTone === 'light' ? 'bg-lime-200/85' : 'bg-emerald-950/80'}`} />
                                        </div>
                                      </div>
                                    </>
@@ -4334,7 +4331,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                       style={{ backgroundColor: `rgba(255,255,255,${heroPreviewStyles.overlayOpacity})` }}
                                     />
                                      <div className="absolute right-4 top-4 flex items-center gap-2">
-                                       <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/40 bg-black/16 text-white backdrop-blur-md">
+                                       <div className="inline-flex h-8 w-8 items-center justify-center text-white/78">
                                          <Globe className="h-4 w-4" />
                                       </div>
                                       <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
@@ -4343,21 +4340,18 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                      </div>
                                      <div className="absolute bottom-4 left-4 max-w-[78%] space-y-2">
                                        {siteForm.heroShowCompanyName ? (
-                                         <p className={`text-[10px] uppercase tracking-[0.26em] ${heroPreviewStyles.textTone === 'light' ? 'text-white/82' : 'text-zinc-900/78'}`}>
+                                         <p className={`font-mono text-[10px] uppercase tracking-[0.18em] ${heroPreviewStyles.textTone === 'light' ? 'text-white/74' : 'text-zinc-900/68'}`}>
                                            {siteForm.companyName || 'SSA Ingenieria'}
                                          </p>
                                        ) : null}
-                                       <div
-                                         className={`inline-flex max-w-full items-end gap-2 rounded-[22px] border px-4 py-3 backdrop-blur-md ${
-                                           heroPreviewStyles.textTone === 'light'
-                                             ? 'border-white/25 bg-black/18 text-white'
-                                             : 'border-white/55 bg-white/72 text-zinc-950'
-                                         }`}
-                                       >
-                                         <span className="whitespace-pre-wrap break-words text-sm font-light leading-tight">
+                                       <div className="inline-flex max-w-full items-end gap-2">
+                                         <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${heroPreviewStyles.textTone === 'light' ? 'text-lime-200/70' : 'text-emerald-950/60'}`}>
+                                           ssa@obra:~$
+                                         </span>
+                                         <span className={`whitespace-pre-wrap break-words font-mono text-xs uppercase leading-tight ${heroPreviewStyles.textTone === 'light' ? 'text-lime-100' : 'text-emerald-950'}`}>
                                            {heroPreviewMessage}
                                          </span>
-                                         <span className="inline-block h-4 w-[2px] rounded-full bg-current/80" />
+                                         <span className={`inline-block h-4 w-[2px] rounded-full ${heroPreviewStyles.textTone === 'light' ? 'bg-lime-200/85' : 'bg-emerald-950/80'}`} />
                                        </div>
                                      </div>
                                    </>
