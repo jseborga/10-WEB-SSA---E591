@@ -113,8 +113,13 @@ export function getSeoImage(siteSettings?: SeoSiteSettings | null) {
 }
 
 export function getProjectSeoImage(project?: SeoProjectSource | null, siteSettings?: SeoSiteSettings | null) {
+  return getProjectSeoImages(project, siteSettings)[0] || getSeoImage(siteSettings)
+}
+
+export function getProjectSeoImages(project?: SeoProjectSource | null, siteSettings?: SeoSiteSettings | null) {
   if (!project) {
-    return getSeoImage(siteSettings)
+    const fallback = getSeoImage(siteSettings)
+    return fallback ? [fallback] : []
   }
 
   const projectGallery = [
@@ -122,12 +127,20 @@ export function getProjectSeoImage(project?: SeoProjectSource | null, siteSettin
     ...parseUrlList(project.galleryMobile),
   ]
 
-  return (
-    getFirstShareableImage(
-      [project.mainImage, project.mainImageMobile, ...projectGallery],
-      siteSettings,
-    ) || getSeoImage(siteSettings)
+  const images = Array.from(
+    new Set(
+      [project.mainImage, project.mainImageMobile, ...projectGallery]
+        .map((item) => toAbsoluteUrl(item, siteSettings))
+        .filter((item): item is string => Boolean(item && !isVideoUrl(item))),
+    ),
   )
+
+  if (images.length > 0) {
+    return images
+  }
+
+  const fallback = getSeoImage(siteSettings)
+  return fallback ? [fallback] : []
 }
 
 export function getOrganizationJsonLd(siteSettings?: SeoSiteSettings | null) {

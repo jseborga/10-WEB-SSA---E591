@@ -38,6 +38,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   }).catch(() => [])
 
+  const projects = await db.project.findMany({
+    where: {
+      published: true,
+    },
+    select: {
+      id: true,
+      updatedAt: true,
+    },
+    orderBy: {
+      updatedAt: 'desc',
+    },
+  }).catch(() => [])
+
   return [
     {
       url: siteUrl,
@@ -51,6 +64,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly',
       priority: 0.9,
     },
+    ...projects.map((project) => ({
+      url: `${siteUrl}/proyectos/${project.id}`,
+      lastModified: project.updatedAt,
+      changeFrequency: 'monthly' as const,
+      priority: 0.8,
+    })),
     {
       url: `${siteUrl}/estudio`,
       lastModified: new Date(),

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
-import { getSeoDescription, getSiteUrl } from '@/lib/seo'
+import { getProjectSeoImage, getSeoDescription, getSiteUrl } from '@/lib/seo'
 import { parseLineList } from '@/lib/public-site'
 
 function getPublicationPath(slug: string) {
@@ -36,6 +36,24 @@ export async function GET() {
     },
     orderBy: [{ menuOrder: 'asc' }, { createdAt: 'asc' }],
   }).catch(() => [])
+  const projects = await db.project.findMany({
+    where: {
+      published: true,
+    },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      category: true,
+      location: true,
+      mainImage: true,
+      mainImageMobile: true,
+      gallery: true,
+      galleryMobile: true,
+      seoKeywords: true,
+    },
+    orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
+  }).catch(() => [])
 
   const lines = [
     `# ${siteSettings.companyName || 'SSA Ingenieria'}`,
@@ -50,6 +68,12 @@ export async function GET() {
     `- Projects: ${siteUrl}/proyectos`,
     `- Studio: ${siteUrl}/estudio`,
     `- Contact: ${siteUrl}/contacto`,
+    ...projects.map(
+      (project) => {
+        const shareImage = getProjectSeoImage(project, siteSettings)
+        return `- Proyecto ${project.title}: ${siteUrl}/proyectos/${project.id}${project.description ? ` - ${project.description}` : ''}${project.category ? ` [${project.category}]` : ''}${project.location ? ` (${project.location})` : ''}${shareImage ? ` | Imagen: ${shareImage}` : ''}${project.seoKeywords ? ` | Keywords: ${project.seoKeywords}` : ''}`
+      },
+    ),
     ...pages.map((page) => `- ${page.title}: ${siteUrl}${getPublicationPath(page.slug)}${page.excerpt ? ` - ${page.excerpt}` : ''}`),
     '',
     '## Contact',

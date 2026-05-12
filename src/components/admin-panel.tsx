@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin, ArrowUp, ArrowDown, CornerDownRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -593,6 +593,16 @@ function removeUrlFromList(value: string | null | undefined, urlToRemove: string
   return parseUrlList(value).filter((item) => item !== urlToRemove).join('\n')
 }
 
+function moveUrlToFront(value: string | null | undefined, urlToPromote: string) {
+  const urls = parseUrlList(value)
+
+  if (!urls.includes(urlToPromote)) {
+    return urls.join('\n')
+  }
+
+  return [urlToPromote, ...urls.filter((item) => item !== urlToPromote)].join('\n')
+}
+
 function mergeUniqueUrls(currentValue: string | null | undefined, nextUrls: string[], position: 'prepend' | 'append' = 'prepend') {
   const current = parseUrlList(currentValue)
   const merged = position === 'prepend' ? [...nextUrls, ...current] : [...current, ...nextUrls]
@@ -767,10 +777,14 @@ function MediaPreviewGrid({
   items,
   emptyLabel,
   onRemove,
+  badgeLabel,
+  renderActions,
 }: {
   items: MediaPreviewItem[]
   emptyLabel?: string
   onRemove?: (item: MediaPreviewItem) => void
+  badgeLabel?: (item: MediaPreviewItem) => string | null | undefined
+  renderActions?: (item: MediaPreviewItem) => ReactNode
 }) {
   if (items.length === 0) {
     return emptyLabel ? <p className="text-xs text-zinc-500">{emptyLabel}</p> : null
@@ -787,16 +801,26 @@ function MediaPreviewGrid({
               <img src={item.url} alt={getPreviewItemTitle(item)} className="h-full w-full object-cover" loading="lazy" />
             )}
           </div>
-          <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-3 py-2">
-            <div className="min-w-0">
-              <p className="truncate text-xs font-medium text-zinc-800">{getPreviewItemTitle(item)}</p>
-              <p className="text-[11px] text-zinc-500">{isPreviewVideo(item) ? 'Video' : 'Imagen'}</p>
+          <div className="space-y-2 border-t border-zinc-200 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-zinc-800">{getPreviewItemTitle(item)}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] text-zinc-500">{isPreviewVideo(item) ? 'Video' : 'Imagen'}</p>
+                  {badgeLabel?.(item) ? (
+                    <span className="inline-flex rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white">
+                      {badgeLabel(item)}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              {onRemove ? (
+                <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onRemove(item)}>
+                  Quitar
+                </Button>
+              ) : null}
             </div>
-            {onRemove ? (
-              <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onRemove(item)}>
-                Quitar
-              </Button>
-            ) : null}
+            {renderActions ? <div className="flex flex-wrap gap-2">{renderActions(item)}</div> : null}
           </div>
         </div>
       ))}
@@ -3901,8 +3925,48 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           <MediaPreviewGrid
                             items={parseUrlList(siteForm.heroImages).map((url) => ({ url }))}
                             emptyLabel="Aun no hay medios desktop cargados."
+                            badgeLabel={(item) =>
+                              item.url === heroPreviewImage
+                                ? item.url === siteForm.socialShareImageUrl
+                                  ? 'Portada SEO'
+                                  : 'Portada'
+                                : item.url === siteForm.socialShareImageUrl
+                                  ? 'SEO'
+                                  : null
+                            }
+                            renderActions={(item) => (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-8 px-2 text-[11px]"
+                                  onClick={() =>
+                                    setSiteForm((current) => ({
+                                      ...current,
+                                      heroImages: moveUrlToFront(current.heroImages, item.url),
+                                      socialShareImageUrl: isVideoUrl(item.url) ? current.socialShareImageUrl : item.url,
+                                    }))
+                                  }
+                                >
+                                  <ArrowUp className="mr-1 h-3.5 w-3.5" />
+                                  Portada
+                                </Button>
+                                {!isPreviewVideo(item) ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-8 px-2 text-[11px]"
+                                    onClick={() => setSiteForm((current) => ({ ...current, socialShareImageUrl: item.url }))}
+                                  >
+                                    <Globe className="mr-1 h-3.5 w-3.5" />
+                                    SEO
+                                  </Button>
+                                ) : null}
+                              </>
+                            )}
                             onRemove={(item) => setSiteForm((current) => ({ ...current, heroImages: removeUrlFromList(current.heroImages, item.url) }))}
                           />
+                          <p className="text-xs text-zinc-500">La portada publica es la primera imagen del listado. Al marcar una imagen como portada, tambien se sincroniza la imagen social/SEO si no es video.</p>
                           <Textarea
                             value={siteForm.heroImages}
                             onChange={e => setSiteForm({ ...siteForm, heroImages: e.target.value })}
@@ -3937,10 +4001,50 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           <MediaPreviewGrid
                             items={parseUrlList(siteForm.heroImagesMobile).map((url) => ({ url }))}
                             emptyLabel="Si no cargas medios mobile, la web reutiliza los desktop."
+                            badgeLabel={(item) =>
+                              item.url === heroPreviewMobileImage
+                                ? item.url === siteForm.socialShareImageUrl
+                                  ? 'Portada SEO'
+                                  : 'Portada'
+                                : item.url === siteForm.socialShareImageUrl
+                                  ? 'SEO'
+                                  : null
+                            }
+                            renderActions={(item) => (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-8 px-2 text-[11px]"
+                                  onClick={() =>
+                                    setSiteForm((current) => ({
+                                      ...current,
+                                      heroImagesMobile: moveUrlToFront(current.heroImagesMobile, item.url),
+                                      socialShareImageUrl: isVideoUrl(item.url) ? current.socialShareImageUrl : item.url,
+                                    }))
+                                  }
+                                >
+                                  <ArrowUp className="mr-1 h-3.5 w-3.5" />
+                                  Portada
+                                </Button>
+                                {!isPreviewVideo(item) ? (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-8 px-2 text-[11px]"
+                                    onClick={() => setSiteForm((current) => ({ ...current, socialShareImageUrl: item.url }))}
+                                  >
+                                    <Globe className="mr-1 h-3.5 w-3.5" />
+                                    SEO
+                                  </Button>
+                                ) : null}
+                              </>
+                            )}
                             onRemove={(item) =>
                               setSiteForm((current) => ({ ...current, heroImagesMobile: removeUrlFromList(current.heroImagesMobile, item.url) }))
                             }
                           />
+                          <p className="text-xs text-zinc-500">La portada mobile toma la primera imagen de esta lista. Si no defines una lista mobile, la web reutiliza automaticamente la portada desktop.</p>
                           <Textarea
                             value={siteForm.heroImagesMobile}
                             onChange={e => setSiteForm({ ...siteForm, heroImagesMobile: e.target.value })}

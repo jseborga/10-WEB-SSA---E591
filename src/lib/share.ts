@@ -4,6 +4,21 @@ export interface ShareLinkPayload {
   url: string
 }
 
+export function buildSocialShareLinks(payload: ShareLinkPayload) {
+  const encodedUrl = encodeURIComponent(payload.url)
+  const encodedTitle = encodeURIComponent(payload.title)
+  const encodedText = encodeURIComponent(payload.text || payload.title)
+  const combinedText = encodeURIComponent(`${payload.title} ${payload.url}`)
+
+  return {
+    whatsapp: `https://wa.me/?text=${combinedText}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+    x: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+    telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`,
+  }
+}
+
 export async function shareLink(payload: ShareLinkPayload) {
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     await navigator.share({

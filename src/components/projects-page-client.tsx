@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { MapPin } from 'lucide-react'
+import { ArrowUpRight, MapPin } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
 import { PublicProject, PublicSiteSettings, formatCategoryLabel, getProjectCategories } from '@/lib/public-site'
 import { SiteHeader } from '@/components/site-header'
@@ -44,6 +45,7 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
   const filteredProjects = activeCategory === 'all'
     ? projects
     : projects.filter((project) => project.category === activeCategory)
+  const pageLinkLabel = language === 'en' ? 'Page' : language === 'pt' ? 'Pagina' : 'Pagina'
 
   const similarProjects = selectedProject
     ? projects.filter((project) => project.category === selectedProject.category && project.id !== selectedProject.id).slice(0, 3)
@@ -101,15 +103,19 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
 
         <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredProjects.map((project, index) => (
-            <motion.button
+            <motion.article
               key={project.id}
-              type="button"
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: index * 0.04 }}
-              onClick={() => setSelectedProject(project)}
               className="group relative overflow-hidden rounded-[28px] bg-zinc-100 text-left"
             >
+              <button
+                type="button"
+                aria-label={`Abrir ${getLocalizedText(project, language, 'title')}`}
+                onClick={() => setSelectedProject(project)}
+                className="absolute inset-0 z-10"
+              />
               <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100">
                 <Image
                   src={(isMobile ? project.mainImageMobile || project.mainImage : project.mainImage) || '/images/hero-bg.png'}
@@ -118,6 +124,16 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
                   className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/18 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                <div className="absolute right-4 top-4 z-20">
+                  <Link
+                  href={`/proyectos/${project.id}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/28 bg-black/18 px-3 py-2 text-[10px] uppercase tracking-[0.22em] text-white backdrop-blur-md transition-colors hover:border-white/48 hover:bg-black/28"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                    <span>{pageLinkLabel}</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
                 <div className="absolute inset-x-0 bottom-0 translate-y-4 px-5 pb-5 pt-12 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 sm:px-6 sm:pb-6">
                   <div className="space-y-2 text-white">
                     <p className="text-[11px] uppercase tracking-[0.24em] text-white/72">
@@ -139,7 +155,7 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
                   </div>
                 </div>
               </div>
-            </motion.button>
+            </motion.article>
           ))}
         </div>
 

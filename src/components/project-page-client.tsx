@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Calendar, Link2, Linkedin, MapPin, Building2, Instagram, Facebook, Youtube, Ruler, ChevronLeft, ChevronRight, Share2 } from 'lucide-react'
+import { Calendar, Link2, Linkedin, MapPin, Building2, Instagram, Facebook, Youtube, Ruler, ChevronLeft, ChevronRight, Share2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { SiteHeader } from '@/components/site-header'
 import { useLanguage } from '@/lib/language-context'
 import { formatCategoryLabel, parseUrlList, type PublicProject, type PublicSiteSettings } from '@/lib/public-site'
-import { shareLink } from '@/lib/share'
+import { buildSocialShareLinks, shareLink } from '@/lib/share'
 
 interface ProjectPageClientProps {
   project: PublicProject
@@ -119,6 +119,15 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
   const shareUrl = typeof window !== 'undefined' ? new URL(`/proyectos/${project.id}`, window.location.origin).toString() : `/proyectos/${project.id}`
   const pageTitle = getTitle()
   const pageDescription = getDescription()
+  const socialShareLinks = useMemo(
+    () =>
+      buildSocialShareLinks({
+        title: pageTitle,
+        text: pageDescription || pageTitle,
+        url: shareUrl,
+      }),
+    [pageDescription, pageTitle, shareUrl],
+  )
 
   const handleShareProject = useCallback(async () => {
     try {
@@ -167,6 +176,33 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
               <Share2 className="h-4 w-4" />
               {detailCopy.share}
             </button>
+            <a
+              href={socialShareLinks.whatsapp}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-4 py-2 text-xs uppercase tracking-[0.22em] text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-950"
+            >
+              <Send className="h-4 w-4" />
+              WhatsApp
+            </a>
+            <a
+              href={socialShareLinks.facebook}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-4 py-2 text-xs uppercase tracking-[0.22em] text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-950"
+            >
+              <Facebook className="h-4 w-4" />
+              Facebook
+            </a>
+            <a
+              href={socialShareLinks.linkedin}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-4 py-2 text-xs uppercase tracking-[0.22em] text-zinc-700 transition-colors hover:border-zinc-400 hover:text-zinc-950"
+            >
+              <Linkedin className="h-4 w-4" />
+              LinkedIn
+            </a>
           </div>
         </div>
 

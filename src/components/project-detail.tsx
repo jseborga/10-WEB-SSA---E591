@@ -3,11 +3,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight, Link2, Instagram, Facebook, Linkedin, Youtube, Share2 } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight, Link2, Instagram, Facebook, Linkedin, Youtube, Share2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 import { parseUrlList } from '@/lib/public-site'
-import { shareLink } from '@/lib/share'
+import { buildSocialShareLinks, shareLink } from '@/lib/share'
 
 interface Project {
   id: string
@@ -135,6 +135,15 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
             error: 'No se pudo compartir el proyecto',
           }
   const shareUrl = typeof window !== 'undefined' ? new URL(`/proyectos/${project.id}`, window.location.origin).toString() : `/proyectos/${project.id}`
+  const socialShareLinks = useMemo(
+    () =>
+      buildSocialShareLinks({
+        title: getTitle(),
+        text: project.description || getTitle(),
+        url: shareUrl,
+      }),
+    [getTitle, project.description, shareUrl],
+  )
 
   const handleShareProject = useCallback(async () => {
     try {
@@ -265,6 +274,33 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 >
                   <Link2 className="h-3.5 w-3.5" />
                   {shareCopy.open}
+                </a>
+                <a
+                  href={socialShareLinks.whatsapp}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  WhatsApp
+                </a>
+                <a
+                  href={socialShareLinks.facebook}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+                >
+                  <Facebook className="h-3.5 w-3.5" />
+                  Facebook
+                </a>
+                <a
+                  href={socialShareLinks.linkedin}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-3 py-2 text-xs text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900"
+                >
+                  <Linkedin className="h-3.5 w-3.5" />
+                  LinkedIn
                 </a>
               </div>
                
