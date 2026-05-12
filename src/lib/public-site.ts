@@ -29,9 +29,28 @@ export interface PublicProject {
   seoTitle?: string | null
   seoDescription?: string | null
   seoKeywords?: string | null
+  projectTags?: string | null
+  galleryAnnotations?: string | null
+  galleryMobileAnnotations?: string | null
   status?: string | null
   showOnHomepage?: boolean
   published?: boolean
+}
+
+export interface ProjectMediaAnnotation {
+  url: string
+  category?: string | null
+  label?: string | null
+  tags: string[]
+}
+
+export interface ProjectMediaItem {
+  url: string
+  category: string
+  label: string
+  tags: string[]
+  isLead: boolean
+  alt: string
 }
 
 export interface PublicPublication {
@@ -121,6 +140,137 @@ export function parseLineList(value: string | null | undefined) {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
+}
+
+function isMediaUrl(value: string) {
+  return value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://')
+}
+
+export function normalizeTag(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/^#+/g, '')
+    .replace(/[^a-z0-9\s_-]/g, ' ')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+export function formatTagLabel(value: string) {
+  const normalized = normalizeTag(value)
+  return normalized ? `#${normalized}` : ''
+}
+
+export function parseTagList(value: string | null | undefined) {
+  const chunks = (value || '')
+    .replace(/[;,]+/g, '\n')
+    .split('\n')
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+
+  const tags = chunks.flatMap((chunk) => {
+    const hashtagMatches = Array.from(chunk.matchAll(/#([^\s#,;|]+)/g), (match) => normalizeTag(match[1] || ''))
+      .filter(Boolean)
+
+    if (hashtagMatches.length > 0) {
+      return hashtagMatches
+    }
+
+    const normalized = normalizeTag(chunk)
+    return normalized ? [normalized] : []
+  })
+
+  return Array.from(new Set(tags))
+}
+
+export function parseProjectMediaAnnotations(value: string | null | undefined) {
+  return parseLineList(value).reduce<ProjectMediaAnnotation[]>((items, line) => {
+      const [urlPart = '', categoryPart = '', labelPart = '', ...tagParts] = line.split('|').map((part) => part.trim())
+
+      if (!isMediaUrl(urlPart)) {
+        return items
+      }
+
+      items.push({
+        url: urlPart,
+        category: categoryPart || null,
+        label: labelPart || null,
+        tags: parseTagList(tagParts.join(',')),
+      })
+
+      return items
+    }, [])
+}
+
+interface ProjectMediaSource {
+  title: string
+  category: string
+  mainImage?: string | null
+  mainImageAlt?: string | null
+  mainImageCaption?: string | null
+  mainImageMobile?: string | null
+  gallery?: string | null
+  galleryMobile?: string | null
+  projectTags?: string | null
+  galleryAnnotations?: string | null
+  galleryMobileAnnotations?: string | null
+}
+
+export function buildProjectMediaItems(
+  project: ProjectMediaSource,
+  options?: {
+    isMobile?: boolean
+    fallbackUrl?: string
+  },
+) {
+  const isMobile = Boolean(options?.isMobile)
+  const fallbackUrl = options?.fallbackUrl || ''
+  const leadImage = ((isMobile ? project.mainImageMobile || project.mainImage : project.mainImage || project.mainImageMobile) || '').trim()
+  const galleryValue = isMobile ? project.galleryMobile || project.gallery : project.gallery || project.galleryMobile
+  const annotationValue = isMobile
+    ? project.galleryMobileAnnotations || project.galleryAnnotations
+    : project.galleryAnnotations || project.galleryMobileAnnotations
+  const fallbackAnnotationValue = isMobile ? project.galleryAnnotations : null
+  const urls = [leadImage, ...parseUrlList(galleryValue)]
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const resolvedUrls = Array.from(new Set(urls.length > 0 ? urls : fallbackUrl ? [fallbackUrl] : []))
+  const annotationMap = new Map<string, ProjectMediaAnnotation>()
+
+  for (const annotation of [
+    ...parseProjectMediaAnnotations(fallbackAnnotationValue),
+    ...parseProjectMediaAnnotations(annotationValue),
+  ]) {
+    annotationMap.set(annotation.url, annotation)
+  }
+
+  const projectTags = parseTagList(project.projectTags)
+  const fallbackCategory = formatCategoryLabel(project.category)
+
+  return resolvedUrls.map((url, index): ProjectMediaItem => {
+    const annotation = annotationMap.get(url)
+    const category = annotation?.category?.trim() || fallbackCategory
+    const label =
+      annotation?.label?.trim() ||
+      (index === 0
+        ? project.mainImageCaption?.trim() || category
+        : `${project.title} ${index + 1}`)
+    const tags = Array.from(
+      new Set([normalizeTag(category), ...projectTags, ...(annotation?.tags || [])].filter(Boolean)),
+    )
+
+    return {
+      url,
+      category,
+      label,
+      tags,
+      isLead: index === 0,
+      alt: index === 0 ? project.mainImageAlt?.trim() || project.title : `${project.title} ${label}`,
+    }
+  })
 }
 
 export function isVideoUrl(value: string) {

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
 import { ProjectPageClient } from '@/components/project-page-client'
-import { formatCategoryLabel } from '@/lib/public-site'
+import { formatCategoryLabel, parseProjectMediaAnnotations, parseTagList } from '@/lib/public-site'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 import { getProjectSeoImage, getProjectSeoImages, getSiteUrl } from '@/lib/seo'
 
@@ -29,10 +29,22 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const companyName = siteSettings.companyName || 'SSA Ingenieria'
   const title = project.seoTitle?.trim() || `${project.title} | ${companyName}`
   const description = project.seoDescription?.trim() || project.description || project.title
-  const keywords = (project.seoKeywords || '')
-    .split(',')
+  const imageTerms = [
+    ...parseProjectMediaAnnotations(project.galleryAnnotations).flatMap((item) => [item.category || '', ...item.tags]),
+    ...parseProjectMediaAnnotations(project.galleryMobileAnnotations).flatMap((item) => [item.category || '', ...item.tags]),
+  ]
     .map((item) => item.trim())
     .filter(Boolean)
+  const keywords = Array.from(
+    new Set([
+      ...(project.seoKeywords || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      ...parseTagList(project.projectTags || ''),
+      ...imageTerms,
+    ]),
+  )
   const siteUrl = getSiteUrl(siteSettings)
   const pageUrl = `${siteUrl}/proyectos/${project.id}`
   const shareImage = getProjectSeoImage(project, siteSettings)
@@ -114,6 +126,22 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const categoryLabel = formatCategoryLabel(project.category)
   const shareImage = getProjectSeoImage(project, siteSettings)
   const shareImages = getProjectSeoImages(project, siteSettings)
+  const imageTerms = [
+    ...parseProjectMediaAnnotations(project.galleryAnnotations).flatMap((item) => [item.category || '', ...item.tags]),
+    ...parseProjectMediaAnnotations(project.galleryMobileAnnotations).flatMap((item) => [item.category || '', ...item.tags]),
+  ]
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const keywords = Array.from(
+    new Set([
+      ...(project.seoKeywords || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+      ...parseTagList(project.projectTags || ''),
+      ...imageTerms,
+    ]),
+  )
   const projectJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'CreativeWork',
@@ -122,9 +150,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     description: project.seoDescription || project.description || project.title,
     image: shareImages,
     thumbnailUrl: shareImage,
-    keywords: project.seoKeywords || undefined,
+    keywords: keywords.length > 0 ? keywords.join(', ') : undefined,
     genre: categoryLabel,
     category: project.category,
+    about:
+      keywords.length > 0
+        ? keywords.map((item) => ({
+            '@type': 'DefinedTerm',
+            name: item,
+          }))
+        : undefined,
     url: pageUrl,
     mainEntityOfPage: pageUrl,
     dateCreated: project.createdAt.toISOString(),
@@ -192,7 +227,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
-      <ProjectPageClient project={project} similarProjects={similarProjects} siteSettings={siteSettings} />
+      <ProjectPageClient key={project.id} project={project} similarProjects={similarProjects} siteSettings={siteSettings} />
     </>
   )
 }

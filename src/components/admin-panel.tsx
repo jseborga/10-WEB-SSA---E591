@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 import { type MenuItemConfig, parseMenuConfig, serializeMenuConfig, buildPublicationHref } from '@/lib/menu-config'
-import { formatCategoryLabel, getProjectCategories, isVideoUrl, parseLineList, parseUrlList } from '@/lib/public-site'
+import { formatCategoryLabel, formatTagLabel, getProjectCategories, isVideoUrl, parseLineList, parseProjectMediaAnnotations, parseTagList, parseUrlList } from '@/lib/public-site'
 import { getSeoDescription, getSeoTitle, getSiteUrl } from '@/lib/seo'
 
 interface Project {
@@ -40,6 +40,9 @@ interface Project {
   seoTitle?: string | null
   seoDescription?: string | null
   seoKeywords?: string | null
+  projectTags?: string | null
+  galleryAnnotations?: string | null
+  galleryMobileAnnotations?: string | null
   status?: string | null
   featured?: boolean
   showOnHomepage?: boolean
@@ -336,6 +339,9 @@ type ProjectFormState = {
   seoTitle: string
   seoDescription: string
   seoKeywords: string
+  projectTags: string
+  galleryAnnotations: string
+  galleryMobileAnnotations: string
   status: string
   featured: boolean
   showOnHomepage: boolean
@@ -426,6 +432,9 @@ const emptyProjectForm: ProjectFormState = {
   seoTitle: '',
   seoDescription: '',
   seoKeywords: '',
+  projectTags: '',
+  galleryAnnotations: '',
+  galleryMobileAnnotations: '',
   status: 'completed',
   featured: false,
   showOnHomepage: false,
@@ -593,6 +602,12 @@ function getHeroPreviewStyles(siteForm: SiteFormState) {
 
 function removeUrlFromList(value: string | null | undefined, urlToRemove: string) {
   return parseUrlList(value).filter((item) => item !== urlToRemove).join('\n')
+}
+
+function removeAnnotationFromList(value: string | null | undefined, urlToRemove: string) {
+  return parseLineList(value)
+    .filter((line) => line.split('|')[0]?.trim() !== urlToRemove)
+    .join('\n')
 }
 
 function moveUrlToFront(value: string | null | undefined, urlToPromote: string) {
@@ -1001,6 +1016,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     }),
     [projectForm.gallery, projectForm.galleryMobile, projectForm.mainImage, projectForm.mainImageMobile, projectForm.videoUrl],
   )
+  const projectTagPreview = useMemo(() => parseTagList(projectForm.projectTags), [projectForm.projectTags])
+  const projectGalleryAnnotationCount = useMemo(
+    () => parseProjectMediaAnnotations(projectForm.galleryAnnotations).length,
+    [projectForm.galleryAnnotations],
+  )
+  const projectGalleryMobileAnnotationCount = useMemo(
+    () => parseProjectMediaAnnotations(projectForm.galleryMobileAnnotations).length,
+    [projectForm.galleryMobileAnnotations],
+  )
   const projectPublishValidation = useMemo(() => {
     const blockers: string[] = []
     const warnings: string[] = []
@@ -1014,13 +1038,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     if (!projectMediaSummary.galleryCount && !projectForm.videoUrl.trim()) warnings.push('Conviene añadir galería o video para enriquecer la presentación.')
     if (!projectForm.location.trim()) warnings.push('La ubicación mejora la lectura comercial del proyecto.')
     if (!projectForm.client.trim()) warnings.push('Agregar cliente ayuda a contextualizar la obra.')
+    if (!projectTagPreview.length) warnings.push('Agregar etiquetas # ayuda al SEO y a los filtros por proyecto.')
+    if (projectMediaSummary.galleryCount > 0 && !projectGalleryAnnotationCount) warnings.push('Conviene anotar la galeria desktop para poder filtrar por foto.')
+    if (projectMediaSummary.galleryMobileCount > 0 && !projectGalleryMobileAnnotationCount) warnings.push('Conviene anotar la galeria mobile si usa encuadres diferentes.')
 
     return {
       blockers,
       warnings,
       ready: blockers.length === 0,
     }
-  }, [projectForm, projectMediaSummary.galleryCount])
+  }, [projectForm, projectGalleryAnnotationCount, projectGalleryMobileAnnotationCount, projectMediaSummary.galleryCount, projectMediaSummary.galleryMobileCount, projectTagPreview.length])
   const projectReferenceLinks = useMemo(
     () =>
       [
@@ -2013,6 +2040,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           seoTitle: projectForm.seoTitle,
           seoDescription: projectForm.seoDescription,
           seoKeywords: projectForm.seoKeywords,
+          projectTags: projectForm.projectTags,
+          galleryAnnotations: projectForm.galleryAnnotations,
+          galleryMobileAnnotations: projectForm.galleryMobileAnnotations,
           status: projectForm.status,
           featured: projectForm.featured,
           showOnHomepage: projectForm.showOnHomepage,
@@ -2056,6 +2086,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           seoTitle: projectForm.seoTitle,
           seoDescription: projectForm.seoDescription,
           seoKeywords: projectForm.seoKeywords,
+          projectTags: projectForm.projectTags,
           mainImageAlt: projectForm.mainImageAlt,
           mainImageCaption: projectForm.mainImageCaption,
           hasDesktopImage: Boolean(projectForm.mainImage.trim()),
@@ -2095,6 +2126,10 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           typeof suggestion.seoKeywords === 'string' && suggestion.seoKeywords.trim()
             ? suggestion.seoKeywords.trim()
             : current.seoKeywords,
+        projectTags:
+          typeof suggestion.projectTags === 'string' && suggestion.projectTags.trim()
+            ? suggestion.projectTags.trim()
+            : current.projectTags,
         mainImageAlt:
           typeof suggestion.mainImageAlt === 'string' && suggestion.mainImageAlt.trim()
             ? suggestion.mainImageAlt.trim()
@@ -2330,6 +2365,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       seoTitle: project.seoTitle || '',
       seoDescription: project.seoDescription || '',
       seoKeywords: project.seoKeywords || '',
+      projectTags: project.projectTags || '',
+      galleryAnnotations: project.galleryAnnotations || '',
+      galleryMobileAnnotations: project.galleryMobileAnnotations || '',
       status: project.status || 'completed',
       featured: Boolean(project.featured),
       showOnHomepage: Boolean(project.showOnHomepage),
@@ -2909,6 +2947,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         seoTitle: typeof payload.seoTitle === 'string' ? payload.seoTitle : '',
         seoDescription: typeof payload.seoDescription === 'string' ? payload.seoDescription : '',
         seoKeywords: typeof payload.seoKeywords === 'string' ? payload.seoKeywords : '',
+        projectTags: typeof payload.projectTags === 'string' ? payload.projectTags : '',
+        galleryAnnotations: typeof payload.galleryAnnotations === 'string' ? payload.galleryAnnotations : '',
+        galleryMobileAnnotations: typeof payload.galleryMobileAnnotations === 'string' ? payload.galleryMobileAnnotations : '',
         showOnHomepage: Boolean(payload.showOnHomepage),
         published: Boolean(payload.publishNow),
       })
@@ -2955,6 +2996,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         seoTitle: project.seoTitle || '',
         seoDescription: project.seoDescription || '',
         seoKeywords: project.seoKeywords || '',
+        projectTags: project.projectTags || '',
+        galleryAnnotations: project.galleryAnnotations || '',
+        galleryMobileAnnotations: project.galleryMobileAnnotations || '',
         status: project.status || '',
         featured: Boolean(project.featured),
         showOnHomepage: Boolean(project.showOnHomepage),
@@ -6560,6 +6604,25 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 <label className="text-xs font-medium text-zinc-700 mb-1 block">Keywords</label>
                 <Input value={projectForm.seoKeywords} onChange={e => setProjectForm({ ...projectForm, seoKeywords: e.target.value })} placeholder="ingenieria, construccion, arquitectura" className="text-sm" />
               </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Etiquetas / hashtags</label>
+                <Textarea
+                  value={projectForm.projectTags}
+                  onChange={e => setProjectForm({ ...projectForm, projectTags: e.target.value })}
+                  rows={2}
+                  placeholder="#construccion, #arquitectura, instalaciones, obra-civil"
+                  className="text-sm"
+                />
+                {projectTagPreview.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {projectTagPreview.map((tag) => (
+                      <span key={tag} className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] font-mono text-zinc-600">
+                        {formatTagLabel(tag)}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-medium text-zinc-700 mb-1 block">Alt de imagen principal</label>
@@ -6572,6 +6635,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               </div>
               <p className="text-xs text-zinc-500">
                 La pagina publica del proyecto usa la imagen principal como tarjeta social al compartir el enlace <span className="font-mono">/proyectos/id-del-proyecto</span>.
+              </p>
+              <p className="text-xs text-zinc-500">
+                Las etiquetas visibles tambien se incorporan a la ficha publica y ayudan a relacionar la obra con buscadores, IA y filtros internos.
               </p>
             </div>
               </>
@@ -6773,8 +6839,27 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               <MediaPreviewGrid
                 items={parseUrlList(projectForm.gallery).map((url, index) => ({ url, label: `Galeria ${index + 1}` }))}
                 emptyLabel="Aun no hay imagenes en la galeria."
-                onRemove={(item) => setProjectForm((current) => ({ ...current, gallery: removeUrlFromList(current.gallery, item.url) }))}
+                onRemove={(item) =>
+                  setProjectForm((current) => ({
+                    ...current,
+                    gallery: removeUrlFromList(current.gallery, item.url),
+                    galleryAnnotations: removeAnnotationFromList(current.galleryAnnotations, item.url),
+                  }))
+                }
               />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Anotaciones de galeria desktop</label>
+                <Textarea
+                  value={projectForm.galleryAnnotations}
+                  onChange={e => setProjectForm({ ...projectForm, galleryAnnotations: e.target.value })}
+                  rows={4}
+                  placeholder={'/api/media/foto-1.jpg | construccion | vaciado de losa | #obra-gruesa, #estructura\n/api/media/foto-2.jpg | arquitectura | acceso principal | diseno, fachada'}
+                  className="text-sm font-mono"
+                />
+                <p className="mt-2 text-xs text-zinc-500">
+                  Formato: <span className="font-mono">url | categoria | texto corto | tags</span>. Detectadas: {projectGalleryAnnotationCount}
+                </p>
+              </div>
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -6801,8 +6886,27 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               <MediaPreviewGrid
                 items={parseUrlList(projectForm.galleryMobile).map((url, index) => ({ url, label: `Mobile ${index + 1}` }))}
                 emptyLabel="Sin galeria mobile dedicada."
-                onRemove={(item) => setProjectForm((current) => ({ ...current, galleryMobile: removeUrlFromList(current.galleryMobile, item.url) }))}
+                onRemove={(item) =>
+                  setProjectForm((current) => ({
+                    ...current,
+                    galleryMobile: removeUrlFromList(current.galleryMobile, item.url),
+                    galleryMobileAnnotations: removeAnnotationFromList(current.galleryMobileAnnotations, item.url),
+                  }))
+                }
               />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Anotaciones de galeria mobile</label>
+                <Textarea
+                  value={projectForm.galleryMobileAnnotations}
+                  onChange={e => setProjectForm({ ...projectForm, galleryMobileAnnotations: e.target.value })}
+                  rows={4}
+                  placeholder={'/api/media/foto-mobile-1.jpg | instalaciones | tablero general | #electricidad, #mantenimiento'}
+                  className="text-sm font-mono"
+                />
+                <p className="mt-2 text-xs text-zinc-500">
+                  Usa este bloque solo si mobile necesita categorias o textos distintos. Detectadas: {projectGalleryMobileAnnotationCount}
+                </p>
+              </div>
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">

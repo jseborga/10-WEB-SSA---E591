@@ -6,9 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Calendar, Link2, Linkedin, MapPin, Building2, Instagram, Facebook, Youtube, Ruler, ChevronLeft, ChevronRight, Share2, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { ProjectMediaOverlay } from '@/components/project-media-overlay'
 import { SiteHeader } from '@/components/site-header'
 import { useLanguage } from '@/lib/language-context'
-import { formatCategoryLabel, parseUrlList, type PublicProject, type PublicSiteSettings } from '@/lib/public-site'
+import { buildProjectMediaItems, formatCategoryLabel, formatTagLabel, normalizeTag, parseTagList, type PublicProject, type PublicSiteSettings } from '@/lib/public-site'
 import { buildSocialShareLinks, shareLink } from '@/lib/share'
 
 interface ProjectPageClientProps {
@@ -29,6 +30,7 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
   const [isLoading, setIsLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [isImageExpanded, setIsImageExpanded] = useState(false)
+  const [activeGalleryFilter, setActiveGalleryFilter] = useState('all')
 
   const getTitle = useCallback(() => {
     if (language === 'en' && project.titleEn) return project.titleEn
@@ -52,25 +54,56 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
     return () => mediaQuery.removeEventListener('change', update)
   }, [])
 
-  const allImages = useMemo(() => {
-    const rawGallery = isMobile ? project.galleryMobile || project.gallery : project.gallery
-    const leadImage = isMobile ? project.mainImageMobile || project.mainImage : project.mainImage
-    const galleryImages = parseUrlList(rawGallery)
+  const projectTags = useMemo(
+    () => parseTagList(project.projectTags || project.seoKeywords || ''),
+    [project.projectTags, project.seoKeywords],
+  )
+  const mediaItems = useMemo(
+    () =>
+      buildProjectMediaItems(project, {
+        isMobile,
+        fallbackUrl: '/images/projects/house1.png',
+      }),
+    [
+      isMobile,
+      project,
+    ],
+  )
+  const galleryFilters = useMemo(() => {
+    const categories = Array.from(new Set(mediaItems.map((item) => item.category.trim()).filter(Boolean)))
+    const tags = Array.from(new Set(mediaItems.flatMap((item) => item.tags))).filter(Boolean)
 
-    return leadImage
-      ? [leadImage, ...galleryImages]
-      : galleryImages.length > 0
-        ? galleryImages
-        : ['/images/projects/house1.png']
-  }, [isMobile, project.gallery, project.galleryMobile, project.mainImage, project.mainImageMobile])
+    return [
+      { key: 'all', label: language === 'en' ? 'All' : language === 'pt' ? 'Tudo' : 'Todo', match: () => true },
+      ...categories.map((category) => ({
+        key: `category:${normalizeTag(category)}`,
+        label: category,
+        match: (item: (typeof mediaItems)[number]) => normalizeTag(item.category) === normalizeTag(category),
+      })),
+      ...tags
+        .filter((tag) => !categories.some((category) => normalizeTag(category) === tag))
+        .map((tag) => ({
+          key: `tag:${tag}`,
+          label: formatTagLabel(tag),
+          match: (item: (typeof mediaItems)[number]) => item.tags.includes(tag),
+        })),
+    ]
+  }, [language, mediaItems])
+  const resolvedActiveGalleryFilter = galleryFilters.some((item) => item.key === activeGalleryFilter) ? activeGalleryFilter : 'all'
+  const filteredMediaItems = useMemo(() => {
+    const activeFilter = galleryFilters.find((item) => item.key === resolvedActiveGalleryFilter) || galleryFilters[0]
+    return mediaItems.filter((item) => activeFilter.match(item))
+  }, [galleryFilters, mediaItems, resolvedActiveGalleryFilter])
+  const resolvedCurrentImageIndex = currentImageIndex < filteredMediaItems.length ? currentImageIndex : 0
+  const currentMedia = filteredMediaItems[resolvedCurrentImageIndex] || filteredMediaItems[0] || mediaItems[0]
 
   const nextImage = useCallback(() => {
-    setCurrentImageIndex((prev) => (prev + 1) % allImages.length)
-  }, [allImages.length])
+    setCurrentImageIndex((prev) => (prev + 1) % Math.max(filteredMediaItems.length, 1))
+  }, [filteredMediaItems.length])
 
   const prevImage = useCallback(() => {
-    setCurrentImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length)
-  }, [allImages.length])
+    setCurrentImageIndex((prev) => (prev - 1 + Math.max(filteredMediaItems.length, 1)) % Math.max(filteredMediaItems.length, 1))
+  }, [filteredMediaItems.length])
 
   const detailCopy =
     language === 'en'
@@ -83,6 +116,8 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
           year: 'Year',
           area: 'Area',
           client: 'Client',
+          gallery: 'Gallery filters',
+          tags: 'Project tags',
         }
       : language === 'pt'
         ? {
@@ -94,6 +129,8 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
             year: 'Ano',
             area: 'Area',
             client: 'Cliente',
+            gallery: 'Filtros da galeria',
+            tags: 'Etiquetas do projeto',
           }
         : {
             back: 'Volver a proyectos',
@@ -104,6 +141,8 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
             year: 'Ano',
             area: 'Area',
             client: 'Cliente',
+            gallery: 'Filtros de galeria',
+            tags: 'Etiquetas del proyecto',
           }
 
   const projectLinks = useMemo(
@@ -162,6 +201,15 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
             </span>
             <h1 className="mt-4 text-3xl font-light tracking-tight sm:text-5xl">{pageTitle}</h1>
             {project.description ? <p className="mt-4 max-w-2xl text-sm text-zinc-600 sm:text-base">{project.description}</p> : null}
+            {projectTags.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {projectTags.map((tag) => (
+                  <span key={tag} className="rounded-full border border-zinc-200 px-2.5 py-1 font-mono text-[11px] text-zinc-600">
+                    {formatTagLabel(tag)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -215,13 +263,21 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
               onClick={() => setIsImageExpanded(true)}
             >
               <Image
-                src={allImages[currentImageIndex]}
-                alt={project.mainImageAlt || pageTitle}
+                src={currentMedia?.url || '/images/projects/house1.png'}
+                alt={currentMedia?.alt || project.mainImageAlt || pageTitle}
                 fill
                 className={isMobile ? 'object-contain' : 'object-cover'}
                 onLoad={() => setIsLoading(false)}
                 priority
               />
+              {currentMedia ? (
+                <ProjectMediaOverlay
+                  key={`${currentMedia.url}-${currentMedia.label}`}
+                  category={currentMedia.category}
+                  label={currentMedia.label}
+                  tags={currentMedia.tags}
+                />
+              ) : null}
 
               {isLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -229,7 +285,7 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
                 </div>
               ) : null}
 
-              {allImages.length > 1 ? (
+              {filteredMediaItems.length > 1 ? (
                 <>
                   <button
                     type="button"
@@ -258,23 +314,49 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
             </div>
           </div>
 
-          {project.mainImageCaption ? <p className="text-sm text-zinc-500">{project.mainImageCaption}</p> : null}
+          {currentMedia?.label ? <p className="text-sm text-zinc-500">{currentMedia.label}</p> : null}
 
-          {allImages.length > 1 ? (
+          {galleryFilters.length > 1 ? (
+            <div className="space-y-3">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">{detailCopy.gallery}</p>
+              <div className="flex flex-wrap gap-2">
+                {galleryFilters.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    onClick={() => {
+                      setIsLoading(true)
+                      setActiveGalleryFilter(filter.key)
+                      setCurrentImageIndex(0)
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
+                      resolvedActiveGalleryFilter === filter.key
+                        ? 'border-zinc-900 bg-zinc-900 text-white'
+                        : 'border-zinc-200 text-zinc-600 hover:border-zinc-400 hover:text-zinc-900'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {filteredMediaItems.length > 1 ? (
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {allImages.map((imageUrl, index) => (
+              {filteredMediaItems.map((item, index) => (
                 <button
-                  key={`${imageUrl}-${index}`}
+                  key={`${item.url}-${index}`}
                   type="button"
                   onClick={() => {
                     setIsLoading(true)
                     setCurrentImageIndex(index)
                   }}
                   className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-2xl border transition-all ${
-                    index === currentImageIndex ? 'border-zinc-900' : 'border-zinc-200 opacity-70 hover:opacity-100'
+                    index === resolvedCurrentImageIndex ? 'border-zinc-900' : 'border-zinc-200 opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <Image src={imageUrl} alt="" fill className={isMobile ? 'object-contain bg-zinc-100' : 'object-cover'} />
+                  <Image src={item.url} alt={item.alt} fill className={isMobile ? 'object-contain bg-zinc-100' : 'object-cover'} />
                 </button>
               ))}
             </div>
@@ -332,7 +414,6 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
               <div className="max-w-3xl text-base leading-8 text-zinc-700">
                 {pageDescription || 'Sin descripcion ampliada disponible todavia.'}
               </div>
-
               {projectLinks.length > 0 ? (
                 <div className="border-t border-zinc-200 pt-6">
                   <p className="mb-3 text-xs uppercase tracking-[0.22em] text-zinc-500">{detailCopy.links}</p>
@@ -409,13 +490,13 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
             </button>
             <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8">
               <img
-                src={allImages[currentImageIndex]}
-                alt={project.mainImageAlt || pageTitle}
+                src={currentMedia?.url || '/images/projects/house1.png'}
+                alt={currentMedia?.alt || project.mainImageAlt || pageTitle}
                 className="max-h-full max-w-full object-contain"
                 onClick={(event) => event.stopPropagation()}
               />
             </div>
-            {allImages.length > 1 ? (
+            {filteredMediaItems.length > 1 ? (
               <>
                 <button
                   type="button"

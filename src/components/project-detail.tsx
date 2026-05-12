@@ -5,8 +5,9 @@ import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight, Link2, Instagram, Facebook, Linkedin, Youtube, Share2, Send } from 'lucide-react'
 import { toast } from 'sonner'
+import { ProjectMediaOverlay } from '@/components/project-media-overlay'
 import { useLanguage } from '@/lib/language-context'
-import { parseUrlList } from '@/lib/public-site'
+import { buildProjectMediaItems, formatTagLabel, normalizeTag, parseTagList } from '@/lib/public-site'
 import { buildSocialShareLinks, shareLink } from '@/lib/share'
 
 interface Project {
@@ -37,6 +38,10 @@ interface Project {
   facebookUrl?: string | null
   linkedinUrl?: string | null
   youtubeUrl?: string | null
+  seoKeywords?: string | null
+  projectTags?: string | null
+  galleryAnnotations?: string | null
+  galleryMobileAnnotations?: string | null
   status?: string | null
 }
 
@@ -59,6 +64,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   const [isLoading, setIsLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [isImageExpanded, setIsImageExpanded] = useState(false)
+  const [activeGalleryFilter, setActiveGalleryFilter] = useState('all')
 
   const getTitle = useCallback(() => {
     if (language === 'en' && project.titleEn) return project.titleEn
@@ -82,25 +88,53 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
     return () => mediaQuery.removeEventListener('change', update)
   }, [])
 
-  // Parse gallery images
-  const allImages = useMemo(() => {
-    const rawGallery = isMobile ? project.galleryMobile || project.gallery : project.gallery
-    const leadImage = isMobile ? project.mainImageMobile || project.mainImage : project.mainImage
-    const galleryImages = parseUrlList(rawGallery)
-    return leadImage
-      ? [leadImage, ...galleryImages]
-      : galleryImages.length > 0 
-        ? galleryImages 
-        : ['/images/projects/house1.png']
-  }, [isMobile, project.gallery, project.galleryMobile, project.mainImage, project.mainImageMobile])
+  const projectTags = useMemo(
+    () => parseTagList(project.projectTags || project.seoKeywords || ''),
+    [project.projectTags, project.seoKeywords],
+  )
+  const mediaItems = useMemo(
+    () =>
+      buildProjectMediaItems(project, {
+        isMobile,
+        fallbackUrl: '/images/projects/house1.png',
+      }),
+    [isMobile, project],
+  )
+  const galleryFilters = useMemo(() => {
+    const categories = Array.from(new Set(mediaItems.map((item) => item.category.trim()).filter(Boolean)))
+    const tags = Array.from(new Set(mediaItems.flatMap((item) => item.tags))).filter(Boolean)
+
+    return [
+      { key: 'all', label: language === 'en' ? 'All' : language === 'pt' ? 'Tudo' : 'Todo', match: () => true },
+      ...categories.map((category) => ({
+        key: `category:${normalizeTag(category)}`,
+        label: category,
+        match: (item: (typeof mediaItems)[number]) => normalizeTag(item.category) === normalizeTag(category),
+      })),
+      ...tags
+        .filter((tag) => !categories.some((category) => normalizeTag(category) === tag))
+        .map((tag) => ({
+          key: `tag:${tag}`,
+          label: formatTagLabel(tag),
+          match: (item: (typeof mediaItems)[number]) => item.tags.includes(tag),
+        })),
+    ]
+  }, [language, mediaItems])
+  const resolvedActiveGalleryFilter = galleryFilters.some((item) => item.key === activeGalleryFilter) ? activeGalleryFilter : 'all'
+  const filteredMediaItems = useMemo(() => {
+    const activeFilter = galleryFilters.find((item) => item.key === resolvedActiveGalleryFilter) || galleryFilters[0]
+    return mediaItems.filter((item) => activeFilter.match(item))
+  }, [galleryFilters, mediaItems, resolvedActiveGalleryFilter])
+  const resolvedCurrentImageIndex = currentImageIndex < filteredMediaItems.length ? currentImageIndex : 0
+  const currentMedia = filteredMediaItems[resolvedCurrentImageIndex] || filteredMediaItems[0] || mediaItems[0]
 
   const nextImage = useCallback(() => {
-    setCurrentImageIndex((prev) => (prev + 1) % allImages.length)
-  }, [allImages.length])
+    setCurrentImageIndex((prev) => (prev + 1) % Math.max(filteredMediaItems.length, 1))
+  }, [filteredMediaItems.length])
 
   const prevImage = useCallback(() => {
-    setCurrentImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length)
-  }, [allImages.length])
+    setCurrentImageIndex((prev) => (prev - 1 + Math.max(filteredMediaItems.length, 1)) % Math.max(filteredMediaItems.length, 1))
+  }, [filteredMediaItems.length])
 
   const getCategoryLabel = () => categoryLabels[language]?.[project.category] || project.category
   const projectLinks = useMemo(
@@ -121,6 +155,8 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
           open: 'Open page',
           copied: 'Project link copied',
           error: 'Could not share the project',
+          gallery: 'Gallery filters',
+          tags: 'Project tags',
         }
       : language === 'pt'
         ? {
@@ -128,12 +164,16 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
             open: 'Abrir pagina',
             copied: 'Link do projeto copiado',
             error: 'Nao foi possivel compartilhar o projeto',
+            gallery: 'Filtros da galeria',
+            tags: 'Etiquetas do projeto',
           }
         : {
             share: 'Compartir proyecto',
             open: 'Abrir pagina',
             copied: 'Enlace del proyecto copiado',
             error: 'No se pudo compartir el proyecto',
+            gallery: 'Filtros de galeria',
+            tags: 'Etiquetas del proyecto',
           }
   const shareUrl = typeof window !== 'undefined' ? new URL(`/proyectos/${project.id}`, window.location.origin).toString() : `/proyectos/${project.id}`
   const socialShareLinks = useMemo(
@@ -190,13 +230,21 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
               }}
             >
               <Image
-                src={allImages[currentImageIndex]}
-                alt={project.mainImageAlt || getTitle()}
+                src={currentMedia?.url || '/images/projects/house1.png'}
+                alt={currentMedia?.alt || project.mainImageAlt || getTitle()}
                 fill
                 className={isMobile ? 'object-contain' : 'object-cover'}
                 onLoad={() => setIsLoading(false)}
                 priority
               />
+              {currentMedia ? (
+                <ProjectMediaOverlay
+                  key={`${currentMedia.url}-${currentMedia.label}`}
+                  category={currentMedia.category}
+                  label={currentMedia.label}
+                  tags={currentMedia.tags}
+                />
+              ) : null}
               
               {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -205,7 +253,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
               )}
 
               {/* Navigation arrows */}
-              {allImages.length > 1 && (
+              {filteredMediaItems.length > 1 && (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setIsLoading(true); prevImage() }}
@@ -223,22 +271,47 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
               )}
             </div>
 
-            {project.mainImageCaption && (
-              <p className="mt-3 text-sm text-zinc-400">{project.mainImageCaption}</p>
-            )}
+            {currentMedia?.label ? <p className="mt-3 text-sm text-zinc-400">{currentMedia.label}</p> : null}
+
+            {galleryFilters.length > 1 ? (
+              <div className="mt-4 space-y-3">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">{shareCopy.gallery}</p>
+                <div className="flex flex-wrap gap-2">
+                  {galleryFilters.map((filter) => (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setIsLoading(true)
+                        setActiveGalleryFilter(filter.key)
+                        setCurrentImageIndex(0)
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
+                        resolvedActiveGalleryFilter === filter.key
+                          ? 'border-white bg-white text-zinc-900'
+                          : 'border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-900'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {/* Thumbnails */}
-            {allImages.length > 1 && (
+            {filteredMediaItems.length > 1 && (
               <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
-                {allImages.map((img, idx) => (
+                {filteredMediaItems.map((item, idx) => (
                   <button
-                    key={idx}
+                    key={`${item.url}-${idx}`}
                     onClick={(e) => { e.stopPropagation(); setIsLoading(true); setCurrentImageIndex(idx) }}
                     className={`relative w-16 h-12 sm:w-20 sm:h-14 flex-shrink-0 rounded overflow-hidden transition-opacity ${
-                      idx === currentImageIndex ? 'ring-2 ring-white' : 'opacity-50 hover:opacity-100'
+                      idx === resolvedCurrentImageIndex ? 'ring-2 ring-white' : 'opacity-50 hover:opacity-100'
                     }`}
                   >
-                    <Image src={img} alt="" fill className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'} />
+                    <Image src={item.url} alt={item.alt} fill className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'} />
                   </button>
                 ))}
               </div>
@@ -264,6 +337,15 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
             <div className="lg:col-span-2">
               <span className="text-xs text-zinc-400 uppercase tracking-wider">{getCategoryLabel()}</span>
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-light text-white mt-2 mb-4">{getTitle()}</h1>
+              {projectTags.length > 0 ? (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {projectTags.map((tag) => (
+                    <span key={tag} className="rounded-full border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300">
+                      {formatTagLabel(tag)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div className="mb-5 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -444,13 +526,13 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
             </button>
             <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8">
               <img
-                src={allImages[currentImageIndex]}
-                alt={project.mainImageAlt || getTitle()}
+                src={currentMedia?.url || '/images/projects/house1.png'}
+                alt={currentMedia?.alt || project.mainImageAlt || getTitle()}
                 className="max-h-full max-w-full object-contain"
                 onClick={(event) => event.stopPropagation()}
               />
             </div>
-            {allImages.length > 1 ? (
+            {filteredMediaItems.length > 1 ? (
               <>
                 <button
                   type="button"
