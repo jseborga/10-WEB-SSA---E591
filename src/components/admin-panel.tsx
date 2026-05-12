@@ -360,6 +360,7 @@ type PublicationFormState = {
 type PreparedImageResult = {
   target: 'project' | 'publication' | 'hero' | 'social'
   treatment: 'original' | 'enhanced' | 'editorial' | 'monochrome'
+  fitMode?: 'cover' | 'contain'
   original: {
     url: string
     width: number | null
@@ -925,6 +926,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [adminUsername, setAdminUsername] = useState('admin')
   const [adminPassword, setAdminPassword] = useState('')
   const [projectImageTreatment, setProjectImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
+  const [projectImageFitMode, setProjectImageFitMode] = useState<'cover' | 'contain'>('cover')
   const [heroImageTreatment, setHeroImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('editorial')
   const [publicationImageTreatment, setPublicationImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('enhanced')
   const [siteSocialImageTreatment, setSiteSocialImageTreatment] = useState<'original' | 'enhanced' | 'editorial' | 'monochrome'>('editorial')
@@ -2209,6 +2211,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           sourceUrl: projectForm.mainImage,
           target: 'project',
           treatment: projectImageTreatment,
+          fitMode: projectImageFitMode,
         }),
       })
 
@@ -6686,6 +6689,28 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   </button>
                 ))}
               </div>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: 'cover', label: 'Recorte editorial' },
+                  { key: 'contain', label: 'Encuadre completo' },
+                ] as const).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setProjectImageFitMode(option.key)}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                      projectImageFitMode === option.key
+                        ? 'border-zinc-900 bg-zinc-900 text-white'
+                        : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-500">
+                `Recorte editorial` llena el formato con corte inteligente. `Encuadre completo` conserva la imagen vertical completa y extiende el fondo para mobile sin tocar el archivo original.
+              </p>
               {projectImageVariants ? (
                 <div className="space-y-4">
                   <MediaPreviewGrid

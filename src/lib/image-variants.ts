@@ -4,6 +4,7 @@ import { createStoredFileName, readStoredFile, saveUploadedFile } from '@/lib/me
 
 export type ImageVariantTarget = 'project' | 'publication' | 'hero' | 'social'
 export type ImageTreatment = 'original' | 'enhanced' | 'editorial' | 'monochrome'
+export type ImageVariantFitMode = 'cover' | 'contain'
 
 type VariantSize = {
   width: number
@@ -100,27 +101,65 @@ function applyTreatment(instance: sharp.Sharp, treatment: ImageTreatment) {
   }
 }
 
+async function buildContainedVariant(
+  sourceBuffer: Buffer,
+  size: VariantSize,
+  treatment: ImageTreatment,
+) {
+  const background = await sharp(sourceBuffer)
+    .rotate()
+    .resize(size.width, size.height, {
+      fit: 'cover',
+      position: 'attention',
+      withoutEnlargement: false,
+    })
+    .blur(20)
+    .modulate({ brightness: 0.84, saturation: treatment === 'monochrome' ? 0 : 0.88 })
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer()
+
+  const foreground = await applyTreatment(sharp(sourceBuffer).rotate(), treatment)
+    .resize(size.width, size.height, {
+      fit: 'contain',
+      withoutEnlargement: false,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer()
+
+  return sharp(background)
+    .composite([{ input: foreground, gravity: 'center' }])
+    .webp({
+      quality: 84,
+      effort: 5,
+    })
+}
+
 async function createVariant(
   sourceBuffer: Buffer,
   fileName: string,
   size: VariantSize,
   label: 'desktop' | 'mobile',
   treatment: ImageTreatment,
+  fitMode: ImageVariantFitMode,
 ) {
-  const processed = applyTreatment(sharp(sourceBuffer).rotate(), treatment)
-    .resize(size.width, size.height, {
-      fit: 'cover',
-      position: 'attention',
-      withoutEnlargement: false,
-    })
-    .webp({
-      quality: 84,
-      effort: 5,
-    })
+  const processed =
+    fitMode === 'contain'
+      ? await buildContainedVariant(sourceBuffer, size, treatment)
+      : applyTreatment(sharp(sourceBuffer).rotate(), treatment)
+          .resize(size.width, size.height, {
+            fit: 'cover',
+            position: 'attention',
+            withoutEnlargement: false,
+          })
+          .webp({
+            quality: 84,
+            effort: 5,
+          })
 
   const buffer = await processed.toBuffer()
   const stem = path.parse(fileName).name || 'image'
-  const outputFileName = createStoredFileName(`${stem}-${label}-${treatment}.webp`)
+  const outputFileName = createStoredFileName(`${stem}-${label}-${treatment}-${fitMode}.webp`)
   await saveUploadedFile(outputFileName, buffer)
 
   return {
@@ -135,23 +174,26 @@ export async function generateImageVariants({
   sourceUrl,
   target,
   treatment,
+  fitMode = 'cover',
 }: {
   sourceUrl: string
   target: ImageVariantTarget
   treatment: ImageTreatment
+  fitMode?: ImageVariantFitMode
 }) {
   const { buffer, fileName } = await loadSourceBuffer(sourceUrl)
   const metadata = await sharp(buffer).metadata()
   const sizes = TARGET_SIZES[target]
 
   const [desktop, mobile] = await Promise.all([
-    createVariant(buffer, fileName, sizes.desktop, 'desktop', treatment),
-    createVariant(buffer, fileName, sizes.mobile, 'mobile', treatment),
+    createVariant(buffer, fileName, sizes.desktop, 'desktop', treatment, fitMode),
+    createVariant(buffer, fileName, sizes.mobile, 'mobile', treatment, fitMode),
   ])
 
   return {
     target,
     treatment,
+    fitMode,
     original: {
       url: sourceUrl,
       width: metadata.width || null,

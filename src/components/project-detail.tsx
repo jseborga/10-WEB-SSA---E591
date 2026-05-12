@@ -58,6 +58,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [isImageExpanded, setIsImageExpanded] = useState(false)
 
   const getTitle = useCallback(() => {
     if (language === 'en' && project.titleEn) return project.titleEn
@@ -181,12 +182,18 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
         <div className="max-w-7xl mx-auto px-4">
           {/* Gallery */}
           <div className="relative mb-6 sm:mb-8">
-            <div className="relative aspect-[16/9] sm:aspect-[21/9] rounded-lg overflow-hidden bg-zinc-900">
+            <div
+              className="relative aspect-[4/5] rounded-lg overflow-hidden bg-zinc-900 sm:aspect-[21/9]"
+              onClick={(event) => {
+                event.stopPropagation()
+                setIsImageExpanded(true)
+              }}
+            >
               <Image
                 src={allImages[currentImageIndex]}
                 alt={project.mainImageAlt || getTitle()}
                 fill
-                className="object-cover"
+                className={isMobile ? 'object-contain' : 'object-cover'}
                 onLoad={() => setIsLoading(false)}
                 priority
               />
@@ -201,13 +208,13 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
               {allImages.length > 1 && (
                 <>
                   <button
-                    onClick={(e) => { e.stopPropagation(); prevImage() }}
+                    onClick={(e) => { e.stopPropagation(); setIsLoading(true); prevImage() }}
                     className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
                   >
                     <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); nextImage() }}
+                    onClick={(e) => { e.stopPropagation(); setIsLoading(true); nextImage() }}
                     className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
                   >
                     <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
@@ -226,12 +233,12 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 {allImages.map((img, idx) => (
                   <button
                     key={idx}
-                    onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(idx) }}
+                    onClick={(e) => { e.stopPropagation(); setIsLoading(true); setCurrentImageIndex(idx) }}
                     className={`relative w-16 h-12 sm:w-20 sm:h-14 flex-shrink-0 rounded overflow-hidden transition-opacity ${
                       idx === currentImageIndex ? 'ring-2 ring-white' : 'opacity-50 hover:opacity-100'
                     }`}
                   >
-                    <Image src={img} alt="" fill className="object-cover" />
+                    <Image src={img} alt="" fill className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'} />
                   </button>
                 ))}
               </div>
@@ -391,10 +398,10 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     >
                       <div className="relative w-20 h-16 flex-shrink-0 rounded overflow-hidden">
                         <Image
-                          src={(isMobile ? similar.mainImageMobile || similar.mainImage : similar.mainImage) || '/images/projects/house1.png'}
+                          src={(similar.mainImage || similar.mainImageMobile) || '/images/projects/house1.png'}
                           alt=""
                           fill
-                          className="object-cover"
+                          className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -413,6 +420,63 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
           </div>
         </div>
       </div>
+      <AnimatePresence>
+        {isImageExpanded ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] bg-black/95"
+            onClick={(event) => {
+              event.stopPropagation()
+              setIsImageExpanded(false)
+            }}
+          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                setIsImageExpanded(false)
+              }}
+              className="absolute right-4 top-4 z-[95] flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8">
+              <img
+                src={allImages[currentImageIndex]}
+                alt={project.mainImageAlt || getTitle()}
+                className="max-h-full max-w-full object-contain"
+                onClick={(event) => event.stopPropagation()}
+              />
+            </div>
+            {allImages.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    prevImage()
+                  }}
+                  className="absolute left-4 top-1/2 z-[95] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    nextImage()
+                  }}
+                  className="absolute right-4 top-1/2 z-[95] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </>
+            ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </motion.div>
   )
 }

@@ -116,13 +116,24 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
                 onClick={() => setSelectedProject(project)}
                 className="absolute inset-0 z-10"
               />
-              <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100">
-                <Image
-                  src={(isMobile ? project.mainImageMobile || project.mainImage : project.mainImage) || '/images/hero-bg.png'}
-                  alt={getLocalizedText(project, language, 'title')}
-                  fill
-                  className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-                />
+              <div className="relative aspect-[4/5] overflow-hidden bg-zinc-100 sm:aspect-[4/3]">
+                {isMobile ? (
+                  <div className="absolute inset-3">
+                    <Image
+                      src={(project.mainImage || project.mainImageMobile) || '/images/hero-bg.png'}
+                      alt={getLocalizedText(project, language, 'title')}
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                ) : (
+                  <Image
+                    src={(project.mainImage || project.mainImageMobile) || '/images/hero-bg.png'}
+                    alt={getLocalizedText(project, language, 'title')}
+                    fill
+                    className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                  />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/18 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 <div className="absolute right-4 top-4 z-20">
                   <Link
@@ -153,6 +164,18 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
                       {project.area ? <span>{project.area}</span> : null}
                     </div>
                   </div>
+                </div>
+              </div>
+              <div className="space-y-1 border-t border-zinc-200 bg-white px-4 py-3 sm:hidden">
+                <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                  {formatCategoryLabel(project.category)}
+                </p>
+                <h2 className="text-sm font-medium text-zinc-900">
+                  {getLocalizedText(project, language, 'title')}
+                </h2>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                  {project.location ? <span>{project.location}</span> : null}
+                  {project.year ? <span>{project.year}</span> : null}
                 </div>
               </div>
             </motion.article>

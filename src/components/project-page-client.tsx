@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Calendar, Link2, Linkedin, MapPin, Building2, Instagram, Facebook, Youtube, Ruler, ChevronLeft, ChevronRight, Share2, Send } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Calendar, Link2, Linkedin, MapPin, Building2, Instagram, Facebook, Youtube, Ruler, ChevronLeft, ChevronRight, Share2, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { SiteHeader } from '@/components/site-header'
 import { useLanguage } from '@/lib/language-context'
@@ -27,6 +28,7 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [isImageExpanded, setIsImageExpanded] = useState(false)
 
   const getTitle = useCallback(() => {
     if (language === 'en' && project.titleEn) return project.titleEn
@@ -208,12 +210,15 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
 
         <div className="mt-8 space-y-8">
           <div className="relative overflow-hidden rounded-[28px] bg-zinc-100">
-            <div className="relative aspect-[16/9] sm:aspect-[21/9]">
+            <div
+              className="relative aspect-[4/5] sm:aspect-[21/9]"
+              onClick={() => setIsImageExpanded(true)}
+            >
               <Image
                 src={allImages[currentImageIndex]}
                 alt={project.mainImageAlt || pageTitle}
                 fill
-                className="object-cover"
+                className={isMobile ? 'object-contain' : 'object-cover'}
                 onLoad={() => setIsLoading(false)}
                 priority
               />
@@ -228,14 +233,22 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
                 <>
                   <button
                     type="button"
-                    onClick={prevImage}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setIsLoading(true)
+                      prevImage()
+                    }}
                     className="absolute left-4 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
                   <button
                     type="button"
-                    onClick={nextImage}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setIsLoading(true)
+                      nextImage()
+                    }}
                     className="absolute right-4 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65"
                   >
                     <ChevronRight className="h-5 w-5" />
@@ -253,12 +266,15 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
                 <button
                   key={`${imageUrl}-${index}`}
                   type="button"
-                  onClick={() => setCurrentImageIndex(index)}
+                  onClick={() => {
+                    setIsLoading(true)
+                    setCurrentImageIndex(index)
+                  }}
                   className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-2xl border transition-all ${
                     index === currentImageIndex ? 'border-zinc-900' : 'border-zinc-200 opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <Image src={imageUrl} alt="" fill className="object-cover" />
+                  <Image src={imageUrl} alt="" fill className={isMobile ? 'object-contain bg-zinc-100' : 'object-cover'} />
                 </button>
               ))}
             </div>
@@ -353,10 +369,10 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
                   >
                     <div className="relative h-16 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-zinc-100">
                       <Image
-                        src={(isMobile ? similar.mainImageMobile || similar.mainImage : similar.mainImage) || '/images/projects/house1.png'}
+                        src={(similar.mainImage || similar.mainImageMobile) || '/images/projects/house1.png'}
                         alt=""
                         fill
-                        className="object-cover"
+                        className={isMobile ? 'object-contain bg-zinc-100' : 'object-cover'}
                       />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -372,6 +388,60 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
           </div>
         </div>
       </section>
+      <AnimatePresence>
+        {isImageExpanded ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] bg-black/95"
+            onClick={() => setIsImageExpanded(false)}
+          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                setIsImageExpanded(false)
+              }}
+              className="absolute right-4 top-4 z-[95] flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8">
+              <img
+                src={allImages[currentImageIndex]}
+                alt={project.mainImageAlt || pageTitle}
+                className="max-h-full max-w-full object-contain"
+                onClick={(event) => event.stopPropagation()}
+              />
+            </div>
+            {allImages.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    prevImage()
+                  }}
+                  className="absolute left-4 top-1/2 z-[95] inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    nextImage()
+                  }}
+                  className="absolute right-4 top-1/2 z-[95] inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </>
+            ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </main>
   )
 }
