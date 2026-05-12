@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin, ArrowUp, ArrowDown, CornerDownRight } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin, ArrowUp, ArrowDown, CornerDownRight, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -4266,7 +4266,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                     />
                                      <div className="absolute right-4 top-4 flex items-center gap-2">
                                        <div className="inline-flex h-8 w-8 items-center justify-center text-white/78">
-                                         <Globe className="h-4 w-4" />
+                                         <Share2 className="h-4 w-4" />
                                       </div>
                                       <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
                                          <span>Menu</span>
@@ -4332,7 +4332,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                     />
                                      <div className="absolute right-4 top-4 flex items-center gap-2">
                                        <div className="inline-flex h-8 w-8 items-center justify-center text-white/78">
-                                         <Globe className="h-4 w-4" />
+                                         <Share2 className="h-4 w-4" />
                                       </div>
                                       <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/16 px-3 py-2 text-[10px] uppercase tracking-[0.25em] text-white backdrop-blur-md">
                                          <span>Menu</span>
