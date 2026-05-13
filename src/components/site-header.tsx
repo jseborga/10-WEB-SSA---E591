@@ -15,9 +15,10 @@ const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) =
 
 interface SiteHeaderProps {
   tone?: 'light' | 'dark'
+  chatGuideMessages?: string[]
 }
 
-export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
+export function SiteHeader({ tone = 'light', chatGuideMessages }: SiteHeaderProps) {
   const { t } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuItems, setMenuItems] = useState<MenuItemConfig[]>([])
@@ -156,7 +157,7 @@ export function SiteHeader({ tone = 'light' }: SiteHeaderProps) {
     >
       <Home className="h-4 w-4" />
     </Link>
-    <ChatWidget buttonTone={tone} />
+    <ChatWidget buttonTone={tone} guideMessages={chatGuideMessages} />
     </>
   )
 }

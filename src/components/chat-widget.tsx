@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { io, Socket } from 'socket.io-client'
 import { MessageCircle, X, Send, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,7 @@ const DEFAULT_CHAT_CONFIG: ChatConfig = {
 
 interface ChatWidgetProps {
   buttonTone?: 'light' | 'dark'
+  guideMessages?: string[]
 }
 
 function getSavedSession() {
@@ -91,7 +93,39 @@ function formatPreferredChannelLabel(value: string | undefined) {
   }
 }
 
-export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
+function normalizeGuideMessages(messages: string[] | undefined) {
+  return Array.from(new Set((messages || []).map((message) => message.trim()).filter(Boolean)))
+}
+
+function getGuideActions(language: string) {
+  if (language === 'en') {
+    return [
+      { id: 'about', label: 'Who we are', href: '/estudio' },
+      { id: 'services', label: 'What we do', message: 'I want to know who you are and what services you offer.' },
+      { id: 'projects', label: 'Projects', href: '/proyectos' },
+      { id: 'quote', label: 'Request a quote', message: 'I want an initial quote for my project.' },
+    ]
+  }
+
+  if (language === 'pt') {
+    return [
+      { id: 'about', label: 'Quem somos', href: '/estudio' },
+      { id: 'services', label: 'O que fazemos', message: 'Quero saber quem voces sao e que servicos oferecem.' },
+      { id: 'projects', label: 'Projetos', href: '/proyectos' },
+      { id: 'quote', label: 'Pedir cotacao', message: 'Quero uma cotacao inicial para meu projeto.' },
+    ]
+  }
+
+  return [
+    { id: 'about', label: 'Quienes somos', href: '/estudio' },
+    { id: 'services', label: 'Que hacemos', message: 'Quiero saber quienes son y que servicios ofrecen.' },
+    { id: 'projects', label: 'Proyectos', href: '/proyectos' },
+    { id: 'quote', label: 'Cotizar', message: 'Quiero una cotizacion inicial para mi proyecto.' },
+  ]
+}
+
+export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidgetProps) {
+  const router = useRouter()
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
   const [hasOpened, setHasOpened] = useState(false)
@@ -108,17 +142,31 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
   const [isTyping, setIsTyping] = useState(false)
   const [chatConfig, setChatConfig] = useState<ChatConfig | null>(null)
   const [sessionId, setSessionId] = useState<string>('')
+  const [activeGuideIndex, setActiveGuideIndex] = useState(0)
+  const [typedGuideLength, setTypedGuideLength] = useState(0)
   const socketRef = useRef<Socket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const socketUrl = process.env.NEXT_PUBLIC_CHAT_SOCKET_URL?.trim() || '/?XTransformPort=3003'
   const socketPath = process.env.NEXT_PUBLIC_CHAT_SOCKET_PATH?.trim() || undefined
   const isLightTone = buttonTone === 'light'
+  const normalizedGuideMessages = useMemo(() => normalizeGuideMessages(guideMessages), [guideMessages])
+  const guideActions = useMemo(() => getGuideActions(language), [language])
+  const activeGuideMessage =
+    normalizedGuideMessages.length > 0 ? normalizedGuideMessages[activeGuideIndex % normalizedGuideMessages.length] || '' : ''
+  const showGuideTeaser = !isOpen && !hasOpened && normalizedGuideMessages.length > 0
   const floatingButtonClass = [
     'fixed bottom-5 right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 sm:bottom-6 sm:right-6',
     isLightTone
       ? 'border-white/35 bg-black/14 text-white hover:border-white/70 hover:bg-white hover:text-zinc-900'
       : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-zinc-900 hover:text-white',
   ].join(' ')
+  const guideBubbleClass = [
+    'fixed bottom-20 right-4 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border px-3 py-2 text-left shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md transition-all duration-300 sm:bottom-24 sm:right-6',
+    isLightTone
+      ? 'border-white/18 bg-black/18 text-white hover:border-white/34 hover:bg-black/24'
+      : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
+  ].join(' ')
+  const guideChipClass = 'rounded-full border border-zinc-200 px-3 py-1 text-[11px] text-zinc-700 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900'
 
   useEffect(() => {
     if (!isOpen || hasLoadedConfig) return
@@ -266,6 +314,87 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    if (!showGuideTeaser || !activeGuideMessage) {
+      return
+    }
+
+    setTypedGuideLength(0)
+
+    const typingWindow = Math.max(900, Math.min(2100, activeGuideMessage.length * 58))
+    const charDelay = Math.max(28, Math.min(76, Math.floor(typingWindow / Math.max(activeGuideMessage.length, 1))))
+    const rotateDelay = Math.max(2800, typingWindow + 1600)
+    let charIndex = 0
+
+    const typingInterval = window.setInterval(() => {
+      charIndex += 1
+      setTypedGuideLength(Math.min(charIndex, activeGuideMessage.length))
+
+      if (charIndex >= activeGuideMessage.length) {
+        window.clearInterval(typingInterval)
+      }
+    }, charDelay)
+
+    const rotateTimeout = window.setTimeout(() => {
+      setActiveGuideIndex((current) => (current + 1) % Math.max(normalizedGuideMessages.length, 1))
+    }, rotateDelay)
+
+    return () => {
+      window.clearInterval(typingInterval)
+      window.clearTimeout(rotateTimeout)
+    }
+  }, [activeGuideMessage, normalizedGuideMessages.length, showGuideTeaser])
+
+  const openWidget = useCallback(() => {
+    setIsOpen(true)
+    setHasOpened(true)
+  }, [])
+
+  const prepareGuidedMessage = useCallback(
+    (message: string) => {
+      const nextMessage = message.trim()
+
+      openWidget()
+      setQueuedLeadContext({
+        source: 'chat-guide',
+        stage: 'discover',
+      })
+      setQueuedAutoSend(false)
+
+      if (!nextMessage) {
+        return
+      }
+
+      if (isJoined) {
+        setInputMessage(nextMessage)
+      } else {
+        setQueuedMessage(nextMessage)
+      }
+    },
+    [isJoined, openWidget],
+  )
+
+  const handleGuideAction = useCallback(
+    (actionId: string) => {
+      const action = guideActions.find((item) => item.id === actionId)
+
+      if (!action) {
+        return
+      }
+
+      if ('href' in action && action.href) {
+        setIsOpen(false)
+        router.push(action.href)
+        return
+      }
+
+      if ('message' in action && action.message) {
+        prepareGuidedMessage(action.message)
+      }
+    },
+    [guideActions, prepareGuidedMessage, router],
+  )
+
   const handleJoin = useCallback(() => {
     if (!name.trim()) return
 
@@ -380,6 +509,37 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
 
   return (
     <>
+      {showGuideTeaser ? (
+        <button
+          type="button"
+          onClick={openWidget}
+          className={guideBubbleClass}
+          aria-label="Abrir guia del chat"
+        >
+          <div className="space-y-1">
+            <p className={`font-mono text-[10px] uppercase tracking-[0.18em] ${isLightTone ? 'text-white/62' : 'text-zinc-500'}`}>
+              asistente ssa
+            </p>
+            <div className="inline-flex max-w-full items-end gap-2">
+              <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${isLightTone ? 'text-lime-200/72' : 'text-zinc-600'}`}>
+                ssa@obra:~$
+              </span>
+              <span className="break-words font-mono text-xs uppercase leading-snug sm:text-sm">
+                {activeGuideMessage.slice(0, typedGuideLength)}
+              </span>
+              <span className={`inline-block h-4 w-[2px] shrink-0 animate-pulse rounded-full ${isLightTone ? 'bg-lime-200/85' : 'bg-zinc-900/70'}`} />
+            </div>
+            <p className={`text-[11px] ${isLightTone ? 'text-white/66' : 'text-zinc-500'}`}>
+              {language === 'en'
+                ? 'Click here to open the guide.'
+                : language === 'pt'
+                  ? 'Toque aqui para abrir o guia.'
+                  : 'Haz clic aqui para abrir la guia.'}
+            </p>
+          </div>
+        </button>
+      ) : null}
+
       {/* Floating button */}
       <button
         onClick={() => {
@@ -414,6 +574,16 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
             {!isJoined ? (
               <div className="flex-1 p-4 space-y-3">
                 <p className="text-sm text-zinc-600">{getWelcomeMessage()}</p>
+                <div className="space-y-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">guia rapida</p>
+                  <div className="flex flex-wrap gap-2">
+                    {guideActions.map((action) => (
+                      <button key={action.id} type="button" onClick={() => handleGuideAction(action.id)} className={guideChipClass}>
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {queuedMessage ? (
                   <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
                     Consulta preparada: <span className="font-medium text-zinc-800">{queuedMessage}</span>
@@ -462,6 +632,13 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
                         <p>{t.chat.hello} {name}! 👋</p>
                         <p className="mt-1">{t.chat.helpPrompt}</p>
                         {chatConfig?.enabled && <p className="text-xs text-zinc-400 mt-2">{t.chat.aiAssistant}</p>}
+                        <div className="mt-4 flex flex-wrap justify-center gap-2">
+                          {guideActions.map((action) => (
+                            <button key={action.id} type="button" onClick={() => handleGuideAction(action.id)} className={guideChipClass}>
+                              {action.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       messages.map((msg) => (
