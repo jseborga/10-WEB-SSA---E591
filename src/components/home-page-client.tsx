@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Share2 } from 'lucide-react'
+import { HeroSalesAgent } from '@/components/hero-sales-agent'
 import { toast } from 'sonner'
 import { SiteHeader } from '@/components/site-header'
 import { useLanguage } from '@/lib/language-context'
@@ -390,24 +391,32 @@ export default function HomePageClient({
         </div>
         <div className="pointer-events-none absolute inset-x-0 bottom-28 z-20 px-4 sm:bottom-20 sm:px-6 lg:bottom-16">
           <div className="mx-auto flex max-w-7xl">
-            {activeHeroMessage ? (
-              <TypedHeroMessage
-                key={`${activeHeroMessage}-${heroRotationMs}`}
+            <div className="w-full">
+              {activeHeroMessage ? (
+                <TypedHeroMessage
+                  key={`${activeHeroMessage}-${heroRotationMs}`}
+                  companyName={companyName}
+                  message={activeHeroMessage}
+                  rotationMs={heroRotationMs}
+                  tone={heroTone}
+                  showCompanyName={Boolean(siteSettings?.heroShowCompanyName)}
+                  shareCopied={shareCopied}
+                  shareLabel={shareCopy.share}
+                  copiedLabel={shareCopy.copied}
+                  companyLabelClass={heroCompanyLabelClass}
+                  commandTextClass={heroCommandTextClass}
+                  messageTextClass={heroMessageTextClass}
+                  shareButtonClass={heroShareButtonClass}
+                  onShare={() => void handleShareSite()}
+                />
+              ) : null}
+              <HeroSalesAgent
                 companyName={companyName}
-                message={activeHeroMessage}
-                rotationMs={heroRotationMs}
                 tone={heroTone}
-                showCompanyName={Boolean(siteSettings?.heroShowCompanyName)}
-                shareCopied={shareCopied}
-                shareLabel={shareCopy.share}
-                copiedLabel={shareCopy.copied}
-                companyLabelClass={heroCompanyLabelClass}
-                commandTextClass={heroCommandTextClass}
-                messageTextClass={heroMessageTextClass}
-                shareButtonClass={heroShareButtonClass}
-                onShare={() => void handleShareSite()}
+                siteSettings={siteSettings}
+                projects={initialProjects}
               />
-            ) : null}
+            </div>
           </div>
         </div>
       </section>

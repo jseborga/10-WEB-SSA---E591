@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { selectBestAssignableUser } from '@/lib/crm-routing'
 import { db } from '@/lib/db'
 import { generateChatResponse } from '@/lib/chat-provider'
 import { notifyTelegramHumanHandoff } from '@/lib/chat-handoff'
@@ -60,6 +61,122 @@ function normalizePreferredContactChannel(value: string | null | undefined) {
   }
 
   return ''
+}
+
+function resolveLeadPriority(input: {
+  message: string
+  transcript: string
+  qualified: boolean
+  needsHuman: boolean
+  hasContactMethod: boolean
+  preferredContactChannel: string
+}) {
+  const normalized = normalizeText(`${input.message}\n${input.transcript}`)
+  const isImmediate = /(inmediat|urgente|hoy|esta semana|asap|pronto|1 a 3 meses)/.test(normalized)
+
+  if (input.qualified && input.needsHuman && (input.preferredContactChannel === 'whatsapp' || isImmediate)) {
+    return 'urgent'
+  }
+
+  if (input.qualified || (input.needsHuman && input.hasContactMethod) || isImmediate) {
+    return 'high'
+  }
+
+  if (input.needsHuman || input.hasContactMethod) {
+    return 'normal'
+  }
+
+  return 'low'
+}
+
+function resolveLeadStatus(input: {
+  currentStatus: string | null | undefined
+  qualified: boolean
+  needsHuman: boolean
+  hasContactMethod: boolean
+}) {
+  const blockedStatuses = ['won', 'lost', 'archived']
+
+  if (blockedStatuses.includes(input.currentStatus || '')) {
+    return input.currentStatus || 'new'
+  }
+
+  if (input.qualified) {
+    return 'proposal'
+  }
+
+  if (input.needsHuman || input.hasContactMethod) {
+    return 'contacted'
+  }
+
+  return input.currentStatus || 'new'
+}
+
+function resolveNextAction(input: {
+  priority: string
+  preferredContactChannel: string
+  qualified: boolean
+  needsHuman: boolean
+  hasContactMethod: boolean
+}) {
+  if (input.qualified) {
+    if (input.preferredContactChannel === 'whatsapp') {
+      return 'Contactar por WhatsApp y validar alcance para cotizacion'
+    }
+
+    if (input.preferredContactChannel === 'phone') {
+      return 'Llamar al lead y confirmar requerimientos tecnicos'
+    }
+
+    if (input.preferredContactChannel === 'email') {
+      return 'Responder por correo con siguiente paso comercial'
+    }
+
+    if (input.preferredContactChannel === 'telegram') {
+      return 'Responder por Telegram y coordinar seguimiento'
+    }
+
+    return 'Contactar al lead y definir siguiente paso comercial'
+  }
+
+  if (input.needsHuman && input.hasContactMethod) {
+    return 'Tomar contacto humano y completar datos del proyecto'
+  }
+
+  if (input.priority === 'high' || input.priority === 'urgent') {
+    return 'Priorizar seguimiento comercial en el chat'
+  }
+
+  return 'Continuar calificando necesidad y datos de contacto'
+}
+
+function resolveNextFollowUpAt(priority: string, enabled: boolean) {
+  if (!enabled) {
+    return null
+  }
+
+  const date = new Date()
+
+  if (priority === 'urgent') {
+    date.setMinutes(date.getMinutes() + 30)
+    return date
+  }
+
+  if (priority === 'high') {
+    date.setHours(date.getHours() + 4)
+    return date
+  }
+
+  date.setDate(date.getDate() + 1)
+  return date
+}
+
+function mergePriority(current: string | null | undefined, suggested: string) {
+  const rank = { low: 0, normal: 1, high: 2, urgent: 3 } as const
+  const currentRank = rank[(current || 'normal') as keyof typeof rank] ?? 1
+  const suggestedRank = rank[suggested as keyof typeof rank] ?? 1
+
+  return currentRank > suggestedRank ? current || 'normal' : suggested
 }
 
 function buildContactCollectionRules(language: string) {
@@ -333,6 +450,48 @@ export async function POST(request: Request) {
     const needsHuman = shouldEscalateToHuman(message, usedFallback) || Boolean(leadSuggestion.needsHuman)
     const qualified = hasContactMethod && hasProjectIntent && Boolean(leadSuggestion.contactConsent)
 
+    const existingLead = sessionId
+      ? await db.leadCapture.findUnique({
+          where: { sessionId },
+          select: {
+            ownerName: true,
+            leadStatus: true,
+            priority: true,
+            nextAction: true,
+            nextFollowUpAt: true,
+          },
+        })
+      : null
+
+    const leadPriority = mergePriority(
+      existingLead?.priority,
+      resolveLeadPriority({
+        message,
+        transcript,
+        qualified,
+        needsHuman,
+        hasContactMethod,
+        preferredContactChannel: leadSuggestion.preferredContactChannel,
+      }),
+    )
+    const leadStatus = resolveLeadStatus({
+      currentStatus: existingLead?.leadStatus,
+      qualified,
+      needsHuman,
+      hasContactMethod,
+    })
+    const nextAction = existingLead?.nextAction || resolveNextAction({
+      priority: leadPriority,
+      preferredContactChannel: leadSuggestion.preferredContactChannel,
+      qualified,
+      needsHuman,
+      hasContactMethod,
+    })
+    const nextFollowUpAt = existingLead?.nextFollowUpAt || resolveNextFollowUpAt(leadPriority, needsHuman || qualified)
+    const autoAssignedOwner =
+      !existingLead?.ownerName && (needsHuman || qualified) ? await selectBestAssignableUser().catch(() => null) : null
+    const ownerName = existingLead?.ownerName || autoAssignedOwner?.label || null
+
     if (sessionId) {
       await db.leadCapture.upsert({
         where: { sessionId },
@@ -350,6 +509,11 @@ export async function POST(request: Request) {
           projectIdea: leadSuggestion.projectIdea || undefined,
           summary: leadSuggestion.summary || undefined,
           lastVisitorMessage: message,
+          leadStatus,
+          priority: leadPriority,
+          ownerName: ownerName || undefined,
+          nextAction: nextAction || undefined,
+          nextFollowUpAt: nextFollowUpAt || undefined,
           needsHuman,
           qualified,
         },
@@ -368,6 +532,11 @@ export async function POST(request: Request) {
           projectIdea: leadSuggestion.projectIdea || null,
           summary: leadSuggestion.summary || null,
           lastVisitorMessage: message,
+          leadStatus,
+          priority: leadPriority,
+          ownerName,
+          nextAction: nextAction || null,
+          nextFollowUpAt,
           needsHuman,
           qualified,
         },
@@ -420,6 +589,9 @@ export async function POST(request: Request) {
       needsHuman,
       telegramNotified,
       qualifiedLead: qualified,
+      leadStatus,
+      leadPriority,
+      nextAction,
     })
   } catch (error) {
     console.error('Error processing AI message:', error)

@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { sendAnalyticsEvent } from '@/lib/browser-analytics'
+import {
+  EXTERNAL_CHAT_OPEN_EVENT,
+  type ChatLeadStage,
+  type ExternalChatLeadContext,
+  type ExternalChatOpenDetail,
+} from '@/lib/chat-launcher'
 import { useLanguage } from '@/lib/language-context'
 
 interface Message {
@@ -59,6 +65,32 @@ function normalizeMessages(input: Message[]) {
   }))
 }
 
+function formatLeadStageLabel(stage: ChatLeadStage | undefined) {
+  switch (stage) {
+    case 'hot':
+      return 'Listo para cierre'
+    case 'qualified':
+      return 'Lead en evaluacion'
+    default:
+      return 'Exploracion'
+  }
+}
+
+function formatPreferredChannelLabel(value: string | undefined) {
+  switch (value) {
+    case 'whatsapp':
+      return 'WhatsApp'
+    case 'phone':
+      return 'Llamada'
+    case 'email':
+      return 'Correo'
+    case 'telegram':
+      return 'Telegram'
+    default:
+      return ''
+  }
+}
+
 export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
@@ -69,6 +101,9 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
   const [name, setName] = useState(() => getSavedSession()?.name || '')
   const [email, setEmail] = useState(() => getSavedSession()?.email || '')
   const [isJoined, setIsJoined] = useState(() => !!getSavedSession()?.name)
+  const [queuedMessage, setQueuedMessage] = useState('')
+  const [queuedLeadContext, setQueuedLeadContext] = useState<ExternalChatLeadContext | null>(null)
+  const [queuedAutoSend, setQueuedAutoSend] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [chatConfig, setChatConfig] = useState<ChatConfig | null>(null)
@@ -111,6 +146,33 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
       isActive = false
     }
   }, [hasLoadedConfig, isOpen])
+
+  useEffect(() => {
+    const handleExternalOpen = (event: Event) => {
+      const detail = (event as CustomEvent<ExternalChatOpenDetail>).detail
+      const nextMessage = detail?.message?.trim() || ''
+      const shouldAutoSend = Boolean(detail?.autoSend)
+
+      setIsOpen(true)
+      setHasOpened(true)
+      setQueuedLeadContext(detail?.leadContext || null)
+      setQueuedAutoSend(shouldAutoSend)
+
+      if (nextMessage) {
+        if (isJoined && !shouldAutoSend) {
+          setInputMessage(nextMessage)
+        } else {
+          setQueuedMessage(nextMessage)
+        }
+      }
+    }
+
+    window.addEventListener(EXTERNAL_CHAT_OPEN_EVENT, handleExternalOpen as EventListener)
+
+    return () => {
+      window.removeEventListener(EXTERNAL_CHAT_OPEN_EVENT, handleExternalOpen as EventListener)
+    }
+  }, [isJoined])
 
   // Get welcome message by language
   const getWelcomeMessage = useCallback(() => {
@@ -208,24 +270,38 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
     if (!name.trim()) return
 
     localStorage.setItem('chat_session', JSON.stringify({ name: name.trim(), email: email.trim() }))
+    const pendingMessage = queuedMessage.trim()
+    const shouldAutoSend = queuedAutoSend
 
     if (socketRef.current) {
       socketRef.current.emit('join-session', { sessionId, name: name.trim(), email: email.trim() || undefined })
     }
 
     setIsJoined(true)
-  }, [name, email, sessionId])
 
-  const sendMessage = useCallback(async () => {
-    if (!inputMessage.trim() || !isJoined) return
-    const userMessage = inputMessage.trim()
-    
+    if (pendingMessage) {
+      if (shouldAutoSend) {
+        setInputMessage('')
+      } else {
+        setInputMessage(pendingMessage)
+        setQueuedMessage('')
+      }
+    }
+  }, [name, email, queuedAutoSend, queuedMessage, sessionId])
+
+  const sendPreparedMessage = useCallback(async (rawMessage: string) => {
+    if (!rawMessage.trim() || !isJoined) return
+    const userMessage = rawMessage.trim()
+
     const tempUserMsg: Message = {
       id: `temp_${Date.now()}`, sessionId, name,
       content: userMessage, timestamp: new Date(), type: 'visitor'
     }
     setMessages(prev => [...prev, tempUserMsg])
     setInputMessage('')
+    setQueuedLeadContext(null)
+    setQueuedAutoSend(false)
+    setQueuedMessage('')
 
     if (chatConfig?.enabled) {
       setIsTyping(true)
@@ -267,7 +343,22 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
         content: getFallbackMessage(), timestamp: new Date(), type: 'admin'
       }])
     }
-  }, [getFallbackMessage, inputMessage, isConnected, isJoined, chatConfig, messages, name, sessionId, language])
+  }, [getFallbackMessage, isConnected, isJoined, chatConfig, messages, name, sessionId, language])
+
+  const sendMessage = useCallback(async () => {
+    await sendPreparedMessage(inputMessage)
+  }, [inputMessage, sendPreparedMessage])
+
+  useEffect(() => {
+    const preparedMessage = queuedMessage.trim()
+    const canSendNow = chatConfig?.enabled ? hasLoadedConfig : isConnected
+
+    if (!isOpen || !isJoined || !queuedAutoSend || !preparedMessage || !sessionId || !canSendNow) {
+      return
+    }
+
+    void sendPreparedMessage(preparedMessage)
+  }, [chatConfig?.enabled, hasLoadedConfig, isConnected, isJoined, isOpen, queuedAutoSend, queuedMessage, sendPreparedMessage, sessionId])
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -323,6 +414,26 @@ export function ChatWidget({ buttonTone = 'dark' }: ChatWidgetProps) {
             {!isJoined ? (
               <div className="flex-1 p-4 space-y-3">
                 <p className="text-sm text-zinc-600">{getWelcomeMessage()}</p>
+                {queuedMessage ? (
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                    Consulta preparada: <span className="font-medium text-zinc-800">{queuedMessage}</span>
+                  </div>
+                ) : null}
+                {queuedLeadContext ? (
+                  <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600">
+                    <p className="font-medium text-zinc-800">Contexto comercial</p>
+                    <div className="mt-1 space-y-1">
+                      <p>Estado: {formatLeadStageLabel(queuedLeadContext.stage)}</p>
+                      {queuedLeadContext.serviceType ? <p>Servicio: {queuedLeadContext.serviceType}</p> : null}
+                      {queuedLeadContext.projectType ? <p>Proyecto: {queuedLeadContext.projectType}</p> : null}
+                      {queuedLeadContext.projectLocation ? <p>Ubicacion: {queuedLeadContext.projectLocation}</p> : null}
+                      {queuedLeadContext.timeline ? <p>Plazo: {queuedLeadContext.timeline}</p> : null}
+                      {queuedLeadContext.preferredContactChannel ? <p>Canal: {formatPreferredChannelLabel(queuedLeadContext.preferredContactChannel)}</p> : null}
+                      {queuedLeadContext.contactConsent ? <p>Autorizo contacto: si</p> : null}
+                      {queuedAutoSend ? <p>La consulta se enviara automaticamente al abrir el chat.</p> : null}
+                    </div>
+                  </div>
+                ) : null}
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
