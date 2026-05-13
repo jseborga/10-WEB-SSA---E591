@@ -1,26 +1,29 @@
 import type { Metadata } from 'next'
-import { StudioPageClient } from '@/components/studio-page-client'
+import { ServicesPageClient } from '@/components/services-page-client'
 import { db } from '@/lib/db'
 import { PublicPublication, PublicSiteSettings } from '@/lib/public-site'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 import { getSeoImage, getSiteUrl, toAbsoluteUrl } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
-const STUDIO_SLUGS = ['estudio', 'nosotros', 'sobre-nosotros']
+const SERVICES_SLUGS = ['servicios', 'services', 'servicos']
 
 export async function generateMetadata(): Promise<Metadata> {
   const [publication, siteSettings] = await Promise.all([
     db.publication.findFirst({
       where: {
-        slug: { in: STUDIO_SLUGS },
+        slug: { in: SERVICES_SLUGS },
         published: true,
       },
     }),
     ensureSiteSettings().catch(() => getDefaultSiteSettings()),
   ])
 
-  const title = publication?.seoTitle?.trim() || `Estudio | ${siteSettings.companyName || 'SSA Ingenieria'}`
-  const description = publication?.seoDescription?.trim() || publication?.excerpt || `Estudio y enfoque de ${siteSettings.companyName || 'SSA Ingenieria'}`
+  const title = publication?.seoTitle?.trim() || `Servicios | ${siteSettings.companyName || 'SSA Ingenieria'}`
+  const description =
+    publication?.seoDescription?.trim() ||
+    publication?.excerpt ||
+    `Servicios de construccion, consultoria, arquitectura, ingenierias, supervision y fiscalizacion de ${siteSettings.companyName || 'SSA Ingenieria'}`
   const shareImage = toAbsoluteUrl(publication?.image, siteSettings) || getSeoImage(siteSettings)
   const keywords = (publication?.seoKeywords || '')
     .split(',')
@@ -32,13 +35,13 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     keywords,
     alternates: {
-      canonical: `${getSiteUrl(siteSettings)}/estudio`,
+      canonical: `${getSiteUrl(siteSettings)}/servicios`,
     },
     openGraph: {
       title,
       description,
       type: 'website',
-      url: `${getSiteUrl(siteSettings)}/estudio`,
+      url: `${getSiteUrl(siteSettings)}/servicios`,
       images: shareImage ? [{ url: shareImage, alt: title }] : undefined,
     },
     twitter: {
@@ -50,22 +53,22 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default async function StudioPage() {
+export default async function ServicesPage() {
   let publication: PublicPublication | null = null
   let siteSettings: PublicSiteSettings = getDefaultSiteSettings()
 
   try {
     publication = await db.publication.findFirst({
       where: {
-        slug: { in: STUDIO_SLUGS },
+        slug: { in: SERVICES_SLUGS },
         published: true,
       },
     })
 
     siteSettings = await ensureSiteSettings()
   } catch (error) {
-    console.error('Error loading studio page:', error)
+    console.error('Error loading services page:', error)
   }
 
-  return <StudioPageClient publication={publication} siteSettings={siteSettings} />
+  return <ServicesPageClient publication={publication} siteSettings={siteSettings} />
 }

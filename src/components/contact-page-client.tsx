@@ -124,7 +124,7 @@ export function ContactPageClient({ siteSettings, publication }: ContactPageClie
 
   return (
     <main className="min-h-screen bg-white text-zinc-900">
-      <SiteHeader tone="dark" />
+      <SiteHeader tone="dark" siteSettings={siteSettings} />
 
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 sm:pt-32">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">

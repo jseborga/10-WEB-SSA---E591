@@ -131,7 +131,7 @@ export default function HomePageClient({
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-zinc-950">
-      <SiteHeader tone="light" chatGuideMessages={chatGuideMessages} />
+      <SiteHeader tone="light" chatGuideMessages={chatGuideMessages} siteSettings={siteSettings} />
 
       <section className="relative min-h-screen">
         <div className="absolute inset-0">

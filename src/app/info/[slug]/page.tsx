@@ -2,28 +2,11 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { db } from '@/lib/db'
+import { buildPublicationHref } from '@/lib/menu-config'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 import { getSeoDescription, getSeoImage, getSiteUrl, toAbsoluteUrl } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
-
-function getPublicationPath(slug: string) {
-  const normalized = slug
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-
-  if (normalized === 'contacto') {
-    return '/contacto'
-  }
-
-  if (normalized === 'estudio') {
-    return '/estudio'
-  }
-
-  return `/info/${normalized}`
-}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -45,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const title = page.seoTitle?.trim() || `${page.title} | ${siteSettings.companyName}`
   const description = page.seoDescription?.trim() || page.excerpt || page.title
-  const pageUrl = `${getSiteUrl(siteSettings)}${getPublicationPath(page.slug)}`
+  const pageUrl = `${getSiteUrl(siteSettings)}${buildPublicationHref(page.slug)}`
   const shareImage = toAbsoluteUrl(page.image, siteSettings) || getSeoImage(siteSettings)
   const keywords = (page.seoKeywords || '')
     .split(',')
@@ -77,7 +60,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function InfoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const resolvedPath = getPublicationPath(slug)
+  const resolvedPath = buildPublicationHref(slug)
 
   if (resolvedPath !== `/info/${slug}`) {
     redirect(resolvedPath)
@@ -126,7 +109,7 @@ export default async function InfoPage({ params }: { params: Promise<{ slug: str
     },
     datePublished: page.createdAt.toISOString(),
     dateModified: page.updatedAt.toISOString(),
-    mainEntityOfPage: `${getSiteUrl(siteSettings)}${getPublicationPath(page.slug)}`,
+    mainEntityOfPage: `${getSiteUrl(siteSettings)}${buildPublicationHref(page.slug)}`,
   }
 
   return (

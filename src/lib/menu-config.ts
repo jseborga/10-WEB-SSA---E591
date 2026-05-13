@@ -34,8 +34,12 @@ export function buildPublicationHref(slug: string) {
     return '/contacto'
   }
 
-  if (normalized === 'estudio') {
+  if (['estudio', 'nosotros', 'sobre-nosotros', 'about'].includes(normalized)) {
     return '/estudio'
+  }
+
+  if (['servicios', 'services', 'servicos'].includes(normalized)) {
+    return '/servicios'
   }
 
   return `/info/${normalized}`
@@ -47,6 +51,7 @@ export function buildDefaultMenuConfig(publications: PublicationMenuSource[] = [
   const defaultItems: MenuItemConfig[] = [
     { id: 'menu-home', label: 'Inicio', href: '/' },
     { id: 'menu-projects', label: 'Proyectos', href: '/proyectos' },
+    { id: 'menu-services', label: 'Servicios', href: '/servicios' },
     { id: 'menu-studio', label: 'Estudio', href: '/estudio' },
     { id: 'menu-contact', label: 'Contacto', href: '/contacto' },
   ]

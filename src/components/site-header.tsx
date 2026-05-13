@@ -2,12 +2,13 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Home, Menu, X } from 'lucide-react'
+import { Facebook, Home, Instagram, Menu, MessageCircleMore, X } from 'lucide-react'
 import { LanguageSelector } from '@/components/language-selector'
 import { useLanguage } from '@/lib/language-context'
 import type { MenuItemConfig } from '@/lib/menu-config'
+import type { PublicSiteSettings } from '@/lib/public-site'
 
 const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) => mod.ChatWidget), {
   ssr: false,
@@ -16,9 +17,14 @@ const ChatWidget = dynamic(() => import('@/components/chat-widget').then((mod) =
 interface SiteHeaderProps {
   tone?: 'light' | 'dark'
   chatGuideMessages?: string[]
+  siteSettings?: PublicSiteSettings
 }
 
-export function SiteHeader({ tone = 'light', chatGuideMessages }: SiteHeaderProps) {
+function normalizeWhatsappLink(value: string) {
+  return value.replace(/\D/g, '')
+}
+
+export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: SiteHeaderProps) {
   const { t } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuItems, setMenuItems] = useState<MenuItemConfig[]>([])
@@ -42,6 +48,24 @@ export function SiteHeader({ tone = 'light', chatGuideMessages }: SiteHeaderProp
   const menuItemTextClass = isLight ? 'text-white/88' : 'text-zinc-900/88'
   const submenuItemClass = isLight ? 'text-white/66 hover:text-white' : 'text-zinc-700/80 hover:text-zinc-950'
   const submenuTextClass = isLight ? 'text-white/66' : 'text-zinc-700/80'
+  const socialIconButtonClass = [
+    'inline-flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300',
+    surfaceToneClass,
+  ].join(' ')
+  const socialLinks = useMemo(() => {
+    const maybeXUrl = (siteSettings?.xUrl || '').trim()
+
+    return [
+      { label: 'Instagram', href: siteSettings?.instagramUrl?.trim() || '', icon: Instagram },
+      { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
+      { label: 'X', href: maybeXUrl, glyph: 'X' },
+      {
+        label: 'WhatsApp',
+        href: siteSettings?.whatsapp?.trim() ? `https://wa.me/${normalizeWhatsappLink(siteSettings.whatsapp)}` : '',
+        icon: MessageCircleMore,
+      },
+    ].filter((item) => item.href)
+  }, [siteSettings])
   useEffect(() => {
     let active = true
 
@@ -59,6 +83,7 @@ export function SiteHeader({ tone = 'light', chatGuideMessages }: SiteHeaderProp
           setMenuItems([
             { id: 'fallback-home', label: 'Inicio', href: '/' },
             { id: 'fallback-projects', label: t.nav.projects, href: '/proyectos' },
+            { id: 'fallback-services', label: 'Servicios', href: '/servicios' },
             { id: 'fallback-studio', label: t.nav.studio, href: '/estudio' },
             { id: 'fallback-contact', label: t.nav.contact || 'Contacto', href: '/contacto' },
           ])
@@ -78,6 +103,22 @@ export function SiteHeader({ tone = 'light', chatGuideMessages }: SiteHeaderProp
           <LanguageSelector blinking tone={tone} />
         </div>
         <div className="flex items-center gap-2">
+          {socialLinks.map((social) => {
+            const Icon = social.icon
+
+            return (
+              <a
+                key={social.label}
+                href={social.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={social.label}
+                className={socialIconButtonClass}
+              >
+                {Icon ? <Icon className="h-4 w-4" /> : <span className="text-[11px] font-medium uppercase tracking-[0.12em]">{social.glyph}</span>}
+              </a>
+            )
+          })}
           <Link
             href="/"
             aria-label="Inicio"

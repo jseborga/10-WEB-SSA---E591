@@ -1,26 +1,9 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { buildPublicationHref } from '@/lib/menu-config'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 import { getProjectSeoImage, getSeoDescription, getSiteUrl } from '@/lib/seo'
 import { parseLineList } from '@/lib/public-site'
-
-function getPublicationPath(slug: string) {
-  const normalized = slug
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-
-  if (normalized === 'contacto') {
-    return '/contacto'
-  }
-
-  if (normalized === 'estudio') {
-    return '/estudio'
-  }
-
-  return `/info/${normalized}`
-}
 
 export async function GET() {
   const siteSettings = await ensureSiteSettings().catch(() => getDefaultSiteSettings())
@@ -66,6 +49,7 @@ export async function GET() {
     '## Main URLs',
     `- Home: ${siteUrl}/`,
     `- Projects: ${siteUrl}/proyectos`,
+    `- Services: ${siteUrl}/servicios`,
     `- Studio: ${siteUrl}/estudio`,
     `- Contact: ${siteUrl}/contacto`,
     ...projects.map(
@@ -74,7 +58,7 @@ export async function GET() {
         return `- Proyecto ${project.title}: ${siteUrl}/proyectos/${project.id}${project.description ? ` - ${project.description}` : ''}${project.category ? ` [${project.category}]` : ''}${project.location ? ` (${project.location})` : ''}${shareImage ? ` | Imagen: ${shareImage}` : ''}${project.seoKeywords ? ` | Keywords: ${project.seoKeywords}` : ''}`
       },
     ),
-    ...pages.map((page) => `- ${page.title}: ${siteUrl}${getPublicationPath(page.slug)}${page.excerpt ? ` - ${page.excerpt}` : ''}`),
+    ...pages.map((page) => `- ${page.title}: ${siteUrl}${buildPublicationHref(page.slug)}${page.excerpt ? ` - ${page.excerpt}` : ''}`),
     '',
     '## Contact',
     siteSettings.email ? `- Email: ${siteSettings.email}` : '',

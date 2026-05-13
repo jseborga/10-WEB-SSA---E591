@@ -105,6 +105,7 @@ export interface PublicSiteSettings {
   footerText?: string | null
   instagramUrl?: string | null
   facebookUrl?: string | null
+  xUrl?: string | null
   linkedinUrl?: string | null
   youtubeUrl?: string | null
   tiktokUrl?: string | null

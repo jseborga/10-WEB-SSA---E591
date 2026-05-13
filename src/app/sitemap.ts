@@ -1,25 +1,8 @@
 import type { MetadataRoute } from 'next'
 import { db } from '@/lib/db'
+import { buildPublicationHref } from '@/lib/menu-config'
 import { ensureSiteSettings, getDefaultSiteSettings } from '@/lib/site-settings'
 import { getSiteUrl } from '@/lib/seo'
-
-function getPublicationPath(slug: string) {
-  const normalized = slug
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-
-  if (normalized === 'contacto') {
-    return '/contacto'
-  }
-
-  if (normalized === 'estudio') {
-    return '/estudio'
-  }
-
-  return `/info/${normalized}`
-}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteSettings = await ensureSiteSettings().catch(() => getDefaultSiteSettings())
@@ -77,13 +60,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
+      url: `${siteUrl}/servicios`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
       url: `${siteUrl}/contacto`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     ...pages.map((page) => ({
-      url: `${siteUrl}${getPublicationPath(page.slug)}`,
+      url: `${siteUrl}${buildPublicationHref(page.slug)}`,
       lastModified: page.updatedAt,
       changeFrequency: 'monthly' as const,
       priority: 0.7,
