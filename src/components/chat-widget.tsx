@@ -6,7 +6,6 @@ import { io, Socket } from 'socket.io-client'
 import { MessageCircle, X, Send, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { sendAnalyticsEvent } from '@/lib/browser-analytics'
 import {
   EXTERNAL_CHAT_OPEN_EVENT,
@@ -103,6 +102,7 @@ function getGuideActions(language: string) {
       { id: 'about', label: 'Who we are', href: '/estudio' },
       { id: 'services', label: 'What we do', message: 'I want to know who you are and what services you offer.' },
       { id: 'projects', label: 'Projects', href: '/proyectos' },
+      { id: 'contact', label: 'Contact', href: '/contacto' },
       { id: 'quote', label: 'Request a quote', message: 'I want an initial quote for my project.' },
     ]
   }
@@ -112,6 +112,7 @@ function getGuideActions(language: string) {
       { id: 'about', label: 'Quem somos', href: '/estudio' },
       { id: 'services', label: 'O que fazemos', message: 'Quero saber quem voces sao e que servicos oferecem.' },
       { id: 'projects', label: 'Projetos', href: '/proyectos' },
+      { id: 'contact', label: 'Contato', href: '/contacto' },
       { id: 'quote', label: 'Pedir cotacao', message: 'Quero uma cotacao inicial para meu projeto.' },
     ]
   }
@@ -120,6 +121,7 @@ function getGuideActions(language: string) {
     { id: 'about', label: 'Quienes somos', href: '/estudio' },
     { id: 'services', label: 'Que hacemos', message: 'Quiero saber quienes son y que servicios ofrecen.' },
     { id: 'projects', label: 'Proyectos', href: '/proyectos' },
+    { id: 'contact', label: 'Contacto', href: '/contacto' },
     { id: 'quote', label: 'Cotizar', message: 'Quiero una cotizacion inicial para mi proyecto.' },
   ]
 }
@@ -161,10 +163,10 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
       : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-zinc-900 hover:text-white',
   ].join(' ')
   const guideBubbleClass = [
-    'fixed bottom-20 right-4 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border px-3 py-2 text-left shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md transition-all duration-300 sm:bottom-24 sm:right-6',
+    'fixed bottom-20 right-4 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border px-3 py-2 text-left shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-xl transition-all duration-300 sm:bottom-24 sm:right-6',
     isLightTone
-      ? 'border-white/18 bg-black/18 text-white hover:border-white/34 hover:bg-black/24'
-      : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-white',
+      ? 'border-white/18 bg-black/20 text-white hover:border-white/34 hover:bg-black/26'
+      : 'border-white/55 bg-white/72 text-zinc-900 hover:border-zinc-400 hover:bg-white/82',
   ].join(' ')
   const guideChipClass = 'rounded-full border border-zinc-200 px-3 py-1 text-[11px] text-zinc-700 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900'
 
@@ -555,9 +557,9 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
 
       {/* Chat window */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 sm:bottom-24 sm:right-6 z-50 w-[calc(100%-2rem)] sm:w-80 md:w-96 bg-white rounded-lg shadow-2xl border border-zinc-200 overflow-hidden">
+        <div className="fixed bottom-20 right-4 z-50 flex max-h-[min(78vh,42rem)] w-[calc(100%-2rem)] flex-col overflow-hidden rounded-[24px] border border-white/45 bg-white/74 shadow-2xl backdrop-blur-xl sm:bottom-24 sm:right-6 sm:w-80 md:w-96">
           {/* Header */}
-          <div className="bg-zinc-900 text-white px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-zinc-200/70 bg-zinc-950/82 px-4 py-3 text-white backdrop-blur-xl">
             <div className="flex items-center gap-2">
               <h3 className="font-medium text-sm">{t.chat.title}</h3>
               {chatConfig?.enabled && (
@@ -570,12 +572,19 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
           </div>
 
           {/* Content */}
-          <div className="h-72 sm:h-80 flex flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             {!isJoined ? (
-              <div className="flex-1 p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 <p className="text-sm text-zinc-600">{getWelcomeMessage()}</p>
                 <div className="space-y-2">
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">guia rapida</p>
+                  <p className="text-xs leading-5 text-zinc-500">
+                    {language === 'en'
+                      ? 'Use this as a guided tour to understand the company, review services, inspect projects, and move to the right next step.'
+                      : language === 'pt'
+                        ? 'Use isto como um tour guiado para entender a empresa, revisar servicos, ver projetos e avancar ao proximo passo.'
+                        : 'Usa esto como un tour guiado para entender la empresa, revisar servicios, ver proyectos y avanzar al siguiente paso.'}
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {guideActions.map((action) => (
                       <button key={action.id} type="button" onClick={() => handleGuideAction(action.id)} className={guideChipClass}>
@@ -625,8 +634,18 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
               </div>
             ) : (
               <>
-                <ScrollArea className="flex-1 p-3">
-                  <div className="space-y-2">
+                <div className="border-b border-zinc-200/80 bg-white/42 px-3 py-3 backdrop-blur-sm">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">tour de la pagina</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {guideActions.map((action) => (
+                      <button key={action.id} type="button" onClick={() => handleGuideAction(action.id)} className={guideChipClass}>
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3">
+                  <div className="space-y-2 pr-1">
                     {messages.length === 0 ? (
                       <div className="text-center text-zinc-500 text-sm py-6">
                         <p>{t.chat.hello} {name}! 👋</p>
@@ -661,9 +680,9 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
                     )}
                     <div ref={messagesEndRef} />
                   </div>
-                </ScrollArea>
+                </div>
 
-                <div className="p-3 border-t border-zinc-100 flex gap-2">
+                <div className="flex gap-2 border-t border-zinc-200/80 bg-white/48 p-3 backdrop-blur-sm">
                   <Input
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}

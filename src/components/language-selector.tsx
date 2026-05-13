@@ -97,17 +97,6 @@ export function LanguageSelector({
               }`}
             >
               <span>{lang.full}</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-[0.18em] ${
-                  language === lang.code
-                    ? 'bg-sky-400/20 text-sky-200'
-                    : isLight
-                      ? 'bg-sky-400/15 text-sky-200'
-                      : 'bg-sky-100 text-sky-700'
-                }`}
-              >
-                {lang.name}
-              </span>
             </button>
           ))}
         </div>

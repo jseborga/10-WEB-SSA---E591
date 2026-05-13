@@ -49,9 +49,15 @@ export async function POST(request: Request) {
     const publication = await db.publication.create({
       data: {
         title,
+        titleEn: typeof body.titleEn === 'string' ? body.titleEn.trim() : null,
+        titlePt: typeof body.titlePt === 'string' ? body.titlePt.trim() : null,
         slug,
         excerpt: typeof body.excerpt === 'string' ? body.excerpt.trim() : null,
+        excerptEn: typeof body.excerptEn === 'string' ? body.excerptEn.trim() : null,
+        excerptPt: typeof body.excerptPt === 'string' ? body.excerptPt.trim() : null,
         content: typeof body.content === 'string' ? body.content.trim() : null,
+        contentEn: typeof body.contentEn === 'string' ? body.contentEn.trim() : null,
+        contentPt: typeof body.contentPt === 'string' ? body.contentPt.trim() : null,
         image: typeof body.image === 'string' ? body.image.trim() : null,
         seoTitle: typeof body.seoTitle === 'string' ? body.seoTitle.trim() : null,
         seoDescription: typeof body.seoDescription === 'string' ? body.seoDescription.trim() : null,

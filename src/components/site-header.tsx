@@ -33,7 +33,7 @@ export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: 
     ? 'border-white/35 bg-black/14 text-white hover:border-white/70 hover:bg-white hover:text-zinc-900'
     : 'border-zinc-300 bg-white/92 text-zinc-900 hover:border-zinc-500 hover:bg-zinc-900 hover:text-white'
   const menuButtonClass = [
-    'inline-flex h-11 items-center justify-center gap-2 rounded-full border px-4 text-[10px] uppercase tracking-[0.24em] transition-colors backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 sm:text-[11px]',
+    'inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300',
     surfaceToneClass,
   ].join(' ')
   const iconButtonClass = [
@@ -100,7 +100,7 @@ export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: 
     <header className="fixed inset-x-0 top-0 z-50">
       <nav className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-2">
-          <LanguageSelector blinking tone={tone} />
+          <LanguageSelector blinking tone={tone} iconOnly />
         </div>
         <div className="flex items-center gap-2">
           {socialLinks.map((social) => {
@@ -129,8 +129,9 @@ export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: 
           <button
             onClick={() => setIsMenuOpen((current) => !current)}
             className={menuButtonClass}
+            aria-label={isMenuOpen ? 'Cerrar menu' : 'Abrir menu'}
+            aria-expanded={isMenuOpen}
           >
-            <span>Menu</span>
             {isMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>

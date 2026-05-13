@@ -54,9 +54,15 @@ interface Project {
 interface Publication {
   id: string
   title: string
+  titleEn?: string | null
+  titlePt?: string | null
   slug: string
   excerpt: string | null
+  excerptEn?: string | null
+  excerptPt?: string | null
   content: string | null
+  contentEn?: string | null
+  contentPt?: string | null
   image?: string | null
   seoTitle?: string | null
   seoDescription?: string | null
@@ -350,9 +356,15 @@ type ProjectFormState = {
 
 type PublicationFormState = {
   title: string
+  titleEn: string
+  titlePt: string
   slug: string
   excerpt: string
+  excerptEn: string
+  excerptPt: string
   content: string
+  contentEn: string
+  contentPt: string
   image: string
   category: string
   seoTitle: string
@@ -443,9 +455,15 @@ const emptyProjectForm: ProjectFormState = {
 
 const emptyPublicationForm: PublicationFormState = {
   title: '',
+  titleEn: '',
+  titlePt: '',
   slug: '',
   excerpt: '',
+  excerptEn: '',
+  excerptPt: '',
   content: '',
+  contentEn: '',
+  contentPt: '',
   image: '',
   category: 'informacion',
   seoTitle: '',
@@ -454,6 +472,109 @@ const emptyPublicationForm: PublicationFormState = {
   showInMenu: false,
   menuOrder: '0',
   published: false,
+}
+
+type PublicationBlueprint = {
+  slug: string
+  title: string
+  category: string
+  excerpt: string
+  content: string
+  seoTitle: string
+  seoDescription: string
+  seoKeywords: string
+}
+
+function normalizePublicationSlug(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function getPublicationKind(value: string) {
+  const normalized = normalizePublicationSlug(value)
+
+  if (['estudio', 'nosotros', 'sobre-nosotros', 'about'].includes(normalized)) {
+    return 'studio' as const
+  }
+
+  if (['servicios', 'services', 'servicos'].includes(normalized)) {
+    return 'services' as const
+  }
+
+  return 'generic' as const
+}
+
+function getPublicationBlueprint(kind: 'studio' | 'services'): PublicationBlueprint {
+  if (kind === 'studio') {
+    return {
+      slug: 'estudio',
+      title: 'Nosotros',
+      category: 'informacion',
+      excerpt: 'Presentacion de la empresa, trayectoria, equipo tecnico, staff y red de partners.',
+      content: [
+        '## Introduccion',
+        'Resumen breve de la empresa, su enfoque y el tipo de clientes o proyectos que atiende.',
+        '',
+        '## Historia',
+        'Cuenta como nace la empresa, su trayectoria, experiencia y criterio de trabajo.',
+        '',
+        '## Equipo tecnico',
+        'Arquitectura y diseno | Concepto, documentacion tecnica y criterio espacial.',
+        'Ingenierias | Estructuras, sistemas y especialidades coordinadas.',
+        '',
+        '## Staff',
+        'Nombre Apellido | Cargo | /api/media/staff-01.jpg | Perfil breve y rol dentro de la empresa | https://linkedin.com/in/perfil',
+        '',
+        '## Partners',
+        'Partner o aliado | https://partner.com | Especialidad o aporte dentro del proyecto | /api/media/partner-logo.jpg',
+        '',
+        '## Fotos de grupo',
+        '/api/media/equipo-01.jpg',
+        '/api/media/equipo-02.jpg',
+      ].join('\n'),
+      seoTitle: 'Nosotros | SSA Ingenieria',
+      seoDescription: 'Conoce la trayectoria, el equipo tecnico, el staff y los partners con los que trabaja SSA Ingenieria.',
+      seoKeywords: 'ssa ingenieria, nosotros, equipo tecnico, staff, partners, empresa de ingenieria',
+    }
+  }
+
+  return {
+    slug: 'servicios',
+    title: 'Servicios',
+    category: 'servicio',
+    excerpt: 'Construccion, consultoria de diseno, arquitectura, ingenierias, supervision y fiscalizacion.',
+    content: [
+      '## Introduccion',
+      'Resume en una o dos frases que servicios ofrece la empresa y para que tipo de cliente o proyecto.',
+      '',
+      '## Enfoque',
+      'Explica como articula la empresa el criterio tecnico, el diseo, la ejecucion y el control de obra.',
+      '',
+      '## Construccion',
+      'Describe el alcance de construccion, ejecucion, coordinacion y control de obra.',
+      '',
+      '## Consultoria',
+      'Describe consultoria de diseno, arquitectura e ingenierias especializadas.',
+      '',
+      '## Ingenierias',
+      'Detalla estructuras, sistemas, instalaciones y soporte tecnico especializado.',
+      '',
+      '## Supervision y fiscalizacion',
+      'Explica supervision independiente, control de calidad, cumplimiento y seguimiento.',
+      '',
+      '## Proceso',
+      'Diagnostico | Relevamiento inicial, alcance y prioridades.',
+      'Estrategia | Definicion de servicio, criterios y equipo necesario.',
+      'Control de ejecucion | Coordinacion, seguimiento y revision tecnica.',
+      'Cierre y seguimiento | Entregables, ajustes y siguientes pasos.',
+    ].join('\n'),
+    seoTitle: 'Servicios | SSA Ingenieria',
+    seoDescription: 'Servicios de construccion, consultoria, arquitectura, ingenierias, supervision y fiscalizacion de obras.',
+    seoKeywords: 'servicios de ingenieria, construccion, arquitectura, supervision de obras, fiscalizacion, consultoria tecnica',
+  }
 }
 
 const emptySiteForm: SiteFormState = {
@@ -1512,11 +1633,35 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
 
+  const publicationSlugPreview = buildSlug(publicationForm.slug || publicationForm.title)
+  const publicationHrefPreview = publicationSlugPreview ? buildPublicationHref(publicationSlugPreview) : '/info/tu-slug'
+  const publicationKind = getPublicationKind(publicationSlugPreview)
+  const publicationBlueprint = publicationKind === 'generic' ? null : getPublicationBlueprint(publicationKind)
+
   const parseGalleryUrls = (value: string) =>
     value
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
+
+  const handleApplyPublicationBlueprint = (kind: 'studio' | 'services') => {
+    const blueprint = getPublicationBlueprint(kind)
+
+    setPublicationForm((current) => ({
+      ...current,
+      title: current.title || blueprint.title,
+      slug: current.slug || blueprint.slug,
+      excerpt: current.excerpt || blueprint.excerpt,
+      content: current.content || blueprint.content,
+      category: kind === 'services' ? 'servicio' : current.category || blueprint.category,
+      seoTitle: current.seoTitle || blueprint.seoTitle,
+      seoDescription: current.seoDescription || blueprint.seoDescription,
+      seoKeywords: current.seoKeywords || blueprint.seoKeywords,
+      showInMenu: true,
+    }))
+
+    toast.success(kind === 'studio' ? 'Plantilla de Nosotros cargada' : 'Plantilla de Servicios cargada')
+  }
 
   const handleAddMenuItem = () => {
     setMenuItems((current) => [...current, createMenuItemDraft()])
@@ -2437,9 +2582,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     setEditingPublication(pub)
     setPublicationForm({
       title: pub.title,
+      titleEn: pub.titleEn || '',
+      titlePt: pub.titlePt || '',
       slug: pub.slug,
       excerpt: pub.excerpt || '',
+      excerptEn: pub.excerptEn || '',
+      excerptPt: pub.excerptPt || '',
       content: pub.content || '',
+      contentEn: pub.contentEn || '',
+      contentPt: pub.contentPt || '',
       image: pub.image || '',
       category: pub.category || 'informacion',
       seoTitle: pub.seoTitle || '',
@@ -3638,7 +3789,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                                   <span className={`text-xs px-2 py-0.5 rounded ${p.published ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.published ? t.admin.published : t.admin.draft}</span>
                                   {p.showInMenu && <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">Menú</span>}
                                 </div>
-                                <p className="text-xs text-zinc-400 mt-1 truncate">/info/{p.slug}</p>
+                                <p className="text-xs text-zinc-400 mt-1 truncate">{buildPublicationHref(p.slug)}</p>
                                 <div className="flex flex-wrap gap-2 mt-1 text-xs text-zinc-500">
                                   <span>{p.category || 'informacion'}</span>
                                   {p.showInMenu && <><span>•</span><span>Orden {p.menuOrder ?? 0}</span></>}
@@ -6978,9 +7129,53 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         <DialogContent className="max-w-md sm:max-w-2xl">
           <DialogHeader><DialogTitle>{editingPublication ? 'Editar pagina' : 'Nueva pagina'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900">Estructura editorial y ruta publica</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    La pagina se publicara en <span className="font-mono text-zinc-700">{publicationHrefPreview}</span>. Usa una portada clara, resumen corto, contenido estructurado y SEO orientado al servicio o a la empresa.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" className="text-xs" onClick={() => handleApplyPublicationBlueprint('studio')}>
+                    Plantilla Nosotros
+                  </Button>
+                  <Button type="button" variant="outline" className="text-xs" onClick={() => handleApplyPublicationBlueprint('services')}>
+                    Plantilla Servicios
+                  </Button>
+                  <Button type="button" className="bg-zinc-900 text-xs hover:bg-zinc-800" onClick={() => void handleAssistPublicationWithAi()} disabled={publicationAiLoading}>
+                    {publicationAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Mejorar con IA
+                  </Button>
+                </div>
+              </div>
+              {publicationBlueprint ? (
+                <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs leading-6 text-zinc-600">
+                  <p className="font-medium text-zinc-800">
+                    {publicationKind === 'studio' ? 'Guia para Nosotros' : 'Guia para Servicios'}
+                  </p>
+                  <p className="mt-1">
+                    {publicationKind === 'studio'
+                      ? 'Formatos utiles: `Nombre | Cargo | /foto.jpg | descripcion | link` para staff y `Partner | link | descripcion | /logo.jpg` para aliados. Las fotos de grupo pueden ir en `## Fotos de grupo`, una URL por linea.'
+                      : 'Usa secciones `## Construccion`, `## Consultoria`, `## Ingenierias`, `## Supervision y fiscalizacion` y `## Proceso`. En `## Proceso` puedes usar `Paso | descripcion`.'}
+                  </p>
+                </div>
+              ) : null}
+            </div>
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Título *</label>
               <Input value={publicationForm.title} onChange={e => setPublicationForm({ ...publicationForm, title: e.target.value, slug: buildSlug(e.target.value) })} className="text-sm" />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Titulo EN</label>
+                <Input value={publicationForm.titleEn} onChange={e => setPublicationForm({ ...publicationForm, titleEn: e.target.value })} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Titulo PT</label>
+                <Input value={publicationForm.titlePt} onChange={e => setPublicationForm({ ...publicationForm, titlePt: e.target.value })} className="text-sm" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -7000,6 +7195,16 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Resumen</label>
               <Textarea value={publicationForm.excerpt} onChange={e => setPublicationForm({ ...publicationForm, excerpt: e.target.value })} rows={2} className="text-sm" />
             </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Resumen EN</label>
+                <Textarea value={publicationForm.excerptEn} onChange={e => setPublicationForm({ ...publicationForm, excerptEn: e.target.value })} rows={2} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Resumen PT</label>
+                <Textarea value={publicationForm.excerptPt} onChange={e => setPublicationForm({ ...publicationForm, excerptPt: e.target.value })} rows={2} className="text-sm" />
+              </div>
+            </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-zinc-700 mb-1 block">Imagen</label>
@@ -7015,6 +7220,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 emptyLabel="Aun no hay imagen para esta pagina."
                 onRemove={() => setPublicationForm((current) => ({ ...current, image: '' }))}
               />
+              <p className="text-xs text-zinc-500">
+                En `Nosotros` esta imagen puede ser la foto institucional o de grupo. En `Servicios` conviene una portada limpia alineada al servicio principal.
+              </p>
             </div>
             <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -7083,6 +7291,19 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
             <div>
               <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido</label>
               <Textarea value={publicationForm.content} onChange={e => setPublicationForm({ ...publicationForm, content: e.target.value })} rows={7} className="text-sm" />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido EN</label>
+                <Textarea value={publicationForm.contentEn} onChange={e => setPublicationForm({ ...publicationForm, contentEn: e.target.value })} rows={7} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido PT</label>
+                <Textarea value={publicationForm.contentPt} onChange={e => setPublicationForm({ ...publicationForm, contentPt: e.target.value })} rows={7} className="text-sm" />
+              </div>
+            </div>
+            <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-3 text-xs text-zinc-500">
+              SEO practico: usa un titulo claro de hasta 60 caracteres, descripcion de 140 a 155 caracteres, keywords reales del servicio o de la empresa y una portada coherente con la URL publica. Para `Nosotros`, prioriza marca, trayectoria y equipo. Para `Servicios`, prioriza servicio + especialidad + ciudad o sector cuando aplique.
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
               <div>

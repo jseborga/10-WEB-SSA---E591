@@ -3,7 +3,14 @@
 import Image from 'next/image'
 import { ArrowUpRight } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
-import { findEditorialSection, parseEditorialItems, parseEditorialSections, splitParagraphs } from '@/lib/editorial-sections'
+import {
+  findEditorialSection,
+  parseEditorialItems,
+  parseEditorialMediaUrls,
+  parseEditorialProfiles,
+  parseEditorialSections,
+  splitParagraphs,
+} from '@/lib/editorial-sections'
 import { PublicPublication, PublicSiteSettings, getLocalizedPublicationValue } from '@/lib/public-site'
 import { SiteHeader } from '@/components/site-header'
 
@@ -84,7 +91,9 @@ export function StudioPageClient({ siteSettings, publication }: StudioPageClient
   const introSection = findEditorialSection(sections, ['introduccion', 'intro', 'presentacion'])
   const historySection = findEditorialSection(sections, ['historia', 'trayectoria', 'history'])
   const teamSection = findEditorialSection(sections, ['equipo tecnico', 'equipo', 'profesionales', 'technical team'])
+  const staffSection = findEditorialSection(sections, ['staff', 'equipo base', 'equipo staff', 'core team'])
   const partnersSection = findEditorialSection(sections, ['partners', 'partner', 'aliados', 'alianzas'])
+  const groupPhotosSection = findEditorialSection(sections, ['fotos de grupo', 'fotos equipo', 'team photos', 'group photos'])
   const fallbackHistory = getFallbackHistory(language)
   const fallbackTeam = getFallbackTeam(language)
   const storyParagraphs =
@@ -96,7 +105,11 @@ export function StudioPageClient({ siteSettings, publication }: StudioPageClient
           ? splitParagraphs(body)
           : fallbackHistory
   const teamItems = parseEditorialItems(teamSection?.body)
+  const teamProfiles = parseEditorialProfiles(teamSection?.body)
+  const staffProfiles = parseEditorialProfiles(staffSection?.body)
   const partnerItems = parseEditorialItems(partnersSection?.body).filter((item) => item.href)
+  const partnerProfiles = parseEditorialProfiles(partnersSection?.body).filter((item) => item.href || item.description || item.image)
+  const groupPhotos = parseEditorialMediaUrls(groupPhotosSection?.body)
   const locationParts = [siteSettings?.addressLine, siteSettings?.city, siteSettings?.country].filter(Boolean)
 
   return (
@@ -185,15 +198,63 @@ export function StudioPageClient({ siteSettings, publication }: StudioPageClient
           </div>
 
           <div className="mt-10 grid gap-4 md:grid-cols-2">
-            {(teamItems.length > 0 ? teamItems : fallbackTeam).map((item) => (
-              <div key={item.title} className="border border-zinc-200 p-5">
-                <p className="text-sm font-medium text-zinc-900">{item.title}</p>
-                {item.description ? <p className="mt-3 text-sm leading-7 text-zinc-600">{item.description}</p> : null}
-              </div>
-            ))}
+            {teamProfiles.length > 0
+              ? teamProfiles.map((item) => (
+                  <div key={`${item.title}-${item.subtitle}`} className="border border-zinc-200 p-5">
+                    {item.image ? (
+                      <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-2xl bg-zinc-100">
+                        <Image src={item.image} alt={item.title} fill className="object-cover" />
+                      </div>
+                    ) : null}
+                    <p className="text-sm font-medium text-zinc-900">{item.title}</p>
+                    {item.subtitle ? <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{item.subtitle}</p> : null}
+                    {item.description ? <p className="mt-3 text-sm leading-7 text-zinc-600">{item.description}</p> : null}
+                  </div>
+                ))
+              : (teamItems.length > 0 ? teamItems : fallbackTeam).map((item) => (
+                  <div key={item.title} className="border border-zinc-200 p-5">
+                    <p className="text-sm font-medium text-zinc-900">{item.title}</p>
+                    {item.description ? <p className="mt-3 text-sm leading-7 text-zinc-600">{item.description}</p> : null}
+                  </div>
+                ))}
           </div>
         </div>
       </section>
+
+      {staffProfiles.length > 0 ? (
+        <section className="border-t border-zinc-200">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+            <div className="max-w-2xl">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500">Staff</p>
+              <h2 className="mt-3 text-2xl font-light tracking-tight sm:text-3xl">Equipo base y personas clave</h2>
+            </div>
+
+            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {staffProfiles.map((person) => (
+                <div key={`${person.title}-${person.subtitle}`} className="border border-zinc-200 p-5">
+                  {person.image ? (
+                    <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-2xl bg-zinc-100">
+                      <Image src={person.image} alt={person.title} fill className="object-cover" />
+                    </div>
+                  ) : null}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900">{person.title}</p>
+                      {person.subtitle ? <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{person.subtitle}</p> : null}
+                    </div>
+                    {person.href ? (
+                      <a href={person.href} target="_blank" rel="noreferrer" className="text-zinc-400 transition-colors hover:text-zinc-900" aria-label={person.title}>
+                        <ArrowUpRight className="h-4 w-4" />
+                      </a>
+                    ) : null}
+                  </div>
+                  {person.description ? <p className="mt-3 text-sm leading-7 text-zinc-600">{person.description}</p> : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="border-t border-zinc-200">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
@@ -221,6 +282,32 @@ export function StudioPageClient({ siteSettings, publication }: StudioPageClient
                 </a>
               ))}
             </div>
+          ) : partnerProfiles.length > 0 ? (
+            <div className="mt-10 grid gap-4 md:grid-cols-2">
+              {partnerProfiles.map((partner) => (
+                <a
+                  key={`${partner.title}-${partner.href || partner.subtitle}`}
+                  href={partner.href || '#'}
+                  target={partner.href ? '_blank' : undefined}
+                  rel={partner.href ? 'noreferrer' : undefined}
+                  className="flex items-start justify-between gap-4 border border-zinc-200 p-5 text-left transition-colors hover:border-zinc-900"
+                >
+                  <div className="flex min-w-0 gap-4">
+                    {partner.image ? (
+                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-zinc-100">
+                        <Image src={partner.image} alt={partner.title} fill className="object-cover" />
+                      </div>
+                    ) : null}
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900">{partner.title}</p>
+                      {partner.subtitle ? <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{partner.subtitle}</p> : null}
+                      {partner.description ? <p className="mt-3 text-sm leading-7 text-zinc-600">{partner.description}</p> : null}
+                    </div>
+                  </div>
+                  {partner.href ? <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" /> : null}
+                </a>
+              ))}
+            </div>
           ) : (
             <div className="mt-10 border border-zinc-200 p-5">
               <p className="text-sm leading-7 text-zinc-600">
@@ -234,6 +321,25 @@ export function StudioPageClient({ siteSettings, publication }: StudioPageClient
           )}
         </div>
       </section>
+
+      {groupPhotos.length > 0 ? (
+        <section className="border-t border-zinc-200">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+            <div className="max-w-2xl">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500">Grupo</p>
+              <h2 className="mt-3 text-2xl font-light tracking-tight sm:text-3xl">Fotografias de equipo y contexto</h2>
+            </div>
+
+            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {groupPhotos.map((photoUrl) => (
+                <div key={photoUrl} className="relative aspect-[4/3] overflow-hidden rounded-[24px] bg-zinc-100">
+                  <Image src={photoUrl} alt={title} fill className="object-cover" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
     </main>
   )
 }

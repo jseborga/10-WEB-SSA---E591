@@ -9,6 +9,14 @@ export type EditorialItem = {
   href?: string
 }
 
+export type EditorialProfile = {
+  title: string
+  subtitle: string
+  description: string
+  href?: string
+  image?: string
+}
+
 function normalizeTitle(value: string) {
   return value
     .normalize('NFD')
@@ -33,6 +41,18 @@ function isHeadingLine(value: string) {
 
 function cleanHeading(value: string) {
   return value.replace(/^#{1,3}\s+/, '').replace(/:\s*$/, '').trim()
+}
+
+function isUrl(value: string) {
+  return /^(https?:\/\/|\/)/i.test(value)
+}
+
+function isLikelyImageUrl(value: string) {
+  return /(\.jpg|\.jpeg|\.png|\.webp|\.gif|\.avif|\.svg)(\?.*)?$/i.test(value)
+}
+
+function cleanListLine(value: string) {
+  return value.replace(/^[-*•â€¢]\s*/, '').trim()
 }
 
 export function splitParagraphs(value: string | null | undefined) {
@@ -97,7 +117,7 @@ export function parseEditorialItems(value: string | null | undefined) {
 
   return lines
     .map<EditorialItem | null>((line) => {
-      const cleaned = line.replace(/^[-*•]\s*/, '').trim()
+      const cleaned = cleanListLine(line)
 
       if (!cleaned) {
         return null
@@ -134,4 +154,74 @@ export function parseEditorialItems(value: string | null | undefined) {
       }
     })
     .filter((item): item is EditorialItem => Boolean(item?.title))
+}
+
+export function parseEditorialProfiles(value: string | null | undefined) {
+  const lines = (value || '')
+    .split('\n')
+    .map((line) => cleanListLine(line))
+    .filter(Boolean)
+
+  return lines
+    .map<EditorialProfile | null>((line) => {
+      const parts = line.split('|').map((part) => part.trim()).filter(Boolean)
+
+      if (parts.length === 0) {
+        return null
+      }
+
+      const [title = '', ...rest] = parts
+      let subtitle = ''
+      let description = ''
+      let href = ''
+      let image = ''
+
+      for (const part of rest) {
+        if (isUrl(part)) {
+          if (!image && isLikelyImageUrl(part)) {
+            image = part
+            continue
+          }
+
+          if (!href) {
+            href = part
+            continue
+          }
+
+          if (!image && isLikelyImageUrl(part)) {
+            image = part
+            continue
+          }
+        }
+
+        if (!subtitle) {
+          subtitle = part
+          continue
+        }
+
+        description = description ? `${description} ${part}` : part
+      }
+
+      return title
+        ? {
+            title,
+            subtitle,
+            description,
+            href: href || undefined,
+            image: image || undefined,
+          }
+        : null
+    })
+    .filter((item): item is EditorialProfile => Boolean(item?.title))
+}
+
+export function parseEditorialMediaUrls(value: string | null | undefined) {
+  const urls = (value || '')
+    .split('\n')
+    .map((line) => cleanListLine(line))
+    .filter(Boolean)
+    .flatMap((line) => line.split('|').map((part) => part.trim()).filter(Boolean))
+    .filter((part) => isUrl(part) && isLikelyImageUrl(part))
+
+  return Array.from(new Set(urls))
 }
