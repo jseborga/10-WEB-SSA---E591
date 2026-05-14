@@ -480,7 +480,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     >
                       <div className="relative w-20 h-16 flex-shrink-0 rounded overflow-hidden">
                         <Image
-                          src={(similar.mainImage || similar.mainImageMobile) || '/images/projects/house1.png'}
+                          src={(isMobile ? similar.mainImageMobile || similar.mainImage : similar.mainImage || similar.mainImageMobile) || '/images/projects/house1.png'}
                           alt=""
                           fill
                           className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'}

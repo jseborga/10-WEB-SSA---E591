@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Calendar, Link2, Linkedin, MapPin, Building2, Instagram, Facebook, Youtube, Ruler, ChevronLeft, ChevronRight, Share2, Send, X } from 'lucide-react'
+import { Calendar, Link2, Linkedin, MapPin, Building2, Instagram, Facebook, Youtube, Ruler, ChevronLeft, ChevronRight, Share2, Send, X, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProjectMediaOverlay } from '@/components/project-media-overlay'
 import { SiteHeader } from '@/components/site-header'
@@ -31,6 +31,10 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
   const [isMobile, setIsMobile] = useState(false)
   const [isImageExpanded, setIsImageExpanded] = useState(false)
   const [activeGalleryFilter, setActiveGalleryFilter] = useState('all')
+  const detailSectionRef = useRef<HTMLDivElement | null>(null)
+  const touchStartXRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
+  const didSwipeRef = useRef(false)
 
   const getTitle = useCallback(() => {
     if (language === 'en' && project.titleEn) return project.titleEn
@@ -104,6 +108,61 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
   const prevImage = useCallback(() => {
     setCurrentImageIndex((prev) => (prev - 1 + Math.max(filteredMediaItems.length, 1)) % Math.max(filteredMediaItems.length, 1))
   }, [filteredMediaItems.length])
+
+  const scrollToDetails = useCallback(() => {
+    detailSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+
+    touchStartXRef.current = touch?.clientX ?? null
+    touchStartYRef.current = touch?.clientY ?? null
+    didSwipeRef.current = false
+  }
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    if (!isMobile || filteredMediaItems.length <= 1) {
+      return
+    }
+
+    const startX = touchStartXRef.current
+    const startY = touchStartYRef.current
+    const touch = event.changedTouches[0]
+
+    touchStartXRef.current = null
+    touchStartYRef.current = null
+
+    if (startX == null || startY == null || !touch) {
+      return
+    }
+
+    const deltaX = touch.clientX - startX
+    const deltaY = touch.clientY - startY
+
+    if (Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return
+    }
+
+    didSwipeRef.current = true
+    setIsLoading(true)
+
+    if (deltaX < 0) {
+      nextImage()
+      return
+    }
+
+    prevImage()
+  }
+
+  const handleExpandImage = () => {
+    if (didSwipeRef.current) {
+      didSwipeRef.current = false
+      return
+    }
+
+    setIsImageExpanded(true)
+  }
 
   const detailCopy =
     language === 'en'
@@ -257,27 +316,60 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
         </div>
 
         <div className="mt-8 space-y-8">
-          <div className="relative overflow-hidden rounded-[28px] bg-zinc-100">
+          <div
+            className="relative overflow-hidden rounded-[32px] bg-zinc-950"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             <div
-              className="relative aspect-[4/5] sm:aspect-[21/9]"
-              onClick={() => setIsImageExpanded(true)}
+              className="relative min-h-[72vh] cursor-pointer sm:min-h-[78vh]"
+              onClick={handleExpandImage}
             >
               <Image
                 src={currentMedia?.url || '/images/projects/house1.png'}
                 alt={currentMedia?.alt || project.mainImageAlt || pageTitle}
                 fill
-                className={isMobile ? 'object-contain' : 'object-cover'}
+                className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'}
                 onLoad={() => setIsLoading(false)}
                 priority
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/22 to-transparent" />
               {currentMedia ? (
                 <ProjectMediaOverlay
                   key={`${currentMedia.url}-${currentMedia.label}`}
                   category={currentMedia.category}
                   label={currentMedia.label}
                   tags={currentMedia.tags}
+                  className="bottom-32 left-5 max-w-[78%] sm:bottom-36 sm:left-6"
                 />
               ) : null}
+
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-5 sm:px-6 sm:pb-6">
+                <div className="pointer-events-auto max-w-3xl rounded-[28px] border border-white/12 bg-black/28 p-4 backdrop-blur-md sm:p-5">
+                  <p className="text-sm leading-7 text-white/86 sm:text-base">
+                    {pageDescription || project.description || pageTitle}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/66">
+                    {project.location ? <span>{project.location}</span> : null}
+                    {project.year ? <span>{project.year}</span> : null}
+                    {project.area ? <span>{project.area}</span> : null}
+                    {project.client ? <span>{project.client}</span> : null}
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        scrollToDetails()
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/22 px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-white transition-colors hover:border-white/48 hover:bg-white/10"
+                    >
+                      Revisar ficha completa
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               {isLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -294,7 +386,7 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
                       setIsLoading(true)
                       prevImage()
                     }}
-                    className="absolute left-4 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65"
+                    className="absolute left-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65 md:inline-flex"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
@@ -305,7 +397,7 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
                       setIsLoading(true)
                       nextImage()
                     }}
-                    className="absolute right-4 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65"
+                    className="absolute right-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white transition-colors hover:bg-black/65 md:inline-flex"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
@@ -370,7 +462,7 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
             </div>
           ) : null}
 
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+          <div ref={detailSectionRef} id="project-detail-content" className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
             <div className="space-y-8">
               <div className="grid grid-cols-2 gap-4 border-t border-zinc-200 pt-6 sm:grid-cols-4">
                 {project.location ? (
@@ -450,7 +542,7 @@ export function ProjectPageClient({ project, similarProjects, siteSettings }: Pr
                   >
                     <div className="relative h-16 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-zinc-100">
                       <Image
-                        src={(similar.mainImage || similar.mainImageMobile) || '/images/projects/house1.png'}
+                        src={(isMobile ? similar.mainImageMobile || similar.mainImage : similar.mainImage || similar.mainImageMobile) || '/images/projects/house1.png'}
                         alt=""
                         fill
                         className={isMobile ? 'object-contain bg-zinc-100' : 'object-cover'}

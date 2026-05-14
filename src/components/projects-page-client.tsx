@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowUpRight, MapPin } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
@@ -29,6 +30,7 @@ function getLocalizedText(project: PublicProject, language: 'es' | 'en' | 'pt', 
 
 export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClientProps) {
   const { t, language } = useLanguage()
+  const router = useRouter()
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedProject, setSelectedProject] = useState<PublicProject | null>(null)
   const [isMobile, setIsMobile] = useState(false)
@@ -113,27 +115,16 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
               <button
                 type="button"
                 aria-label={`Abrir ${getLocalizedText(project, language, 'title')}`}
-                onClick={() => setSelectedProject(project)}
+                onClick={() => router.push(`/proyectos/${project.id}`)}
                 className="absolute inset-0 z-10"
               />
-              <div className="relative aspect-[4/5] overflow-hidden bg-zinc-100 sm:aspect-[4/3]">
-                {isMobile ? (
-                  <div className="absolute inset-3">
-                    <Image
-                      src={(project.mainImage || project.mainImageMobile) || '/images/hero-bg.png'}
-                      alt={getLocalizedText(project, language, 'title')}
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
-                  <Image
-                    src={(project.mainImage || project.mainImageMobile) || '/images/hero-bg.png'}
-                    alt={getLocalizedText(project, language, 'title')}
-                    fill
-                    className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-                  />
-                )}
+              <div className="relative aspect-[9/14] overflow-hidden bg-zinc-100 sm:aspect-[4/3]">
+                <Image
+                  src={(isMobile ? project.mainImageMobile || project.mainImage : project.mainImage || project.mainImageMobile) || '/images/hero-bg.png'}
+                  alt={getLocalizedText(project, language, 'title')}
+                  fill
+                  className={`object-cover ${isMobile ? '' : 'transition-transform duration-700 group-hover:scale-[1.04]'}`}
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/18 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 <div className="absolute right-4 top-4 z-20">
                   <Link

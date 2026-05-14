@@ -1378,7 +1378,7 @@ function MediaPreviewGrid({
           <div className="space-y-2 border-t border-zinc-200 px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-zinc-800">{getPreviewItemTitle(item)}</p>
+                <p className="break-all text-xs font-medium leading-5 text-zinc-800">{getPreviewItemTitle(item)}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <p className="text-[11px] text-zinc-500">{isPreviewVideo(item) ? 'Video' : 'Imagen'}</p>
                   {badgeLabel?.(item) ? (
@@ -1432,17 +1432,17 @@ function ProjectMediaAnnotationList({
         const tagPreview = parseTagList(item.tags)
 
         return (
-          <div key={item.url} className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-3 lg:grid-cols-[190px_1fr]">
+          <div key={item.url} className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-3 lg:grid-cols-[190px_minmax(0,1fr)]">
             <div className="overflow-hidden rounded-lg bg-zinc-100">
               <div className="relative aspect-[4/3]">
                 <img src={item.url} alt={item.label || `Foto ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3 overflow-hidden">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-zinc-800">Foto {index + 1}</p>
-                  <p className="truncate text-[11px] text-zinc-500">{item.url}</p>
+                  <p className="break-all text-[11px] leading-5 text-zinc-500">{item.url}</p>
                 </div>
                 {onRemove ? (
                   <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onRemove(item.url)}>
@@ -1569,19 +1569,23 @@ function EditorialItemListEditor({
       {safeItems.map((item, index) => (
         <div key={`${item.title}-${index}`} className="rounded-lg border border-zinc-200 bg-white p-3 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              value={item.title}
-              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, title: event.target.value } : entry)))}
-              placeholder={titlePlaceholder}
-              className="text-sm"
-            />
-            {allowHref ? (
+            <div className="min-w-0">
               <Input
-                value={item.href}
-                onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, href: event.target.value } : entry)))}
-                placeholder={hrefPlaceholder || 'https://...'}
+                value={item.title}
+                onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, title: event.target.value } : entry)))}
+                placeholder={titlePlaceholder}
                 className="text-sm"
               />
+            </div>
+            {allowHref ? (
+              <div className="min-w-0">
+                <Input
+                  value={item.href}
+                  onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, href: event.target.value } : entry)))}
+                  placeholder={hrefPlaceholder || 'https://...'}
+                  className="text-sm"
+                />
+              </div>
             ) : null}
           </div>
           <Textarea
@@ -1632,18 +1636,22 @@ function EditorialProfileListEditor({
       {safeItems.map((item, index) => (
         <div key={`${item.title}-${index}`} className="rounded-lg border border-zinc-200 bg-white p-3 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              value={item.title}
-              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, title: event.target.value } : entry)))}
-              placeholder={titlePlaceholder}
-              className="text-sm"
-            />
-            <Input
-              value={item.subtitle}
-              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, subtitle: event.target.value } : entry)))}
-              placeholder={subtitlePlaceholder}
-              className="text-sm"
-            />
+            <div className="min-w-0">
+              <Input
+                value={item.title}
+                onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, title: event.target.value } : entry)))}
+                placeholder={titlePlaceholder}
+                className="text-sm"
+              />
+            </div>
+            <div className="min-w-0">
+              <Input
+                value={item.subtitle}
+                onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, subtitle: event.target.value } : entry)))}
+                placeholder={subtitlePlaceholder}
+                className="text-sm"
+              />
+            </div>
           </div>
           <Textarea
             value={item.description}
@@ -1653,18 +1661,22 @@ function EditorialProfileListEditor({
             className="text-sm"
           />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              value={item.image}
-              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, image: event.target.value } : entry)))}
-              placeholder={imagePlaceholder}
-              className="text-sm"
-            />
-            <Input
-              value={item.href}
-              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, href: event.target.value } : entry)))}
-              placeholder={hrefPlaceholder}
-              className="text-sm"
-            />
+            <div className="min-w-0">
+              <Input
+                value={item.image}
+                onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, image: event.target.value } : entry)))}
+                placeholder={imagePlaceholder}
+                className="text-sm"
+              />
+            </div>
+            <div className="min-w-0">
+              <Input
+                value={item.href}
+                onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, href: event.target.value } : entry)))}
+                placeholder={hrefPlaceholder}
+                className="text-sm"
+              />
+            </div>
           </div>
           <div className="flex justify-end">
             <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onChange(safeItems.filter((_, entryIndex) => entryIndex !== index))}>
@@ -3511,6 +3523,52 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     setShowPublicationDialog(true)
   }
 
+  const openManagedPublicationEditor = (kind: 'studio' | 'services' | 'contact' | 'quote') => {
+    const existingPublication = publications.find((publication) => getPublicationKind(publication.slug) === kind)
+
+    if (existingPublication) {
+      openEditPublication(existingPublication)
+      return
+    }
+
+    const blueprint = getPublicationBlueprint(kind)
+
+    setEditingPublication(null)
+    setPublicationForm({
+      ...emptyPublicationForm,
+      title: blueprint.title,
+      slug: blueprint.slug,
+      excerpt: blueprint.excerpt,
+      content: blueprint.content,
+      category: blueprint.category,
+      seoTitle: blueprint.seoTitle,
+      seoDescription: blueprint.seoDescription,
+      seoKeywords: blueprint.seoKeywords,
+      showInMenu: kind !== 'quote',
+      menuOrder: '0',
+      published: false,
+    })
+    setPublicationImageVariants(null)
+    setShowPublicationDialog(true)
+  }
+
+  const handleAddCurrentProjectDraftToHero = (device: 'desktop' | 'mobile') => {
+    const candidateUrl = device === 'desktop' ? projectForm.mainImage : projectForm.mainImageMobile || projectForm.mainImage
+
+    if (!candidateUrl.trim()) {
+      toast.error(device === 'desktop' ? 'No hay imagen desktop lista para portada' : 'No hay imagen mobile lista para portada')
+      return
+    }
+
+    setProjectForm((current) => ({ ...current, showOnHomepage: true }))
+    setSiteForm((current) => ({
+      ...current,
+      heroImages: device === 'desktop' ? mergeUniqueUrls(current.heroImages, [candidateUrl]) : current.heroImages,
+      heroImagesMobile: device === 'mobile' ? mergeUniqueUrls(current.heroImagesMobile || current.heroImages, [candidateUrl]) : current.heroImagesMobile,
+    }))
+    toast.success(`Imagen ${device === 'desktop' ? 'desktop' : 'mobile'} agregada a la portada. Guarda el sitio para publicarlo.`)
+  }
+
   const handleSaveSiteConfig = async () => {
     setLoading(true)
     try {
@@ -4547,7 +4605,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         </div>
 
                         <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-3 text-xs text-zinc-500">
-                          Usa rutas como <span className="font-medium text-zinc-700">/</span>, <span className="font-medium text-zinc-700">/proyectos</span>, <span className="font-medium text-zinc-700">/estudio</span>, <span className="font-medium text-zinc-700">/contacto</span>, <span className="font-medium text-zinc-700">/info/slug</span> o un enlace externo completo.
+                          Usa rutas como <span className="font-medium text-zinc-700">/</span>, <span className="font-medium text-zinc-700">/proyectos</span>, <span className="font-medium text-zinc-700">/estudio</span>, <span className="font-medium text-zinc-700">/servicios</span>, <span className="font-medium text-zinc-700">/contacto</span>, <span className="font-medium text-zinc-700">/cotizacion</span>, <span className="font-medium text-zinc-700">/info/slug</span> o un enlace externo completo.
                         </div>
 
                         {publishedPagesForMenu.length > 0 && (
@@ -4685,6 +4743,44 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                         {session.role !== 'admin' && (
                           <p className="text-xs text-amber-600">Solo los administradores pueden guardar cambios del menú general.</p>
                         )}
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 space-y-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h3 className="text-sm font-medium text-zinc-900">Paginas clave del sitio</h3>
+                            <p className="mt-1 text-xs text-zinc-500">Edita directamente Nosotros, Servicios, Contacto y Cotizacion aunque todavia no existan como pagina creada.</p>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          {([
+                            { key: 'studio', title: 'Nosotros', href: '/estudio', description: 'Historia, equipo tecnico, staff, partners y fotos de grupo.' },
+                            { key: 'services', title: 'Servicios', href: '/servicios', description: 'Construccion, consultoria, ingenierias, supervision y proceso.' },
+                            { key: 'contact', title: 'Contacto', href: '/contacto', description: 'Canales, cobertura, formulario y referencias.' },
+                            { key: 'quote', title: 'Cotizacion', href: '/cotizacion', description: 'Formulario comercial para solicitar alcance y presupuesto inicial.' },
+                          ] as const).map((page) => {
+                            const existing = publications.find((publication) => getPublicationKind(publication.slug) === page.key)
+
+                            return (
+                              <div key={`managed-page-${page.key}`} className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-medium text-zinc-900">{page.title}</p>
+                                    <span className={`rounded-full px-2 py-0.5 text-[11px] ${existing?.published ? 'bg-emerald-100 text-emerald-700' : existing ? 'bg-amber-100 text-amber-700' : 'bg-zinc-200 text-zinc-700'}`}>
+                                      {existing ? (existing.published ? 'Publicado' : 'Borrador') : 'Sin crear'}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 break-all font-mono text-[11px] text-zinc-500">{page.href}</p>
+                                  <p className="mt-2 text-xs leading-5 text-zinc-500">{page.description}</p>
+                                </div>
+                                <div className="mt-4 flex gap-2">
+                                  <Button type="button" variant="outline" className="flex-1 text-xs" onClick={() => openManagedPublicationEditor(page.key)}>
+                                    {existing ? 'Editar' : 'Crear'}
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                       <div className="grid gap-3">
                         {publications.map(p => (
@@ -7430,7 +7526,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 </div>
               </div>
             </DialogHeader>
-          <div className="space-y-4 py-4 max-h-[calc(100dvh-144px)] overflow-y-auto px-5 pr-4 sm:px-6">
+          <div className="max-h-[calc(100dvh-144px)] overflow-x-hidden overflow-y-auto px-5 py-4 pr-4 sm:px-6">
             <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -8083,6 +8179,15 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 <input type="checkbox" checked={projectForm.showOnHomepage} onChange={e => setProjectForm({ ...projectForm, showOnHomepage: e.target.checked })} />
                 Mostrar imagen en la portada principal
               </label>
+              <p className="text-xs text-zinc-500">Cuando esta activo, la home usa automaticamente la imagen desktop en desktop y la mobile en mobile dentro del carrusel aleatorio.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" className="text-xs" onClick={() => handleAddCurrentProjectDraftToHero('desktop')} disabled={!projectForm.mainImage.trim()}>
+                  Desktop a portada
+                </Button>
+                <Button type="button" variant="outline" className="text-xs" onClick={() => handleAddCurrentProjectDraftToHero('mobile')} disabled={!projectForm.mainImageMobile.trim() && !projectForm.mainImage.trim()}>
+                  Mobile a portada
+                </Button>
+              </div>
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
                 Estado actual: <span className="font-medium text-zinc-800">{projectForm.published ? 'Publicado' : 'Borrador'}</span>
               </div>
@@ -8115,7 +8220,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               </p>
             </div>
           </DialogHeader>
-          <div className="space-y-4 py-4 max-h-[calc(100dvh-144px)] overflow-y-auto px-5 pr-4 sm:px-6">
+          <div className="max-h-[calc(100dvh-144px)] overflow-x-hidden overflow-y-auto px-5 py-4 pr-4 sm:px-6">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
