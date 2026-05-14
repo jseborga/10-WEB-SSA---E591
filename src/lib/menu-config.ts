@@ -34,6 +34,10 @@ export function buildPublicationHref(slug: string) {
     return '/contacto'
   }
 
+  if (['cotizacion', 'cotizacion-de-proyectos', 'quote', 'quotation'].includes(normalized)) {
+    return '/cotizacion'
+  }
+
   if (['estudio', 'nosotros', 'sobre-nosotros', 'about'].includes(normalized)) {
     return '/estudio'
   }

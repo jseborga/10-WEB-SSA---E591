@@ -206,10 +206,10 @@ export function ServicesPageClient({ siteSettings, publication }: ServicesPageCl
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/contacto"
+                href="/cotizacion"
                 className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-5 py-3 text-[11px] uppercase tracking-[0.24em] text-zinc-700 transition-colors hover:border-zinc-900 hover:text-zinc-900"
               >
-                Solicitar asesoria
+                Solicitar cotizacion
               </Link>
             </div>
           </div>

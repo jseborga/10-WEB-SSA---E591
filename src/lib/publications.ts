@@ -58,6 +58,10 @@ export function getPublicationHref(slug: string) {
     return '/contacto'
   }
 
+  if (['cotizacion', 'cotizacion-de-proyectos', 'quote', 'quotation'].includes(normalized)) {
+    return '/cotizacion'
+  }
+
   if (normalized === 'estudio') {
     return '/estudio'
   }

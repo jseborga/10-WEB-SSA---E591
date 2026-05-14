@@ -37,6 +37,13 @@ export async function GET() {
     },
     orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
   }).catch(() => [])
+  const reservedRoutes = new Set(['/estudio', '/servicios', '/contacto', '/cotizacion'])
+  const pageLines = pages
+    .map((page) => ({
+      href: buildPublicationHref(page.slug),
+      line: `- ${page.title}: ${siteUrl}${buildPublicationHref(page.slug)}${page.excerpt ? ` - ${page.excerpt}` : ''}`,
+    }))
+    .filter((page) => !reservedRoutes.has(page.href))
 
   const lines = [
     `# ${siteSettings.companyName || 'SSA Ingenieria'}`,
@@ -52,13 +59,14 @@ export async function GET() {
     `- Services: ${siteUrl}/servicios`,
     `- Studio: ${siteUrl}/estudio`,
     `- Contact: ${siteUrl}/contacto`,
+    `- Quote: ${siteUrl}/cotizacion`,
     ...projects.map(
       (project) => {
         const shareImage = getProjectSeoImage(project, siteSettings)
         return `- Proyecto ${project.title}: ${siteUrl}/proyectos/${project.id}${project.description ? ` - ${project.description}` : ''}${project.category ? ` [${project.category}]` : ''}${project.location ? ` (${project.location})` : ''}${shareImage ? ` | Imagen: ${shareImage}` : ''}${project.seoKeywords ? ` | Keywords: ${project.seoKeywords}` : ''}`
       },
     ),
-    ...pages.map((page) => `- ${page.title}: ${siteUrl}${buildPublicationHref(page.slug)}${page.excerpt ? ` - ${page.excerpt}` : ''}`),
+    ...pageLines.map((page) => page.line),
     '',
     '## Contact',
     siteSettings.email ? `- Email: ${siteSettings.email}` : '',

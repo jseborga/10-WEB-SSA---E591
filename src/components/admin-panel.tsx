@@ -691,6 +691,41 @@ const contactPublicationSections: PublicationSectionField[] = [
   },
 ]
 
+const quotePublicationSections: PublicationSectionField[] = [
+  {
+    key: 'intro',
+    title: 'Introduccion',
+    aliases: ['introduccion', 'intro', 'presentacion', 'overview'],
+    placeholder: 'Explica brevemente que tipo de proyecto puede cotizar la empresa y que recibira la persona al enviar el formulario.',
+    help: 'Es la apertura principal de la pagina de cotizacion.',
+    rows: 3,
+  },
+  {
+    key: 'scope',
+    title: 'Alcance',
+    aliases: ['alcance', 'proyecto', 'scope'],
+    placeholder: 'Enumera que informacion conviene enviar: tipo de proyecto, servicio requerido, ubicacion, escala, plazo y referencias.',
+    help: 'Sirve para guiar al cliente y mejorar la calidad del lead.',
+    rows: 4,
+  },
+  {
+    key: 'process',
+    title: 'Proceso',
+    aliases: ['proceso', 'siguiente paso', 'workflow', 'next step'],
+    placeholder: 'Describe como revisan la solicitud, validan alcance y devuelven una respuesta tecnica o comercial.',
+    help: 'Aclara que ocurrira despues del envio del formulario.',
+    rows: 4,
+  },
+  {
+    key: 'references',
+    title: 'Referencias',
+    aliases: ['referencias', 'enlaces', 'links', 'references'],
+    placeholder: 'Proyecto similar | https://... | Referencia externa o material complementario',
+    help: 'Usa una linea por referencia con formato Titulo | URL | nota corta.',
+    rows: 4,
+  },
+]
+
 function normalizePublicationSlug(value: string) {
   return value
     .normalize('NFD')
@@ -714,10 +749,14 @@ function getPublicationKind(value: string) {
     return 'contact' as const
   }
 
+  if (['cotizacion', 'cotizacion-de-proyectos', 'quote', 'quotation'].includes(normalized)) {
+    return 'quote' as const
+  }
+
   return 'generic' as const
 }
 
-function getPublicationBlueprint(kind: 'studio' | 'services' | 'contact'): PublicationBlueprint {
+function getPublicationBlueprint(kind: 'studio' | 'services' | 'contact' | 'quote'): PublicationBlueprint {
   if (kind === 'studio') {
     return {
       slug: 'estudio',
@@ -776,6 +815,31 @@ function getPublicationBlueprint(kind: 'studio' | 'services' | 'contact'): Publi
       seoTitle: 'Contacto | SSA Ingenieria',
       seoDescription: 'Contacta a SSA Ingenieria para proyectos de construccion, supervision, arquitectura, ingenierias y consultoria tecnica.',
       seoKeywords: 'contacto ssa ingenieria, cotizacion, construccion, supervision, arquitectura, ingenieria',
+    }
+  }
+
+  if (kind === 'quote') {
+    return {
+      slug: 'cotizacion',
+      title: 'Cotizacion',
+      category: 'servicio',
+      excerpt: 'Formulario comercial para solicitar una cotizacion tecnica inicial de proyecto.',
+      content: [
+        '## Introduccion',
+        'Explica en una o dos frases que tipo de proyectos puede cotizar la empresa y que recibira la persona al completar el formulario.',
+        '',
+        '## Alcance',
+        'Indica que datos conviene compartir para responder mejor: servicio requerido, tipo de proyecto, ubicacion, escala, plazo y referencias.',
+        '',
+        '## Proceso',
+        'Describe como revisan la solicitud, validan alcance y responden por el canal mas adecuado.',
+        '',
+        '## Referencias',
+        'Proyecto similar | https://example.com | Caso de referencia o material complementario.',
+      ].join('\n'),
+      seoTitle: 'Cotizacion de proyectos | SSA Ingenieria',
+      seoDescription: 'Solicita una cotizacion inicial para proyectos de construccion, arquitectura, ingenierias, supervision o consultoria tecnica.',
+      seoKeywords: 'cotizacion de proyectos, presupuesto de obra, construccion, arquitectura, ingenieria, supervision',
     }
   }
 
@@ -868,13 +932,17 @@ function mergeTagText(currentValue: string, nextValue: string) {
   return merged.map((tag) => formatTagLabel(tag)).filter(Boolean).join(', ')
 }
 
-function getPublicationSectionFields(kind: 'studio' | 'services' | 'contact') {
+function getPublicationSectionFields(kind: 'studio' | 'services' | 'contact' | 'quote') {
   if (kind === 'studio') {
     return studioPublicationSections
   }
 
   if (kind === 'services') {
     return servicesPublicationSections
+  }
+
+  if (kind === 'quote') {
+    return quotePublicationSections
   }
 
   return contactPublicationSections
@@ -887,7 +955,7 @@ function matchesPublicationSectionAlias(title: string, aliases: string[]) {
   return normalizedAliases.includes(normalizedTitle) || normalizedAliases.some((alias) => normalizedTitle.includes(alias) || alias.includes(normalizedTitle))
 }
 
-function getGuidedPublicationSectionState(content: string | null | undefined, kind: 'studio' | 'services' | 'contact') {
+function getGuidedPublicationSectionState(content: string | null | undefined, kind: 'studio' | 'services' | 'contact' | 'quote') {
   const fields = getPublicationSectionFields(kind)
   const sections = parseEditorialSections(content)
   const guidedSections = fields.map((field) => ({
@@ -927,7 +995,7 @@ function serializeGuidedPublicationSections(
 
 function updateGuidedPublicationSectionContent(
   content: string | null | undefined,
-  kind: 'studio' | 'services' | 'contact',
+  kind: 'studio' | 'services' | 'contact' | 'quote',
   key: string,
   body: string,
 ) {
@@ -938,7 +1006,7 @@ function updateGuidedPublicationSectionContent(
 
 function updateGuidedPublicationAdditionalContent(
   content: string | null | undefined,
-  kind: 'studio' | 'services' | 'contact',
+  kind: 'studio' | 'services' | 'contact' | 'quote',
   additionalContent: string,
 ) {
   const { guidedSections } = getGuidedPublicationSectionState(content, kind)
@@ -2370,7 +2438,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       .map((line) => line.trim())
       .filter(Boolean)
 
-  const handleApplyPublicationBlueprint = (kind: 'studio' | 'services' | 'contact') => {
+  const handleApplyPublicationBlueprint = (kind: 'studio' | 'services' | 'contact' | 'quote') => {
     const blueprint = getPublicationBlueprint(kind)
 
     setPublicationForm((current) => ({
@@ -2379,14 +2447,22 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       slug: current.slug || blueprint.slug,
       excerpt: current.excerpt || blueprint.excerpt,
       content: current.content || blueprint.content,
-      category: kind === 'services' ? 'servicio' : current.category || blueprint.category,
+      category: kind === 'services' || kind === 'quote' ? 'servicio' : current.category || blueprint.category,
       seoTitle: current.seoTitle || blueprint.seoTitle,
       seoDescription: current.seoDescription || blueprint.seoDescription,
       seoKeywords: current.seoKeywords || blueprint.seoKeywords,
       showInMenu: true,
     }))
 
-    toast.success(kind === 'studio' ? 'Plantilla de Nosotros cargada' : kind === 'services' ? 'Plantilla de Servicios cargada' : 'Plantilla de Contacto cargada')
+    toast.success(
+      kind === 'studio'
+        ? 'Plantilla de Nosotros cargada'
+        : kind === 'services'
+          ? 'Plantilla de Servicios cargada'
+          : kind === 'quote'
+            ? 'Plantilla de Cotizacion cargada'
+            : 'Plantilla de Contacto cargada',
+    )
   }
 
   const handleAddMenuItem = () => {
@@ -8058,6 +8134,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   <Button type="button" variant="outline" className="text-xs" onClick={() => handleApplyPublicationBlueprint('contact')}>
                     Plantilla Contacto
                   </Button>
+                  <Button type="button" variant="outline" className="text-xs" onClick={() => handleApplyPublicationBlueprint('quote')}>
+                    Plantilla Cotizacion
+                  </Button>
                   <Button type="button" className="bg-zinc-900 text-xs hover:bg-zinc-800" onClick={() => void handleAssistPublicationWithAi()} disabled={publicationAiLoading}>
                     {publicationAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     Mejorar con IA
@@ -8067,13 +8146,21 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               {publicationBlueprint ? (
                 <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs leading-6 text-zinc-600">
                   <p className="font-medium text-zinc-800">
-                    {publicationKind === 'studio' ? 'Guia para Nosotros' : publicationKind === 'services' ? 'Guia para Servicios' : 'Guia para Contacto'}
+                    {publicationKind === 'studio'
+                      ? 'Guia para Nosotros'
+                      : publicationKind === 'services'
+                        ? 'Guia para Servicios'
+                        : publicationKind === 'quote'
+                          ? 'Guia para Cotizacion'
+                          : 'Guia para Contacto'}
                   </p>
                   <p className="mt-1">
                     {publicationKind === 'studio'
                       ? 'Formatos utiles: `Nombre | Cargo | /foto.jpg | descripcion | link` para staff, `Partner | link | descripcion | /logo.jpg` para aliados y `Titulo | https://... | nota` para referencias. Las fotos de grupo pueden ir en `## Fotos de grupo`, una URL por linea.'
                       : publicationKind === 'services'
                         ? 'Usa secciones `## Construccion`, `## Consultoria`, `## Ingenierias`, `## Supervision y fiscalizacion`, `## Proceso` y `## Referencias`. En `## Proceso` puedes usar `Paso | descripcion`.'
+                        : publicationKind === 'quote'
+                          ? 'Usa secciones `## Introduccion`, `## Alcance`, `## Proceso` y `## Referencias`. En referencias puedes usar `Titulo | https://... | nota`.'
                         : 'Usa secciones `## Introduccion`, `## Cobertura`, `## Nota del formulario` y `## Referencias`. Las referencias pueden ir como `Titulo | https://... | nota`.'}
                   </p>
                 </div>
@@ -8259,7 +8346,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                           }))
                         }
                       />
-                    ) : (publicationKind === 'studio' || publicationKind === 'services' || publicationKind === 'contact') && section.key === 'references' ? (
+                    ) : (publicationKind === 'studio' || publicationKind === 'services' || publicationKind === 'contact' || publicationKind === 'quote') && section.key === 'references' ? (
                       <EditorialItemListEditor
                         items={parseEditorialItemDrafts(section.body)}
                         allowHref

@@ -34,6 +34,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   }).catch(() => [])
 
+  const reservedRoutes = new Set(['/estudio', '/servicios', '/contacto', '/cotizacion'])
+  const pageEntries = pages
+    .map((page) => ({
+      href: buildPublicationHref(page.slug),
+      lastModified: page.updatedAt,
+    }))
+    .filter((page) => !reservedRoutes.has(page.href))
+
   return [
     {
       url: siteUrl,
@@ -71,9 +79,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.8,
     },
-    ...pages.map((page) => ({
-      url: `${siteUrl}${buildPublicationHref(page.slug)}`,
-      lastModified: page.updatedAt,
+    {
+      url: `${siteUrl}/cotizacion`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    },
+    ...pageEntries.map((page) => ({
+      url: `${siteUrl}${page.href}`,
+      lastModified: page.lastModified,
       changeFrequency: 'monthly' as const,
       priority: 0.7,
     })),
