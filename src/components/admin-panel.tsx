@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 import { type MenuItemConfig, parseMenuConfig, serializeMenuConfig, buildPublicationHref } from '@/lib/menu-config'
+import { findEditorialSection, parseEditorialSections } from '@/lib/editorial-sections'
 import { formatCategoryLabel, formatTagLabel, getProjectCategories, isVideoUrl, parseLineList, parseProjectMediaAnnotations, parseTagList, parseUrlList } from '@/lib/public-site'
 import { getSeoDescription, getSeoTitle, getSiteUrl } from '@/lib/seo'
 
@@ -485,6 +486,162 @@ type PublicationBlueprint = {
   seoKeywords: string
 }
 
+type ProjectMediaAnnotationDraft = {
+  url: string
+  category: string
+  label: string
+  tags: string
+}
+
+type PublicationSectionField = {
+  key: string
+  title: string
+  aliases: string[]
+  placeholder: string
+  help: string
+  rows?: number
+}
+
+const projectMediaCategorySuggestions = [
+  'construccion',
+  'arquitectura',
+  'diseno',
+  'ingenierias',
+  'instalaciones',
+  'supervision',
+  'fiscalizacion',
+  'detalle-tecnico',
+  'obra-civil',
+  'interiores',
+  'equipamiento',
+]
+
+const studioPublicationSections: PublicationSectionField[] = [
+  {
+    key: 'intro',
+    title: 'Introduccion',
+    aliases: ['introduccion', 'intro', 'presentacion'],
+    placeholder: 'Resume que es la empresa, que tipo de proyectos atiende y cual es su enfoque general.',
+    help: 'Se usa como apertura de la pagina y ayuda a entender rapido a la empresa.',
+    rows: 3,
+  },
+  {
+    key: 'history',
+    title: 'Historia',
+    aliases: ['historia', 'trayectoria', 'history'],
+    placeholder: 'Cuenta como nace la empresa, su trayectoria, experiencia y criterio de trabajo.',
+    help: 'Aqui va el relato institucional y la experiencia acumulada.',
+    rows: 5,
+  },
+  {
+    key: 'team',
+    title: 'Equipo tecnico',
+    aliases: ['equipo tecnico', 'equipo', 'profesionales', 'technical team'],
+    placeholder: 'Arquitectura y diseno | Concepto, documentacion tecnica y criterio espacial.\nIngenierias | Estructuras, sistemas y especialidades coordinadas.',
+    help: 'Usa una linea por especialidad con formato Titulo | descripcion.',
+    rows: 5,
+  },
+  {
+    key: 'staff',
+    title: 'Staff',
+    aliases: ['staff', 'equipo base', 'equipo staff', 'core team'],
+    placeholder: 'Nombre Apellido | Cargo | /foto.jpg | Perfil breve y rol dentro de la empresa | https://linkedin.com/...',
+    help: 'Usa una linea por persona con formato Nombre | Cargo | foto | descripcion | link.',
+    rows: 5,
+  },
+  {
+    key: 'partners',
+    title: 'Partners',
+    aliases: ['partners', 'partner', 'aliados', 'alianzas'],
+    placeholder: 'Partner o aliado | https://partner.com | Especialidad o aporte dentro del proyecto | /logo.jpg',
+    help: 'Usa una linea por partner con formato Nombre | link | descripcion | logo.',
+    rows: 4,
+  },
+  {
+    key: 'group-photos',
+    title: 'Fotos de grupo',
+    aliases: ['fotos de grupo', 'fotos equipo', 'team photos', 'group photos'],
+    placeholder: '/api/media/equipo-01.jpg\n/api/media/equipo-02.jpg',
+    help: 'Una URL por linea para mostrar fotografias institucionales o de equipo.',
+    rows: 4,
+  },
+  {
+    key: 'references',
+    title: 'Referencias',
+    aliases: ['referencias', 'enlaces', 'links', 'references'],
+    placeholder: 'Perfil corporativo | https://... | Presentacion institucional o referencia externa',
+    help: 'Usa una linea por referencia con formato Titulo | URL | nota corta.',
+    rows: 4,
+  },
+]
+
+const servicesPublicationSections: PublicationSectionField[] = [
+  {
+    key: 'intro',
+    title: 'Introduccion',
+    aliases: ['introduccion', 'intro', 'presentacion', 'overview'],
+    placeholder: 'Resume en una o dos frases que servicios ofrece la empresa y para que tipo de cliente o proyecto.',
+    help: 'Se usa como apertura comercial del bloque de servicios.',
+    rows: 3,
+  },
+  {
+    key: 'approach',
+    title: 'Enfoque',
+    aliases: ['enfoque', 'alcance', 'criterio', 'approach'],
+    placeholder: 'Explica como articula la empresa el criterio tecnico, el diseno, la ejecucion y el control de obra.',
+    help: 'Aqui se explica el metodo y la forma de trabajar.',
+    rows: 4,
+  },
+  {
+    key: 'construction',
+    title: 'Construccion',
+    aliases: ['construccion', 'ejecucion', 'obra'],
+    placeholder: 'Describe el alcance de construccion, ejecucion, coordinacion y control de obra.',
+    help: 'Describe la linea de servicio de construccion.',
+    rows: 4,
+  },
+  {
+    key: 'consulting',
+    title: 'Consultoria',
+    aliases: ['consultoria', 'diseno', 'arquitectura'],
+    placeholder: 'Describe consultoria de diseno, arquitectura e ingenierias especializadas.',
+    help: 'Explica consultoria, diseno y soporte tecnico.',
+    rows: 4,
+  },
+  {
+    key: 'engineering',
+    title: 'Ingenierias',
+    aliases: ['ingenierias', 'especialidades', 'sistemas'],
+    placeholder: 'Detalla estructuras, sistemas, instalaciones y soporte tecnico especializado.',
+    help: 'Detalla especialidades y soporte de ingenieria.',
+    rows: 4,
+  },
+  {
+    key: 'supervision',
+    title: 'Supervision y fiscalizacion',
+    aliases: ['supervision y fiscalizacion', 'supervision', 'fiscalizacion', 'control'],
+    placeholder: 'Explica supervision independiente, control de calidad, cumplimiento y seguimiento.',
+    help: 'Explica supervision, control de calidad y fiscalizacion.',
+    rows: 4,
+  },
+  {
+    key: 'workflow',
+    title: 'Proceso',
+    aliases: ['proceso', 'metodologia', 'como trabajamos', 'workflow'],
+    placeholder: 'Diagnostico | Relevamiento inicial, alcance y prioridades.\nEstrategia | Definicion de servicio, criterios y equipo necesario.',
+    help: 'Usa una linea por paso con formato Paso | descripcion.',
+    rows: 5,
+  },
+  {
+    key: 'references',
+    title: 'Referencias',
+    aliases: ['referencias', 'enlaces', 'links', 'references'],
+    placeholder: 'Portafolio | https://... | Link complementario o referencia externa',
+    help: 'Usa una linea por referencia con formato Titulo | URL | nota corta.',
+    rows: 4,
+  },
+]
+
 function normalizePublicationSlug(value: string) {
   return value
     .normalize('NFD')
@@ -534,6 +691,9 @@ function getPublicationBlueprint(kind: 'studio' | 'services'): PublicationBluepr
         '## Fotos de grupo',
         '/api/media/equipo-01.jpg',
         '/api/media/equipo-02.jpg',
+        '',
+        '## Referencias',
+        'Perfil institucional | https://example.com | Referencia o material complementario de la empresa.',
       ].join('\n'),
       seoTitle: 'Nosotros | SSA Ingenieria',
       seoDescription: 'Conoce la trayectoria, el equipo tecnico, el staff y los partners con los que trabaja SSA Ingenieria.',
@@ -546,9 +706,9 @@ function getPublicationBlueprint(kind: 'studio' | 'services'): PublicationBluepr
     title: 'Servicios',
     category: 'servicio',
     excerpt: 'Construccion, consultoria de diseno, arquitectura, ingenierias, supervision y fiscalizacion.',
-    content: [
-      '## Introduccion',
-      'Resume en una o dos frases que servicios ofrece la empresa y para que tipo de cliente o proyecto.',
+      content: [
+        '## Introduccion',
+        'Resume en una o dos frases que servicios ofrece la empresa y para que tipo de cliente o proyecto.',
       '',
       '## Enfoque',
       'Explica como articula la empresa el criterio tecnico, el diseo, la ejecucion y el control de obra.',
@@ -565,16 +725,138 @@ function getPublicationBlueprint(kind: 'studio' | 'services'): PublicationBluepr
       '## Supervision y fiscalizacion',
       'Explica supervision independiente, control de calidad, cumplimiento y seguimiento.',
       '',
-      '## Proceso',
-      'Diagnostico | Relevamiento inicial, alcance y prioridades.',
-      'Estrategia | Definicion de servicio, criterios y equipo necesario.',
-      'Control de ejecucion | Coordinacion, seguimiento y revision tecnica.',
-      'Cierre y seguimiento | Entregables, ajustes y siguientes pasos.',
-    ].join('\n'),
+        '## Proceso',
+        'Diagnostico | Relevamiento inicial, alcance y prioridades.',
+        'Estrategia | Definicion de servicio, criterios y equipo necesario.',
+        'Control de ejecucion | Coordinacion, seguimiento y revision tecnica.',
+        'Cierre y seguimiento | Entregables, ajustes y siguientes pasos.',
+        '',
+        '## Referencias',
+        'Portafolio | https://example.com | Link complementario o referencia de soporte.',
+      ].join('\n'),
     seoTitle: 'Servicios | SSA Ingenieria',
     seoDescription: 'Servicios de construccion, consultoria, arquitectura, ingenierias, supervision y fiscalizacion de obras.',
     seoKeywords: 'servicios de ingenieria, construccion, arquitectura, supervision de obras, fiscalizacion, consultoria tecnica',
   }
+}
+
+function getProjectMediaAnnotationDrafts(urlValue: string | null | undefined, annotationValue: string | null | undefined) {
+  const annotationMap = new Map(parseProjectMediaAnnotations(annotationValue).map((item) => [item.url, item]))
+
+  return parseUrlList(urlValue).map<ProjectMediaAnnotationDraft>((url) => {
+    const annotation = annotationMap.get(url)
+
+    return {
+      url,
+      category: annotation?.category || '',
+      label: annotation?.label || '',
+      tags: (annotation?.tags || []).map((tag) => formatTagLabel(tag)).filter(Boolean).join(', '),
+    }
+  })
+}
+
+function serializeProjectMediaAnnotationDrafts(items: ProjectMediaAnnotationDraft[]) {
+  return items
+    .map((item) => {
+      const url = item.url.trim()
+
+      if (!url) {
+        return ''
+      }
+
+      const tags = parseTagList(item.tags).map((tag) => formatTagLabel(tag)).filter(Boolean).join(', ')
+      const parts = [url, item.category.trim(), item.label.trim(), tags]
+
+      while (parts.length > 1 && !parts[parts.length - 1]) {
+        parts.pop()
+      }
+
+      return parts.join(' | ')
+    })
+    .filter(Boolean)
+    .join('\n')
+}
+
+function patchProjectMediaAnnotationDrafts(
+  items: ProjectMediaAnnotationDraft[],
+  url: string,
+  patch: Partial<ProjectMediaAnnotationDraft>,
+) {
+  return items.map((item) => (item.url === url ? { ...item, ...patch } : item))
+}
+
+function mergeTagText(currentValue: string, nextValue: string) {
+  const merged = Array.from(new Set([...parseTagList(currentValue), ...parseTagList(nextValue)]))
+  return merged.map((tag) => formatTagLabel(tag)).filter(Boolean).join(', ')
+}
+
+function getPublicationSectionFields(kind: 'studio' | 'services') {
+  return kind === 'studio' ? studioPublicationSections : servicesPublicationSections
+}
+
+function matchesPublicationSectionAlias(title: string, aliases: string[]) {
+  const normalizedTitle = normalizePublicationSlug(title)
+  const normalizedAliases = aliases.map((alias) => normalizePublicationSlug(alias))
+
+  return normalizedAliases.includes(normalizedTitle) || normalizedAliases.some((alias) => normalizedTitle.includes(alias) || alias.includes(normalizedTitle))
+}
+
+function getGuidedPublicationSectionState(content: string | null | undefined, kind: 'studio' | 'services') {
+  const fields = getPublicationSectionFields(kind)
+  const sections = parseEditorialSections(content)
+  const guidedSections = fields.map((field) => ({
+    ...field,
+    body: findEditorialSection(sections, field.aliases)?.body || '',
+  }))
+
+  const additionalSections = sections.filter(
+    (section) => !fields.some((field) => matchesPublicationSectionAlias(section.title, field.aliases)),
+  )
+
+  return {
+    guidedSections,
+    additionalContent: additionalSections.map((section) => `## ${section.title}\n${section.body}`.trim()).filter(Boolean).join('\n\n'),
+  }
+}
+
+function serializeGuidedPublicationSections(
+  sections: Array<PublicationSectionField & { body: string }>,
+  additionalContent: string,
+) {
+  const blocks = sections
+    .map((section) => {
+      const body = section.body.trim()
+      return body ? `## ${section.title}\n${body}` : ''
+    })
+    .filter(Boolean)
+
+  const extras = additionalContent.trim()
+
+  if (extras) {
+    blocks.push(extras)
+  }
+
+  return blocks.join('\n\n').trim()
+}
+
+function updateGuidedPublicationSectionContent(
+  content: string | null | undefined,
+  kind: 'studio' | 'services',
+  key: string,
+  body: string,
+) {
+  const { guidedSections, additionalContent } = getGuidedPublicationSectionState(content, kind)
+  const nextSections = guidedSections.map((section) => (section.key === key ? { ...section, body } : section))
+  return serializeGuidedPublicationSections(nextSections, additionalContent)
+}
+
+function updateGuidedPublicationAdditionalContent(
+  content: string | null | undefined,
+  kind: 'studio' | 'services',
+  additionalContent: string,
+) {
+  const { guidedSections } = getGuidedPublicationSectionState(content, kind)
+  return serializeGuidedPublicationSections(guidedSections, additionalContent)
 }
 
 const emptySiteForm: SiteFormState = {
@@ -966,6 +1248,101 @@ function MediaPreviewGrid({
   )
 }
 
+function ProjectMediaAnnotationList({
+  items,
+  categorySuggestions,
+  categoryListId,
+  emptyLabel,
+  onChange,
+  onRemove,
+}: {
+  items: ProjectMediaAnnotationDraft[]
+  categorySuggestions: string[]
+  categoryListId: string
+  emptyLabel?: string
+  onChange: (url: string, patch: Partial<ProjectMediaAnnotationDraft>) => void
+  onRemove?: (url: string) => void
+}) {
+  if (items.length === 0) {
+    return emptyLabel ? <p className="text-xs text-zinc-500">{emptyLabel}</p> : null
+  }
+
+  return (
+    <div className="space-y-4">
+      <datalist id={categoryListId}>
+        {categorySuggestions.map((value) => (
+          <option key={value} value={value} />
+        ))}
+      </datalist>
+      {items.map((item, index) => {
+        const tagPreview = parseTagList(item.tags)
+
+        return (
+          <div key={item.url} className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-3 lg:grid-cols-[190px_1fr]">
+            <div className="overflow-hidden rounded-lg bg-zinc-100">
+              <div className="relative aspect-[4/3]">
+                <img src={item.url} alt={item.label || `Foto ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-zinc-800">Foto {index + 1}</p>
+                  <p className="truncate text-[11px] text-zinc-500">{item.url}</p>
+                </div>
+                {onRemove ? (
+                  <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onRemove(item.url)}>
+                    Quitar
+                  </Button>
+                ) : null}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Categoria</label>
+                  <Input
+                    value={item.category}
+                    list={categoryListId}
+                    onChange={(event) => onChange(item.url, { category: event.target.value })}
+                    placeholder="construccion, instalaciones, diseno..."
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Texto corto</label>
+                  <Input
+                    value={item.label}
+                    onChange={(event) => onChange(item.url, { label: event.target.value })}
+                    placeholder="Avance de obra, fachada, detalle tecnico..."
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Etiquetas</label>
+                <Input
+                  value={item.tags}
+                  onChange={(event) => onChange(item.url, { tags: event.target.value })}
+                  placeholder="#construccion, #detalle-tecnico, #arquitectura"
+                  className="text-sm"
+                />
+                {tagPreview.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {tagPreview.map((tag) => (
+                      <span key={`${item.url}-${tag}`} className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] font-mono text-zinc-600">
+                        {formatTagLabel(tag)}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 interface AdminPanelProps {
   initialOpen?: boolean
   hideLauncher?: boolean
@@ -1036,6 +1413,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const [requestFilter, setRequestFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
   const [uploadingField, setUploadingField] = useState<string | null>(null)
   const [projectAiLoading, setProjectAiLoading] = useState(false)
+  const [projectMediaAiLoading, setProjectMediaAiLoading] = useState<'desktop' | 'mobile' | null>(null)
   const [publicationAiLoading, setPublicationAiLoading] = useState(false)
   const [siteSeoLoading, setSiteSeoLoading] = useState(false)
   const [siteSocialImageAssistLoading, setSiteSocialImageAssistLoading] = useState(false)
@@ -1138,6 +1516,25 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
     [projectForm.gallery, projectForm.galleryMobile, projectForm.mainImage, projectForm.mainImageMobile, projectForm.videoUrl],
   )
   const projectTagPreview = useMemo(() => parseTagList(projectForm.projectTags), [projectForm.projectTags])
+  const projectGalleryAnnotationDrafts = useMemo(
+    () => getProjectMediaAnnotationDrafts(projectForm.gallery, projectForm.galleryAnnotations),
+    [projectForm.gallery, projectForm.galleryAnnotations],
+  )
+  const projectGalleryMobileAnnotationDrafts = useMemo(
+    () => getProjectMediaAnnotationDrafts(projectForm.galleryMobile, projectForm.galleryMobileAnnotations),
+    [projectForm.galleryMobile, projectForm.galleryMobileAnnotations],
+  )
+  const projectMediaCategoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [projectForm.category, ...projectCategoryOptions, ...projectMediaCategorySuggestions]
+            .map((value) => value.trim())
+            .filter(Boolean),
+        ),
+      ),
+    [projectCategoryOptions, projectForm.category],
+  )
   const projectGalleryAnnotationCount = useMemo(
     () => parseProjectMediaAnnotations(projectForm.galleryAnnotations).length,
     [projectForm.galleryAnnotations],
@@ -1637,6 +2034,20 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
   const publicationHrefPreview = publicationSlugPreview ? buildPublicationHref(publicationSlugPreview) : '/info/tu-slug'
   const publicationKind = getPublicationKind(publicationSlugPreview)
   const publicationBlueprint = publicationKind === 'generic' ? null : getPublicationBlueprint(publicationKind)
+  const publicationGuidedSections = useMemo(
+    () =>
+      publicationKind === 'generic'
+        ? []
+        : getGuidedPublicationSectionState(publicationForm.content, publicationKind).guidedSections,
+    [publicationForm.content, publicationKind],
+  )
+  const publicationAdditionalContent = useMemo(
+    () =>
+      publicationKind === 'generic'
+        ? ''
+        : getGuidedPublicationSectionState(publicationForm.content, publicationKind).additionalContent,
+    [publicationForm.content, publicationKind],
+  )
 
   const parseGalleryUrls = (value: string) =>
     value
@@ -2290,6 +2701,111 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       toast.error('No se pudo generar la sugerencia con IA')
     } finally {
       setProjectAiLoading(false)
+    }
+  }
+
+  const setProjectMediaAnnotationValue = (
+    target: 'desktop' | 'mobile',
+    url: string,
+    patch: Partial<ProjectMediaAnnotationDraft>,
+  ) => {
+    setProjectForm((current) => {
+      const galleryValue = target === 'desktop' ? current.gallery : current.galleryMobile
+      const annotationValue = target === 'desktop' ? current.galleryAnnotations : current.galleryMobileAnnotations
+      const nextItems = patchProjectMediaAnnotationDrafts(getProjectMediaAnnotationDrafts(galleryValue, annotationValue), url, patch)
+      const serialized = serializeProjectMediaAnnotationDrafts(nextItems)
+
+      return target === 'desktop'
+        ? { ...current, galleryAnnotations: serialized }
+        : { ...current, galleryMobileAnnotations: serialized }
+    })
+  }
+
+  const handleAssistProjectMediaWithAi = async (target: 'desktop' | 'mobile') => {
+    const galleryValue = target === 'desktop' ? projectForm.gallery : projectForm.galleryMobile
+    const annotationValue = target === 'desktop' ? projectForm.galleryAnnotations : projectForm.galleryMobileAnnotations
+    const urls = parseUrlList(galleryValue)
+
+    if (urls.length === 0) {
+      toast.error(target === 'desktop' ? 'Primero agrega imagenes a la galeria desktop.' : 'Primero agrega imagenes a la galeria mobile.')
+      return
+    }
+
+    setProjectMediaAiLoading(target)
+
+    try {
+      const response = await fetch('/api/ai/project-media-annotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: projectForm.title,
+          description: projectForm.description,
+          fullDescription: projectForm.fullDescription,
+          category: projectForm.category,
+          location: projectForm.location,
+          client: projectForm.client,
+          projectTags: projectForm.projectTags,
+          target,
+          urls,
+          currentAnnotations: parseProjectMediaAnnotations(annotationValue),
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        toast.error(data.error || 'No se pudo completar la galeria con IA')
+        return
+      }
+
+      const suggestionItems: Array<{ url: string; category?: string; label?: string; tags?: string }> = Array.isArray(data.suggestion?.suggestions)
+        ? data.suggestion.suggestions
+        : []
+      const suggestionMap = new Map<string, { category?: string; label?: string; tags?: string }>(
+        suggestionItems
+          .filter((item) => typeof item?.url === 'string' && item.url.trim())
+          .map((item) => [item.url.trim(), item]),
+      )
+
+      setProjectForm((current) => {
+        const currentGalleryValue = target === 'desktop' ? current.gallery : current.galleryMobile
+        const currentAnnotationValue = target === 'desktop' ? current.galleryAnnotations : current.galleryMobileAnnotations
+        const nextItems = getProjectMediaAnnotationDrafts(currentGalleryValue, currentAnnotationValue).map((item) => {
+          const suggestion = suggestionMap.get(item.url)
+
+          if (!suggestion) {
+            return item
+          }
+
+          return {
+            ...item,
+            category: item.category.trim() || (suggestion.category || '').trim(),
+            label: item.label.trim() || (suggestion.label || '').trim(),
+            tags: mergeTagText(item.tags, suggestion.tags || ''),
+          }
+        })
+
+        const serialized = serializeProjectMediaAnnotationDrafts(nextItems)
+        const mergedProjectTags = mergeTagText(current.projectTags, typeof data.suggestion?.projectTags === 'string' ? data.suggestion.projectTags : '')
+
+        return target === 'desktop'
+          ? {
+              ...current,
+              galleryAnnotations: serialized,
+              projectTags: mergedProjectTags || current.projectTags,
+            }
+          : {
+              ...current,
+              galleryMobileAnnotations: serialized,
+              projectTags: mergedProjectTags || current.projectTags,
+            }
+      })
+
+      toast.success(target === 'desktop' ? 'La IA completo etiquetas y categorias de la galeria desktop' : 'La IA completo etiquetas y categorias de la galeria mobile')
+    } catch {
+      toast.error('No se pudo completar la galeria con IA')
+    } finally {
+      setProjectMediaAiLoading(null)
     }
   }
 
@@ -6998,18 +7514,54 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   }))
                 }
               />
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Anotaciones de galeria desktop</label>
-                <Textarea
-                  value={projectForm.galleryAnnotations}
-                  onChange={e => setProjectForm({ ...projectForm, galleryAnnotations: e.target.value })}
-                  rows={4}
-                  placeholder={'/api/media/foto-1.jpg | construccion | vaciado de losa | #obra-gruesa, #estructura\n/api/media/foto-2.jpg | arquitectura | acceso principal | diseno, fachada'}
-                  className="text-sm font-mono"
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900">Etiquetas y filtros de galeria</p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Edita cada imagen como ficha simple. La web usa esto para filtros, textos sutiles y SEO visual. Detectadas: {projectGalleryAnnotationCount}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-xs"
+                    onClick={() => void handleAssistProjectMediaWithAi('desktop')}
+                    disabled={projectMediaAiLoading === 'desktop' || projectGalleryAnnotationDrafts.length === 0}
+                  >
+                    {projectMediaAiLoading === 'desktop' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Completar con IA
+                  </Button>
+                </div>
+                <ProjectMediaAnnotationList
+                  items={projectGalleryAnnotationDrafts}
+                  categorySuggestions={projectMediaCategoryOptions}
+                  categoryListId="project-gallery-desktop-categories"
+                  emptyLabel="Agrega imagenes para activar la edicion guiada de la galeria."
+                  onChange={(url, patch) => setProjectMediaAnnotationValue('desktop', url, patch)}
+                  onRemove={(url) =>
+                    setProjectForm((current) => ({
+                      ...current,
+                      gallery: removeUrlFromList(current.gallery, url),
+                      galleryAnnotations: removeAnnotationFromList(current.galleryAnnotations, url),
+                    }))
+                  }
                 />
-                <p className="mt-2 text-xs text-zinc-500">
-                  Formato: <span className="font-mono">url | categoria | texto corto | tags</span>. Detectadas: {projectGalleryAnnotationCount}
-                </p>
+                <details className="rounded-lg border border-dashed border-zinc-200 bg-white px-3 py-3">
+                  <summary className="cursor-pointer text-xs font-medium text-zinc-700">Ver formato tecnico</summary>
+                  <div className="mt-3 space-y-2">
+                    <Textarea
+                      value={projectForm.galleryAnnotations}
+                      onChange={e => setProjectForm({ ...projectForm, galleryAnnotations: e.target.value })}
+                      rows={4}
+                      placeholder={'/api/media/foto-1.jpg | construccion | vaciado de losa | #obra-gruesa, #estructura\n/api/media/foto-2.jpg | arquitectura | acceso principal | #diseno, #fachada'}
+                      className="text-sm font-mono"
+                    />
+                    <p className="text-xs text-zinc-500">
+                      Formato avanzado: <span className="font-mono">url | categoria | texto corto | tags</span>.
+                    </p>
+                  </div>
+                </details>
               </div>
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
@@ -7045,18 +7597,54 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   }))
                 }
               />
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Anotaciones de galeria mobile</label>
-                <Textarea
-                  value={projectForm.galleryMobileAnnotations}
-                  onChange={e => setProjectForm({ ...projectForm, galleryMobileAnnotations: e.target.value })}
-                  rows={4}
-                  placeholder={'/api/media/foto-mobile-1.jpg | instalaciones | tablero general | #electricidad, #mantenimiento'}
-                  className="text-sm font-mono"
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900">Etiquetas mobile</p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Usa esta version solo cuando mobile requiera textos o categorias diferentes. Detectadas: {projectGalleryMobileAnnotationCount}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-xs"
+                    onClick={() => void handleAssistProjectMediaWithAi('mobile')}
+                    disabled={projectMediaAiLoading === 'mobile' || projectGalleryMobileAnnotationDrafts.length === 0}
+                  >
+                    {projectMediaAiLoading === 'mobile' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Completar con IA
+                  </Button>
+                </div>
+                <ProjectMediaAnnotationList
+                  items={projectGalleryMobileAnnotationDrafts}
+                  categorySuggestions={projectMediaCategoryOptions}
+                  categoryListId="project-gallery-mobile-categories"
+                  emptyLabel="Agrega imagenes mobile para activar la edicion guiada."
+                  onChange={(url, patch) => setProjectMediaAnnotationValue('mobile', url, patch)}
+                  onRemove={(url) =>
+                    setProjectForm((current) => ({
+                      ...current,
+                      galleryMobile: removeUrlFromList(current.galleryMobile, url),
+                      galleryMobileAnnotations: removeAnnotationFromList(current.galleryMobileAnnotations, url),
+                    }))
+                  }
                 />
-                <p className="mt-2 text-xs text-zinc-500">
-                  Usa este bloque solo si mobile necesita categorias o textos distintos. Detectadas: {projectGalleryMobileAnnotationCount}
-                </p>
+                <details className="rounded-lg border border-dashed border-zinc-200 bg-white px-3 py-3">
+                  <summary className="cursor-pointer text-xs font-medium text-zinc-700">Ver formato tecnico</summary>
+                  <div className="mt-3 space-y-2">
+                    <Textarea
+                      value={projectForm.galleryMobileAnnotations}
+                      onChange={e => setProjectForm({ ...projectForm, galleryMobileAnnotations: e.target.value })}
+                      rows={4}
+                      placeholder={'/api/media/foto-mobile-1.jpg | instalaciones | tablero general | #electricidad, #mantenimiento'}
+                      className="text-sm font-mono"
+                    />
+                    <p className="text-xs text-zinc-500">
+                      Formato avanzado: <span className="font-mono">url | categoria | texto corto | tags</span>.
+                    </p>
+                  </div>
+                </details>
               </div>
             </div>
             <div className="rounded-xl border border-zinc-200 p-4 space-y-3">
@@ -7157,8 +7745,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   </p>
                   <p className="mt-1">
                     {publicationKind === 'studio'
-                      ? 'Formatos utiles: `Nombre | Cargo | /foto.jpg | descripcion | link` para staff y `Partner | link | descripcion | /logo.jpg` para aliados. Las fotos de grupo pueden ir en `## Fotos de grupo`, una URL por linea.'
-                      : 'Usa secciones `## Construccion`, `## Consultoria`, `## Ingenierias`, `## Supervision y fiscalizacion` y `## Proceso`. En `## Proceso` puedes usar `Paso | descripcion`.'}
+                      ? 'Formatos utiles: `Nombre | Cargo | /foto.jpg | descripcion | link` para staff, `Partner | link | descripcion | /logo.jpg` para aliados y `Titulo | https://... | nota` para referencias. Las fotos de grupo pueden ir en `## Fotos de grupo`, una URL por linea.'
+                      : 'Usa secciones `## Construccion`, `## Consultoria`, `## Ingenierias`, `## Supervision y fiscalizacion`, `## Proceso` y `## Referencias`. En `## Proceso` puedes usar `Paso | descripcion`.'}
                   </p>
                 </div>
               ) : null}
@@ -7288,10 +7876,74 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                 </div>
               ) : null}
             </div>
-            <div>
-              <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido</label>
-              <Textarea value={publicationForm.content} onChange={e => setPublicationForm({ ...publicationForm, content: e.target.value })} rows={7} className="text-sm" />
-            </div>
+            {publicationBlueprint ? (
+              <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900">Editor guiado por secciones</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Edita la pagina por bloques. El contenido completo se reconstruye automaticamente sin obligarte a trabajar sobre un texto largo.
+                  </p>
+                </div>
+                {publicationGuidedSections.map((section) => (
+                  <div key={section.key} className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3">
+                    <div className="mb-2">
+                      <p className="text-xs font-medium text-zinc-800">{section.title}</p>
+                      <p className="mt-1 text-[11px] leading-5 text-zinc-500">{section.help}</p>
+                    </div>
+                    <Textarea
+                      value={section.body}
+                      onChange={(event) =>
+                        setPublicationForm((current) => ({
+                          ...current,
+                          content:
+                            publicationKind === 'generic'
+                              ? current.content
+                              : updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, event.target.value),
+                        }))
+                      }
+                      rows={section.rows || 4}
+                      placeholder={section.placeholder}
+                      className="text-sm"
+                    />
+                  </div>
+                ))}
+                <div className="rounded-lg border border-dashed border-zinc-200 bg-white px-3 py-3">
+                  <p className="text-xs font-medium text-zinc-800">Secciones adicionales</p>
+                  <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                    Si necesitas bloques especiales fuera de la estructura principal, puedes mantenerlos aqui en formato libre con sus encabezados.
+                  </p>
+                  <Textarea
+                    value={publicationAdditionalContent}
+                    onChange={(event) =>
+                      setPublicationForm((current) => ({
+                        ...current,
+                        content:
+                          publicationKind === 'generic'
+                            ? current.content
+                            : updateGuidedPublicationAdditionalContent(current.content, publicationKind, event.target.value),
+                      }))
+                    }
+                    rows={5}
+                    placeholder={'## Cobertura\nDescribe una seccion adicional aqui.\n\n## Otra seccion\nPuedes conservar bloques especiales sin perder la estructura guiada.'}
+                    className="mt-3 text-sm"
+                  />
+                </div>
+                <details className="rounded-lg border border-dashed border-zinc-200 bg-white px-3 py-3">
+                  <summary className="cursor-pointer text-xs font-medium text-zinc-700">Ver contenido completo</summary>
+                  <Textarea
+                    value={publicationForm.content}
+                    onChange={e => setPublicationForm({ ...publicationForm, content: e.target.value })}
+                    rows={8}
+                    className="mt-3 text-sm"
+                  />
+                </details>
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido</label>
+                <Textarea value={publicationForm.content} onChange={e => setPublicationForm({ ...publicationForm, content: e.target.value })} rows={7} className="text-sm" />
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-medium text-zinc-700 mb-1 block">Contenido EN</label>

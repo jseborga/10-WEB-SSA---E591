@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ArrowUpRight } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { findEditorialSection, parseEditorialItems, parseEditorialSections, splitParagraphs } from '@/lib/editorial-sections'
 import { useLanguage } from '@/lib/language-context'
@@ -151,6 +151,7 @@ export function ServicesPageClient({ siteSettings, publication }: ServicesPageCl
   const introSection = findEditorialSection(sections, ['introduccion', 'intro', 'presentacion', 'overview'])
   const approachSection = findEditorialSection(sections, ['enfoque', 'alcance', 'criterio', 'approach'])
   const workflowSection = findEditorialSection(sections, ['proceso', 'metodologia', 'como trabajamos', 'workflow'])
+  const referencesSection = findEditorialSection(sections, ['referencias', 'enlaces', 'links', 'references'])
   const baseCards = getServiceCards(language)
   const serviceCards = baseCards.map((service) => {
     const matchedSection = findEditorialSection(sections, service.aliases)
@@ -179,6 +180,7 @@ export function ServicesPageClient({ siteSettings, publication }: ServicesPageCl
               : 'Estructuramos los servicios para conectar intencion de proyecto, soporte tecnico, control de ejecucion y seguimiento bajo un mismo lenguaje comercial y tecnico.',
         ]
   const workflowItems = parseEditorialItems(workflowSection?.body)
+  const referenceItems = parseEditorialItems(referencesSection?.body).filter((item) => item.href)
   const fallbackWorkflow = getFallbackWorkflow(language)
   const locationParts = [siteSettings?.addressLine, siteSettings?.city, siteSettings?.country].filter(Boolean)
 
@@ -312,6 +314,35 @@ export function ServicesPageClient({ siteSettings, publication }: ServicesPageCl
           </div>
         </div>
       </section>
+
+      {referenceItems.length > 0 ? (
+        <section className="border-t border-zinc-200">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+            <div className="max-w-2xl">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500">Referencias</p>
+              <h2 className="mt-3 text-2xl font-light tracking-tight sm:text-3xl">Material complementario y enlaces utiles</h2>
+            </div>
+
+            <div className="mt-10 grid gap-4 md:grid-cols-2">
+              {referenceItems.map((item) => (
+                <a
+                  key={`${item.title}-${item.href}`}
+                  href={item.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-start justify-between gap-4 border border-zinc-200 p-5 text-left transition-colors hover:border-zinc-900"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900">{item.title}</p>
+                    {item.description ? <p className="mt-3 text-sm leading-7 text-zinc-600">{item.description}</p> : null}
+                  </div>
+                  <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
     </main>
   )
 }

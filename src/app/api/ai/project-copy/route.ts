@@ -11,6 +11,7 @@ type ProjectCopyResponse = {
   seoTitle?: string
   seoDescription?: string
   seoKeywords?: string
+  projectTags?: string
   mainImageAlt?: string
   mainImageCaption?: string
 }
@@ -45,6 +46,7 @@ function normalizeSuggestion(data: unknown) {
     seoTitle: toValue('seoTitle'),
     seoDescription: toValue('seoDescription'),
     seoKeywords: toValue('seoKeywords'),
+    projectTags: toValue('projectTags'),
     mainImageAlt: toValue('mainImageAlt'),
     mainImageCaption: toValue('mainImageCaption'),
   }
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
       '  "seoTitle": "Titulo SEO breve",',
       '  "seoDescription": "Descripcion SEO de 1 o 2 frases",',
       '  "seoKeywords": "palabras, clave, separadas, por, coma",',
+      '  "projectTags": "#tag-1, #tag-2, #tag-3",',
       '  "mainImageAlt": "Texto alternativo descriptivo de la imagen principal",',
       '  "mainImageCaption": "Caption editorial corto para la imagen principal"',
       '}',
