@@ -82,6 +82,11 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
     return project.fullDescription || project.description
   }, [language, project])
 
+  const getCategoryLabel = useCallback(
+    () => categoryLabels[language]?.[project.category] || project.category,
+    [language, project.category],
+  )
+
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)')
     const update = () => setIsMobile(mediaQuery.matches)
@@ -131,6 +136,26 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   }, [galleryFilters, mediaItems, resolvedActiveGalleryFilter])
   const resolvedCurrentImageIndex = currentImageIndex < filteredMediaItems.length ? currentImageIndex : 0
   const currentMedia = filteredMediaItems[resolvedCurrentImageIndex] || filteredMediaItems[0] || mediaItems[0]
+  const crawlSections = useMemo(
+    () =>
+      [
+        {
+          eyebrow: getCategoryLabel(),
+          title: getTitle(),
+          body: project.description || getFullDescription() || getTitle(),
+          extended: getFullDescription() || project.description || '',
+          meta: [project.location, project.year ? String(project.year) : '', project.area, project.client].filter(Boolean),
+        },
+        {
+          eyebrow: getCategoryLabel(),
+          title: getTitle(),
+          body: project.description || getFullDescription() || getTitle(),
+          extended: getFullDescription() || project.description || '',
+          meta: [project.location, project.year ? String(project.year) : '', project.area, project.client].filter(Boolean),
+        },
+      ],
+    [getCategoryLabel, getFullDescription, getTitle, project.area, project.client, project.description, project.location, project.year],
+  )
 
   const nextImage = useCallback(() => {
     setCurrentImageIndex((prev) => (prev + 1) % Math.max(filteredMediaItems.length, 1))
@@ -148,7 +173,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
     const interval = window.setInterval(() => {
       setIsLoading(true)
       nextImage()
-    }, 9800)
+    }, 13200)
 
     return () => window.clearInterval(interval)
   }, [filteredMediaItems.length, isImageExpanded, nextImage])
@@ -209,7 +234,6 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
     router.push(`/proyectos/${project.id}`)
   }
 
-  const getCategoryLabel = () => categoryLabels[language]?.[project.category] || project.category
   const projectLinks = useMemo(
     () =>
       [
@@ -308,7 +332,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                   initial={{ opacity: 0, scale: 1.03 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 1.01 }}
-                  transition={{ duration: 2.1, ease: 'easeOut' }}
+                  transition={{ duration: 2.8, ease: 'easeOut' }}
                   className="absolute inset-0"
                 >
                   <Image
@@ -358,11 +382,11 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     isMobile ? 'w-full' : 'w-[min(34vw,460px)]'
                   }`}
                 >
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/82 to-transparent" />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/88 to-transparent" />
-                  <div className="relative mb-2 space-y-1">
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/86 to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/92 to-transparent" />
+                  <div className="relative mb-3 space-y-1">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-white/62">
-                      {getCategoryLabel()}
+                      {currentMedia?.category || getCategoryLabel()}
                     </p>
                     <p
                       className="text-xs leading-5 text-white/84 sm:text-sm sm:leading-6"
@@ -373,52 +397,58 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                         overflow: 'hidden',
                       }}
                     >
-                      {project.description || getTitle()}
+                      {currentMedia?.label || project.description || getTitle()}
                     </p>
                   </div>
                   <div className={`relative overflow-hidden ${isMobile ? 'h-20' : 'h-32'}`}>
-                    <motion.div
-                      key={`${project.id}-${language}`}
-                      initial={false}
-                      animate={{ y: ['28%', '-88%'] }}
-                      transition={{ duration: 30, ease: 'linear', repeat: Infinity }}
-                      className={`absolute inset-x-0 bottom-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(18deg)]' : '[transform:perspective(900px)_rotateX(28deg)]'}`}
-                    >
-                      <p className="text-center text-[10px] uppercase tracking-[0.22em] text-white/64 sm:text-[11px]">
-                        {getCategoryLabel()}
-                      </p>
-                      <h2 className="mt-2 text-center text-lg font-light tracking-tight text-white sm:mt-3 sm:text-2xl">
-                        {getTitle()}
-                      </h2>
-                      <p
-                        className="mt-3 text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 5,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
+                    <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
+                      <div
+                        className="will-change-transform"
+                        style={{ animation: `projectDetailCrawl ${isMobile ? 48 : 54}s linear infinite` }}
                       >
-                        {project.description || getFullDescription() || getTitle()}
-                      </p>
-                      <p
-                        className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7"
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 5,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {getFullDescription() || ''}
-                      </p>
-                      <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] uppercase tracking-[0.16em] text-white/58 sm:text-[11px]">
-                        {project.location ? <span>{project.location}</span> : null}
-                        {project.year ? <span>{project.year}</span> : null}
-                        {project.area ? <span>{project.area}</span> : null}
-                        {project.client ? <span>{project.client}</span> : null}
+                      {crawlSections.map((section, index) => (
+                        <div key={`${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
+                          <p className="text-center text-[10px] uppercase tracking-[0.22em] text-white/64 sm:text-[11px]">
+                            {section.eyebrow}
+                          </p>
+                          <h2 className="mt-2 text-center text-lg font-light tracking-tight text-white sm:mt-3 sm:text-2xl">
+                            {section.title}
+                          </h2>
+                          <p
+                            className="mt-3 text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
+                            style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 5,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {section.body}
+                          </p>
+                          {section.extended ? (
+                            <p
+                              className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7"
+                              style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 5,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {section.extended}
+                            </p>
+                          ) : null}
+                          {section.meta.length > 0 ? (
+                            <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] uppercase tracking-[0.16em] text-white/58 sm:text-[11px]">
+                              {section.meta.map((item) => (
+                                <span key={`${index}-${item}`}>{item}</span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
                       </div>
-                    </motion.div>
+                    </div>
                   </div>
                   <div className="relative mt-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-white/66 sm:mt-3 sm:text-[11px]">
                     <span>{shareCopy.open}</span>
@@ -659,6 +689,17 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
           </div>
         </div>
       </div>
+      <style jsx>{`
+        @keyframes projectDetailCrawl {
+          0% {
+            transform: translate3d(0, 16%, 0);
+          }
+
+          100% {
+            transform: translate3d(0, -58%, 0);
+          }
+        }
+      `}</style>
       <AnimatePresence>
         {isImageExpanded ? (
           <motion.div
