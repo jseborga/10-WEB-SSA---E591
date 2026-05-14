@@ -1,9 +1,10 @@
 'use client'
 
 import { FormEvent, useMemo, useState } from 'react'
-import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone } from 'lucide-react'
+import { ArrowUpRight, Facebook, Instagram, Linkedin, Mail, MapPin, Phone } from 'lucide-react'
 import { toast } from 'sonner'
 import { sendAnalyticsEvent } from '@/lib/browser-analytics'
+import { findEditorialSection, parseEditorialItems, parseEditorialSections, splitParagraphs } from '@/lib/editorial-sections'
 import { useLanguage } from '@/lib/language-context'
 import { PublicPublication, PublicSiteSettings, getLocalizedPublicationValue } from '@/lib/public-site'
 import { SiteHeader } from '@/components/site-header'
@@ -80,6 +81,15 @@ export function ContactPageClient({ siteSettings, publication }: ContactPageClie
   const title = getLocalizedPublicationValue(publication, language, 'title') || contactCopy.title
   const excerpt = getLocalizedPublicationValue(publication, language, 'excerpt') || contactCopy.intro
   const body = getLocalizedPublicationValue(publication, language, 'content')
+  const sections = parseEditorialSections(body)
+  const introSection = findEditorialSection(sections, ['introduccion', 'intro', 'presentacion', 'overview'])
+  const coverageSection = findEditorialSection(sections, ['cobertura', 'ubicacion', 'alcance', 'coverage'])
+  const formNoteSection = findEditorialSection(sections, ['nota del formulario', 'formulario', 'mensaje', 'form note'])
+  const referencesSection = findEditorialSection(sections, ['referencias', 'enlaces', 'links', 'references'])
+  const introParagraphs = splitParagraphs(introSection?.body)
+  const coverageParagraphs = splitParagraphs(coverageSection?.body)
+  const formNoteParagraphs = splitParagraphs(formNoteSection?.body)
+  const referenceItems = parseEditorialItems(referencesSection?.body).filter((item) => item.href)
   const socialLinks = [
     { label: 'Instagram', href: siteSettings?.instagramUrl?.trim() || '', icon: Instagram },
     { label: 'Facebook', href: siteSettings?.facebookUrl?.trim() || '', icon: Facebook },
@@ -132,7 +142,9 @@ export function ContactPageClient({ siteSettings, publication }: ContactPageClie
             <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500">{t.nav.contact || 'Contacto'}</p>
             <h1 className="mt-3 text-3xl font-light tracking-tight sm:text-5xl">{title}</h1>
             <p className="mt-5 max-w-xl text-base leading-8 text-zinc-600">{excerpt}</p>
-            {body ? <p className="mt-6 text-sm leading-7 text-zinc-500">{body}</p> : null}
+            {introParagraphs.slice(1).map((paragraph) => (
+              <p key={paragraph} className="mt-6 text-sm leading-7 text-zinc-500">{paragraph}</p>
+            ))}
 
             <div className="mt-10 space-y-5">
               {siteSettings?.email ? (
@@ -186,9 +198,50 @@ export function ContactPageClient({ siteSettings, publication }: ContactPageClie
                 })}
               </div>
             ) : null}
+
+            {coverageParagraphs.length > 0 ? (
+              <div className="mt-8 rounded-[28px] border border-zinc-200 p-5">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Cobertura</p>
+                <div className="mt-4 space-y-3">
+                  {coverageParagraphs.map((paragraph) => (
+                    <p key={paragraph} className="text-sm leading-7 text-zinc-600">{paragraph}</p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {referenceItems.length > 0 ? (
+              <div className="mt-8 space-y-3">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Referencias</p>
+                <div className="space-y-3">
+                  {referenceItems.map((item) => (
+                    <a
+                      key={`${item.title}-${item.href}`}
+                      href={item.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-start justify-between gap-4 rounded-[24px] border border-zinc-200 px-5 py-4 text-left transition-colors hover:border-zinc-900"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900">{item.title}</p>
+                        {item.description ? <p className="mt-2 text-sm leading-7 text-zinc-600">{item.description}</p> : null}
+                      </div>
+                      <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-[32px] border border-zinc-200 p-6 sm:p-8">
+            {formNoteParagraphs.length > 0 ? (
+              <div className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                {formNoteParagraphs.map((paragraph) => (
+                  <p key={paragraph} className="text-sm leading-7 text-zinc-600">{paragraph}</p>
+                ))}
+              </div>
+            ) : null}
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-2 text-sm text-zinc-600">

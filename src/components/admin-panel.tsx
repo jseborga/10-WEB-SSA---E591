@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 import { type MenuItemConfig, parseMenuConfig, serializeMenuConfig, buildPublicationHref } from '@/lib/menu-config'
-import { findEditorialSection, parseEditorialSections } from '@/lib/editorial-sections'
+import { findEditorialSection, parseEditorialItems, parseEditorialMediaUrls, parseEditorialProfiles, parseEditorialSections } from '@/lib/editorial-sections'
 import { formatCategoryLabel, formatTagLabel, getProjectCategories, isVideoUrl, parseLineList, parseProjectMediaAnnotations, parseTagList, parseUrlList } from '@/lib/public-site'
 import { getSeoDescription, getSeoTitle, getSiteUrl } from '@/lib/seo'
 
@@ -493,6 +493,20 @@ type ProjectMediaAnnotationDraft = {
   tags: string
 }
 
+type EditorialItemDraft = {
+  title: string
+  description: string
+  href: string
+}
+
+type EditorialProfileDraft = {
+  title: string
+  subtitle: string
+  description: string
+  href: string
+  image: string
+}
+
 type PublicationSectionField = {
   key: string
   title: string
@@ -642,6 +656,41 @@ const servicesPublicationSections: PublicationSectionField[] = [
   },
 ]
 
+const contactPublicationSections: PublicationSectionField[] = [
+  {
+    key: 'intro',
+    title: 'Introduccion',
+    aliases: ['introduccion', 'intro', 'presentacion', 'overview'],
+    placeholder: 'Explica brevemente como debe contactarse el cliente y que tipo de consultas o proyectos atiende la empresa.',
+    help: 'Es la apertura principal de la pagina de contacto.',
+    rows: 3,
+  },
+  {
+    key: 'coverage',
+    title: 'Cobertura',
+    aliases: ['cobertura', 'ubicacion', 'alcance', 'coverage'],
+    placeholder: 'Detalla ciudades, alcance geografico o tipo de cobertura operativa.',
+    help: 'Sirve para explicar donde atiende la empresa o en que contexto opera.',
+    rows: 3,
+  },
+  {
+    key: 'form-note',
+    title: 'Nota del formulario',
+    aliases: ['nota del formulario', 'formulario', 'mensaje', 'form note'],
+    placeholder: 'Aclara que datos conviene enviar en el formulario y que tipo de respuesta puede esperar la persona.',
+    help: 'Se muestra como apoyo al formulario y ayuda a guiar el mensaje del cliente.',
+    rows: 4,
+  },
+  {
+    key: 'references',
+    title: 'Referencias',
+    aliases: ['referencias', 'enlaces', 'links', 'references'],
+    placeholder: 'Ubicacion o mapa | https://... | Enlace externo, referencia o canal adicional',
+    help: 'Usa una linea por referencia con formato Titulo | URL | nota corta.',
+    rows: 4,
+  },
+]
+
 function normalizePublicationSlug(value: string) {
   return value
     .normalize('NFD')
@@ -661,10 +710,14 @@ function getPublicationKind(value: string) {
     return 'services' as const
   }
 
+  if (['contacto', 'contact', 'contato'].includes(normalized)) {
+    return 'contact' as const
+  }
+
   return 'generic' as const
 }
 
-function getPublicationBlueprint(kind: 'studio' | 'services'): PublicationBlueprint {
+function getPublicationBlueprint(kind: 'studio' | 'services' | 'contact'): PublicationBlueprint {
   if (kind === 'studio') {
     return {
       slug: 'estudio',
@@ -698,6 +751,31 @@ function getPublicationBlueprint(kind: 'studio' | 'services'): PublicationBluepr
       seoTitle: 'Nosotros | SSA Ingenieria',
       seoDescription: 'Conoce la trayectoria, el equipo tecnico, el staff y los partners con los que trabaja SSA Ingenieria.',
       seoKeywords: 'ssa ingenieria, nosotros, equipo tecnico, staff, partners, empresa de ingenieria',
+    }
+  }
+
+  if (kind === 'contact') {
+    return {
+      slug: 'contacto',
+      title: 'Contacto',
+      category: 'informacion',
+      excerpt: 'Canales directos, formulario y cobertura para iniciar una conversacion comercial o tecnica.',
+      content: [
+        '## Introduccion',
+        'Explica en una o dos frases como debe contactarse el cliente y que tipo de consultas atiende la empresa.',
+        '',
+        '## Cobertura',
+        'Detalla ciudades, cobertura geografica, tipo de proyecto o alcance operativo.',
+        '',
+        '## Nota del formulario',
+        'Indica que datos conviene compartir para recibir una respuesta mas precisa: tipo de proyecto, ubicacion, alcance o plazo.',
+        '',
+        '## Referencias',
+        'Ubicacion o mapa | https://example.com | Link a una ubicacion, agenda o referencia externa.',
+      ].join('\n'),
+      seoTitle: 'Contacto | SSA Ingenieria',
+      seoDescription: 'Contacta a SSA Ingenieria para proyectos de construccion, supervision, arquitectura, ingenierias y consultoria tecnica.',
+      seoKeywords: 'contacto ssa ingenieria, cotizacion, construccion, supervision, arquitectura, ingenieria',
     }
   }
 
@@ -790,8 +868,16 @@ function mergeTagText(currentValue: string, nextValue: string) {
   return merged.map((tag) => formatTagLabel(tag)).filter(Boolean).join(', ')
 }
 
-function getPublicationSectionFields(kind: 'studio' | 'services') {
-  return kind === 'studio' ? studioPublicationSections : servicesPublicationSections
+function getPublicationSectionFields(kind: 'studio' | 'services' | 'contact') {
+  if (kind === 'studio') {
+    return studioPublicationSections
+  }
+
+  if (kind === 'services') {
+    return servicesPublicationSections
+  }
+
+  return contactPublicationSections
 }
 
 function matchesPublicationSectionAlias(title: string, aliases: string[]) {
@@ -801,7 +887,7 @@ function matchesPublicationSectionAlias(title: string, aliases: string[]) {
   return normalizedAliases.includes(normalizedTitle) || normalizedAliases.some((alias) => normalizedTitle.includes(alias) || alias.includes(normalizedTitle))
 }
 
-function getGuidedPublicationSectionState(content: string | null | undefined, kind: 'studio' | 'services') {
+function getGuidedPublicationSectionState(content: string | null | undefined, kind: 'studio' | 'services' | 'contact') {
   const fields = getPublicationSectionFields(kind)
   const sections = parseEditorialSections(content)
   const guidedSections = fields.map((field) => ({
@@ -841,7 +927,7 @@ function serializeGuidedPublicationSections(
 
 function updateGuidedPublicationSectionContent(
   content: string | null | undefined,
-  kind: 'studio' | 'services',
+  kind: 'studio' | 'services' | 'contact',
   key: string,
   body: string,
 ) {
@@ -852,7 +938,7 @@ function updateGuidedPublicationSectionContent(
 
 function updateGuidedPublicationAdditionalContent(
   content: string | null | undefined,
-  kind: 'studio' | 'services',
+  kind: 'studio' | 'services' | 'contact',
   additionalContent: string,
 ) {
   const { guidedSections } = getGuidedPublicationSectionState(content, kind)
@@ -1339,6 +1425,235 @@ function ProjectMediaAnnotationList({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function serializeEditorialItemDrafts(items: EditorialItemDraft[], includeHref = true) {
+  return items
+    .map((item) => {
+      const parts = [item.title.trim()]
+
+      if (includeHref && item.href.trim()) {
+        parts.push(item.href.trim())
+      }
+
+      if (item.description.trim()) {
+        parts.push(item.description.trim())
+      }
+
+      return parts.filter(Boolean).join(' | ')
+    })
+    .filter(Boolean)
+    .join('\n')
+}
+
+function parseEditorialItemDrafts(value: string | null | undefined) {
+  return parseEditorialItems(value).map<EditorialItemDraft>((item) => ({
+    title: item.title || '',
+    description: item.description || '',
+    href: item.href || '',
+  }))
+}
+
+function serializeEditorialProfileDrafts(items: EditorialProfileDraft[]) {
+  return items
+    .map((item) =>
+      [item.title.trim(), item.subtitle.trim(), item.image.trim(), item.description.trim(), item.href.trim()]
+        .filter(Boolean)
+        .join(' | '),
+    )
+    .filter(Boolean)
+    .join('\n')
+}
+
+function parseEditorialProfileDrafts(value: string | null | undefined) {
+  return parseEditorialProfiles(value).map<EditorialProfileDraft>((item) => ({
+    title: item.title || '',
+    subtitle: item.subtitle || '',
+    description: item.description || '',
+    href: item.href || '',
+    image: item.image || '',
+  }))
+}
+
+function EditorialItemListEditor({
+  items,
+  allowHref = false,
+  titlePlaceholder,
+  descriptionPlaceholder,
+  hrefPlaceholder,
+  addLabel,
+  onChange,
+}: {
+  items: EditorialItemDraft[]
+  allowHref?: boolean
+  titlePlaceholder: string
+  descriptionPlaceholder: string
+  hrefPlaceholder?: string
+  addLabel: string
+  onChange: (items: EditorialItemDraft[]) => void
+}) {
+  const safeItems = items.length > 0 ? items : [{ title: '', description: '', href: '' }]
+
+  return (
+    <div className="space-y-3">
+      {safeItems.map((item, index) => (
+        <div key={`${item.title}-${index}`} className="rounded-lg border border-zinc-200 bg-white p-3 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={item.title}
+              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, title: event.target.value } : entry)))}
+              placeholder={titlePlaceholder}
+              className="text-sm"
+            />
+            {allowHref ? (
+              <Input
+                value={item.href}
+                onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, href: event.target.value } : entry)))}
+                placeholder={hrefPlaceholder || 'https://...'}
+                className="text-sm"
+              />
+            ) : null}
+          </div>
+          <Textarea
+            value={item.description}
+            onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, description: event.target.value } : entry)))}
+            rows={3}
+            placeholder={descriptionPlaceholder}
+            className="text-sm"
+          />
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onChange(safeItems.filter((_, entryIndex) => entryIndex !== index))}>
+              Quitar
+            </Button>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" className="text-xs" onClick={() => onChange([...safeItems, { title: '', description: '', href: '' }])}>
+        <Plus className="mr-1 h-4 w-4" />
+        {addLabel}
+      </Button>
+    </div>
+  )
+}
+
+function EditorialProfileListEditor({
+  items,
+  addLabel,
+  titlePlaceholder,
+  subtitlePlaceholder,
+  descriptionPlaceholder,
+  imagePlaceholder,
+  hrefPlaceholder,
+  onChange,
+}: {
+  items: EditorialProfileDraft[]
+  addLabel: string
+  titlePlaceholder: string
+  subtitlePlaceholder: string
+  descriptionPlaceholder: string
+  imagePlaceholder: string
+  hrefPlaceholder: string
+  onChange: (items: EditorialProfileDraft[]) => void
+}) {
+  const safeItems = items.length > 0 ? items : [{ title: '', subtitle: '', description: '', href: '', image: '' }]
+
+  return (
+    <div className="space-y-3">
+      {safeItems.map((item, index) => (
+        <div key={`${item.title}-${index}`} className="rounded-lg border border-zinc-200 bg-white p-3 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={item.title}
+              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, title: event.target.value } : entry)))}
+              placeholder={titlePlaceholder}
+              className="text-sm"
+            />
+            <Input
+              value={item.subtitle}
+              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, subtitle: event.target.value } : entry)))}
+              placeholder={subtitlePlaceholder}
+              className="text-sm"
+            />
+          </div>
+          <Textarea
+            value={item.description}
+            onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, description: event.target.value } : entry)))}
+            rows={3}
+            placeholder={descriptionPlaceholder}
+            className="text-sm"
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              value={item.image}
+              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, image: event.target.value } : entry)))}
+              placeholder={imagePlaceholder}
+              className="text-sm"
+            />
+            <Input
+              value={item.href}
+              onChange={(event) => onChange(safeItems.map((entry, entryIndex) => (entryIndex === index ? { ...entry, href: event.target.value } : entry)))}
+              placeholder={hrefPlaceholder}
+              className="text-sm"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onChange(safeItems.filter((_, entryIndex) => entryIndex !== index))}>
+              Quitar
+            </Button>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" className="text-xs" onClick={() => onChange([...safeItems, { title: '', subtitle: '', description: '', href: '', image: '' }])}>
+        <Plus className="mr-1 h-4 w-4" />
+        {addLabel}
+      </Button>
+    </div>
+  )
+}
+
+function EditorialMediaUrlListEditor({
+  urls,
+  addLabel,
+  placeholder,
+  onChange,
+}: {
+  urls: string[]
+  addLabel: string
+  placeholder: string
+  onChange: (urls: string[]) => void
+}) {
+  const safeUrls = urls.length > 0 ? urls : ['']
+
+  return (
+    <div className="space-y-3">
+      {safeUrls.map((url, index) => (
+        <div key={`${url}-${index}`} className="rounded-lg border border-zinc-200 bg-white p-3 space-y-3">
+          <Input
+            value={url}
+            onChange={(event) => onChange(safeUrls.map((entry, entryIndex) => (entryIndex === index ? event.target.value : entry)))}
+            placeholder={placeholder}
+            className="text-sm"
+          />
+          {url.trim() ? (
+            <div className="overflow-hidden rounded-lg bg-zinc-100">
+              <div className="relative aspect-[4/3]">
+                <img src={url} alt={`Media ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+              </div>
+            </div>
+          ) : null}
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" className="h-8 px-2 text-[11px]" onClick={() => onChange(safeUrls.filter((_, entryIndex) => entryIndex !== index))}>
+              Quitar
+            </Button>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" className="text-xs" onClick={() => onChange([...safeUrls, ''])}>
+        <Plus className="mr-1 h-4 w-4" />
+        {addLabel}
+      </Button>
     </div>
   )
 }
@@ -2055,7 +2370,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       .map((line) => line.trim())
       .filter(Boolean)
 
-  const handleApplyPublicationBlueprint = (kind: 'studio' | 'services') => {
+  const handleApplyPublicationBlueprint = (kind: 'studio' | 'services' | 'contact') => {
     const blueprint = getPublicationBlueprint(kind)
 
     setPublicationForm((current) => ({
@@ -2071,7 +2386,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       showInMenu: true,
     }))
 
-    toast.success(kind === 'studio' ? 'Plantilla de Nosotros cargada' : 'Plantilla de Servicios cargada')
+    toast.success(kind === 'studio' ? 'Plantilla de Nosotros cargada' : kind === 'services' ? 'Plantilla de Servicios cargada' : 'Plantilla de Contacto cargada')
   }
 
   const handleAddMenuItem = () => {
@@ -7714,9 +8029,17 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
 
       {/* Publication Dialog */}
       <Dialog open={showPublicationDialog} onOpenChange={setShowPublicationDialog}>
-        <DialogContent className="max-w-md sm:max-w-2xl">
-          <DialogHeader><DialogTitle>{editingPublication ? 'Editar pagina' : 'Nueva pagina'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-1">
+        <DialogContent hideOverlay showCloseButton={false} className="inset-0 left-0 top-0 h-[100dvh] w-[100vw] max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 shadow-none data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 sm:max-w-none">
+          <div className="flex h-full flex-col bg-white">
+          <DialogHeader className="border-b border-zinc-200 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <DialogTitle>{editingPublication ? 'Editar pagina' : 'Nueva pagina'}</DialogTitle>
+              <p className="text-xs text-zinc-500">
+                {publicationHrefPreview}
+              </p>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 py-4 max-h-[calc(100dvh-144px)] overflow-y-auto px-5 pr-4 sm:px-6">
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -7732,6 +8055,9 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                   <Button type="button" variant="outline" className="text-xs" onClick={() => handleApplyPublicationBlueprint('services')}>
                     Plantilla Servicios
                   </Button>
+                  <Button type="button" variant="outline" className="text-xs" onClick={() => handleApplyPublicationBlueprint('contact')}>
+                    Plantilla Contacto
+                  </Button>
                   <Button type="button" className="bg-zinc-900 text-xs hover:bg-zinc-800" onClick={() => void handleAssistPublicationWithAi()} disabled={publicationAiLoading}>
                     {publicationAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                     Mejorar con IA
@@ -7741,12 +8067,14 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               {publicationBlueprint ? (
                 <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-xs leading-6 text-zinc-600">
                   <p className="font-medium text-zinc-800">
-                    {publicationKind === 'studio' ? 'Guia para Nosotros' : 'Guia para Servicios'}
+                    {publicationKind === 'studio' ? 'Guia para Nosotros' : publicationKind === 'services' ? 'Guia para Servicios' : 'Guia para Contacto'}
                   </p>
                   <p className="mt-1">
                     {publicationKind === 'studio'
                       ? 'Formatos utiles: `Nombre | Cargo | /foto.jpg | descripcion | link` para staff, `Partner | link | descripcion | /logo.jpg` para aliados y `Titulo | https://... | nota` para referencias. Las fotos de grupo pueden ir en `## Fotos de grupo`, una URL por linea.'
-                      : 'Usa secciones `## Construccion`, `## Consultoria`, `## Ingenierias`, `## Supervision y fiscalizacion`, `## Proceso` y `## Referencias`. En `## Proceso` puedes usar `Paso | descripcion`.'}
+                      : publicationKind === 'services'
+                        ? 'Usa secciones `## Construccion`, `## Consultoria`, `## Ingenierias`, `## Supervision y fiscalizacion`, `## Proceso` y `## Referencias`. En `## Proceso` puedes usar `Paso | descripcion`.'
+                        : 'Usa secciones `## Introduccion`, `## Cobertura`, `## Nota del formulario` y `## Referencias`. Las referencias pueden ir como `Titulo | https://... | nota`.'}
                   </p>
                 </div>
               ) : null}
@@ -7890,21 +8218,92 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       <p className="text-xs font-medium text-zinc-800">{section.title}</p>
                       <p className="mt-1 text-[11px] leading-5 text-zinc-500">{section.help}</p>
                     </div>
-                    <Textarea
-                      value={section.body}
-                      onChange={(event) =>
-                        setPublicationForm((current) => ({
-                          ...current,
-                          content:
-                            publicationKind === 'generic'
-                              ? current.content
-                              : updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, event.target.value),
-                        }))
-                      }
-                      rows={section.rows || 4}
-                      placeholder={section.placeholder}
-                      className="text-sm"
-                    />
+                    {publicationKind === 'studio' && section.key === 'team' ? (
+                      <EditorialItemListEditor
+                        items={parseEditorialItemDrafts(section.body)}
+                        titlePlaceholder="Especialidad o area"
+                        descriptionPlaceholder="Describe el rol, alcance o capacidad tecnica."
+                        addLabel="Agregar especialidad"
+                        onChange={(items) =>
+                          setPublicationForm((current) => ({
+                            ...current,
+                            content: updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, serializeEditorialItemDrafts(items, false)),
+                          }))
+                        }
+                      />
+                    ) : publicationKind === 'studio' && (section.key === 'staff' || section.key === 'partners') ? (
+                      <EditorialProfileListEditor
+                        items={parseEditorialProfileDrafts(section.body)}
+                        addLabel={section.key === 'staff' ? 'Agregar persona' : 'Agregar partner'}
+                        titlePlaceholder={section.key === 'staff' ? 'Nombre y apellido' : 'Nombre del partner'}
+                        subtitlePlaceholder={section.key === 'staff' ? 'Cargo o rol' : 'Especialidad'}
+                        descriptionPlaceholder={section.key === 'staff' ? 'Perfil breve y rol dentro de la empresa.' : 'Describe el aporte o especialidad del partner.'}
+                        imagePlaceholder={section.key === 'staff' ? '/api/media/staff-01.jpg' : '/api/media/partner-logo.jpg'}
+                        hrefPlaceholder={section.key === 'staff' ? 'https://linkedin.com/...' : 'https://partner.com'}
+                        onChange={(items) =>
+                          setPublicationForm((current) => ({
+                            ...current,
+                            content: updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, serializeEditorialProfileDrafts(items)),
+                          }))
+                        }
+                      />
+                    ) : publicationKind === 'studio' && section.key === 'group-photos' ? (
+                      <EditorialMediaUrlListEditor
+                        urls={parseEditorialMediaUrls(section.body)}
+                        addLabel="Agregar foto"
+                        placeholder="/api/media/equipo-01.jpg"
+                        onChange={(urls) =>
+                          setPublicationForm((current) => ({
+                            ...current,
+                            content: updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, urls.filter(Boolean).join('\n')),
+                          }))
+                        }
+                      />
+                    ) : (publicationKind === 'studio' || publicationKind === 'services' || publicationKind === 'contact') && section.key === 'references' ? (
+                      <EditorialItemListEditor
+                        items={parseEditorialItemDrafts(section.body)}
+                        allowHref
+                        titlePlaceholder="Titulo de la referencia"
+                        hrefPlaceholder="https://..."
+                        descriptionPlaceholder="Nota corta o contexto de este enlace."
+                        addLabel="Agregar referencia"
+                        onChange={(items) =>
+                          setPublicationForm((current) => ({
+                            ...current,
+                            content: updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, serializeEditorialItemDrafts(items, true)),
+                          }))
+                        }
+                      />
+                    ) : publicationKind === 'services' && section.key === 'workflow' ? (
+                      <EditorialItemListEditor
+                        items={parseEditorialItemDrafts(section.body)}
+                        titlePlaceholder="Paso"
+                        descriptionPlaceholder="Describe brevemente esta etapa."
+                        addLabel="Agregar paso"
+                        onChange={(items) =>
+                          setPublicationForm((current) => ({
+                            ...current,
+                            content: updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, serializeEditorialItemDrafts(items, false)),
+                          }))
+                        }
+                      />
+                    ) : (
+                      <Textarea
+                        value={section.body}
+                        onChange={(event) =>
+                          setPublicationForm((current) => ({
+                            ...current,
+                            content:
+                              publicationKind === 'generic'
+                                ? current.content
+                                : updateGuidedPublicationSectionContent(current.content, publicationKind, section.key, event.target.value),
+                          }))
+                        }
+                        rows={section.rows || 4}
+                        placeholder={section.placeholder}
+                        className="text-sm"
+                      />
+                    )}
                   </div>
                 ))}
                 <div className="rounded-lg border border-dashed border-zinc-200 bg-white px-3 py-3">
@@ -7991,11 +8390,12 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-zinc-200 px-5 py-4 sm:px-6">
             <Button variant="outline" onClick={() => setShowPublicationDialog(false)} className="text-sm">{t.admin.cancel}</Button>
             <Button onClick={() => void handleSavePublication(false)} disabled={!publicationForm.title || loading || Boolean(uploadingField)} variant="outline" className="text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar borrador'}</Button>
             <Button onClick={() => void handleSavePublication(true)} disabled={!publicationForm.title || loading || Boolean(uploadingField)} className="bg-zinc-900 hover:bg-zinc-800 text-sm"><Save className="w-4 h-4 mr-1" />{loading ? t.admin.saving : 'Guardar y publicar'}</Button>
           </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </>
