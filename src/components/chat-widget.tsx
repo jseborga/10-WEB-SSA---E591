@@ -51,6 +51,8 @@ const DEFAULT_CHAT_CONFIG: ChatConfig = {
 interface ChatWidgetProps {
   buttonTone?: 'light' | 'dark'
   guideMessages?: string[]
+  brandingIconUrl?: string
+  companyName?: string
 }
 
 function getSavedSession() {
@@ -126,7 +128,12 @@ function getGuideActions(language: string) {
   ]
 }
 
-export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidgetProps) {
+export function ChatWidget({
+  buttonTone = 'dark',
+  guideMessages = [],
+  brandingIconUrl,
+  companyName,
+}: ChatWidgetProps) {
   const router = useRouter()
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
@@ -153,6 +160,8 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
   const isLightTone = buttonTone === 'light'
   const normalizedGuideMessages = useMemo(() => normalizeGuideMessages(guideMessages), [guideMessages])
   const guideActions = useMemo(() => getGuideActions(language), [language])
+  const resolvedCompanyName = companyName?.trim() || chatConfig?.companyName || DEFAULT_CHAT_CONFIG.companyName
+  const resolvedBrandingIconUrl = brandingIconUrl?.trim() || ''
   const activeGuideMessage =
     normalizedGuideMessages.length > 0 ? normalizedGuideMessages[activeGuideIndex % normalizedGuideMessages.length] || '' : ''
   const showGuideTeaser = !isOpen && !hasOpened && normalizedGuideMessages.length > 0
@@ -552,16 +561,41 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
         className={floatingButtonClass}
         aria-label="Chat"
       >
-        {isOpen ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
+        {isOpen ? (
+          <X className="h-5 w-5" />
+        ) : resolvedBrandingIconUrl ? (
+          <span className="relative inline-flex h-9 w-9 items-center justify-center">
+            <img
+              src={resolvedBrandingIconUrl}
+              alt={resolvedCompanyName}
+              className="h-9 w-9 rounded-full bg-white/92 object-contain p-1"
+            />
+            <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-zinc-950 text-white shadow-sm">
+              <MessageCircle className="h-2.5 w-2.5" />
+            </span>
+          </span>
+        ) : (
+          <MessageCircle className="h-5 w-5" />
+        )}
       </button>
 
       {/* Chat window */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 flex max-h-[min(78vh,42rem)] w-[calc(100%-2rem)] flex-col overflow-hidden rounded-[24px] border border-white/45 bg-white/74 shadow-2xl backdrop-blur-xl sm:bottom-24 sm:right-6 sm:w-80 md:w-96">
+        <div className="fixed bottom-20 right-4 z-50 flex max-h-[min(78vh,42rem)] w-[calc(100%-2rem)] flex-col overflow-hidden rounded-[24px] border border-white/40 bg-white/48 shadow-2xl backdrop-blur-xl sm:bottom-24 sm:right-6 sm:w-80 md:w-96">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-200/70 bg-zinc-950/82 px-4 py-3 text-white backdrop-blur-xl">
+          <div className="flex items-center justify-between border-b border-white/16 bg-zinc-950/64 px-4 py-3 text-white backdrop-blur-xl">
             <div className="flex items-center gap-2">
-              <h3 className="font-medium text-sm">{t.chat.title}</h3>
+              {resolvedBrandingIconUrl ? (
+                <img
+                  src={resolvedBrandingIconUrl}
+                  alt={resolvedCompanyName}
+                  className="h-8 w-8 rounded-full border border-white/20 bg-white/92 object-contain p-1"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <p className="truncate text-[10px] uppercase tracking-[0.18em] text-white/58">{resolvedCompanyName}</p>
+                <h3 className="truncate text-sm font-medium">{t.chat.title}</h3>
+              </div>
               {chatConfig?.enabled && (
                 <span className="flex items-center gap-1 text-xs bg-green-600 px-2 py-0.5 rounded-full">
                   <Bot className="w-3 h-3" /> IA
@@ -575,10 +609,10 @@ export function ChatWidget({ buttonTone = 'dark', guideMessages = [] }: ChatWidg
           <div className="flex min-h-0 flex-1 flex-col">
             {!isJoined ? (
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                <p className="text-sm text-zinc-600">{getWelcomeMessage()}</p>
+                <p className="text-sm text-zinc-700">{getWelcomeMessage()}</p>
                 <div className="space-y-2">
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">guia rapida</p>
-                  <p className="text-xs leading-5 text-zinc-500">
+                  <p className="text-xs leading-5 text-zinc-600">
                     {language === 'en'
                       ? 'Use this as a guided tour to understand the company, review services, inspect projects, and move to the right next step.'
                       : language === 'pt'

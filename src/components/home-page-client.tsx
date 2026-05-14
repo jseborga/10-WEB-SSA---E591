@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { useLanguage } from '@/lib/language-context'
 import { PublicProject, PublicSiteSettings, isVideoUrl, parseUrlList } from '@/lib/public-site'
@@ -38,11 +40,21 @@ function getUniqueMessages(messages: string[]) {
   return Array.from(new Set(messages.map((message) => message.trim()).filter(Boolean)))
 }
 
+function isValidMediaUrl(value: string) {
+  return value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://')
+}
+
+interface HeroItem {
+  url: string
+  projectId?: string | null
+}
+
 export default function HomePageClient({
   initialProjects = [],
   siteSettings,
   aiHeroMessages = [],
 }: HomePageClientProps) {
+  const router = useRouter()
   const { language } = useLanguage()
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
@@ -57,27 +69,52 @@ export default function HomePageClient({
     return () => mediaQuery.removeEventListener('change', update)
   }, [])
 
-  const desktopImages = useMemo(() => {
+  const desktopImages = useMemo<HeroItem[]>(() => {
     const configuredDesktop = parseUrlList(siteSettings?.heroImages)
     const projectImages = initialProjects
       .filter((project) => project.showOnHomepage)
-      .map((project) => project.mainImage?.trim() || '')
-      .filter((value) => value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://'))
+      .map((project) => ({
+        url: project.mainImage?.trim() || '',
+        projectId: project.id,
+      }))
+      .filter((item) => isValidMediaUrl(item.url))
+    const configuredProjectLookup = new Map(projectImages.map((item) => [item.url, item.projectId]))
+    const configuredItems = configuredDesktop.map((url) => ({
+      url,
+      projectId: configuredProjectLookup.get(url) || null,
+    }))
+    const uniqueProjectItems = projectImages.filter(
+      (item, index) =>
+        projectImages.findIndex((candidate) => candidate.url === item.url) === index &&
+        !configuredDesktop.includes(item.url),
+    )
 
-    const uniqueProjectImages = projectImages.filter((image, index) => projectImages.indexOf(image) === index && !configuredDesktop.includes(image))
-    return shuffleItems([...configuredDesktop, ...uniqueProjectImages])
+    return shuffleItems([...configuredItems, ...uniqueProjectItems])
   }, [initialProjects, siteSettings?.heroImages])
 
-  const mobileImages = useMemo(() => {
+  const mobileImages = useMemo<HeroItem[]>(() => {
     const configuredMobile = parseUrlList(siteSettings?.heroImagesMobile)
     const projectImagesMobile = initialProjects
       .filter((project) => project.showOnHomepage)
-      .map((project) => (project.mainImageMobile || project.mainImage || '').trim())
-      .filter((value) => value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://'))
+      .map((project) => ({
+        url: (project.mainImageMobile || project.mainImage || '').trim(),
+        projectId: project.id,
+      }))
+      .filter((item) => isValidMediaUrl(item.url))
 
     if (configuredMobile.length > 0) {
-      const uniqueProjectImages = projectImagesMobile.filter((image, index) => projectImagesMobile.indexOf(image) === index && !configuredMobile.includes(image))
-      return shuffleItems([...configuredMobile, ...uniqueProjectImages])
+      const configuredProjectLookup = new Map(projectImagesMobile.map((item) => [item.url, item.projectId]))
+      const configuredItems = configuredMobile.map((url) => ({
+        url,
+        projectId: configuredProjectLookup.get(url) || null,
+      }))
+      const uniqueProjectItems = projectImagesMobile.filter(
+        (item, index) =>
+          projectImagesMobile.findIndex((candidate) => candidate.url === item.url) === index &&
+          !configuredMobile.includes(item.url),
+      )
+
+      return shuffleItems([...configuredItems, ...uniqueProjectItems])
     }
 
     return projectImagesMobile.length > 0 ? shuffleItems(projectImagesMobile) : desktopImages
@@ -85,7 +122,7 @@ export default function HomePageClient({
 
   const heroImages = isMobile ? mobileImages : desktopImages
   const resolvedHeroIndex = heroImages.length > 0 ? activeHeroIndex % heroImages.length : 0
-  const activeHeroItem = heroImages[resolvedHeroIndex] || ''
+  const activeHeroItem = heroImages[resolvedHeroIndex] || null
   const chatGuideMessages = useMemo(
     () =>
       getUniqueMessages([
@@ -101,9 +138,12 @@ export default function HomePageClient({
   const advanceHero = () => {
     setActiveHeroIndex((current) => (current + 1) % Math.max(heroImages.length, 1))
   }
+  const rewindHero = () => {
+    setActiveHeroIndex((current) => (current - 1 + Math.max(heroImages.length, 1)) % Math.max(heroImages.length, 1))
+  }
 
   useEffect(() => {
-    if (heroImages.length <= 1 || !activeHeroItem || isVideoUrl(activeHeroItem)) {
+    if (heroImages.length <= 1 || !activeHeroItem || isVideoUrl(activeHeroItem.url)) {
       return
     }
 
@@ -128,6 +168,8 @@ export default function HomePageClient({
   const activeHeroOpacity = heroImageTreatment === 'original' ? 1 : heroImageOpacity / 100
   const activeHeroGrayscale = heroImageTreatment === 'monochrome' ? 100 : Math.max(0, Math.round(100 - heroImageSaturation * 0.38))
   const activeHeroSaturation = Math.max(0.9, heroImageSaturation / 100)
+  const heroControlClass =
+    'inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/24 bg-black/18 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md transition-colors hover:border-white/58 hover:bg-black/34 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300'
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-zinc-950">
@@ -137,12 +179,12 @@ export default function HomePageClient({
         <div className="absolute inset-0">
           {heroImages.length > 0 ? (
             <AnimatePresence mode="sync">
-              {heroImages.map((imageUrl, index) =>
+              {heroImages.map((item, index) =>
                 index === resolvedHeroIndex ? (
-                  isVideoUrl(imageUrl) ? (
+                  isVideoUrl(item.url) ? (
                     <motion.video
-                      key={`${imageUrl}-${isMobile ? 'mobile' : 'desktop'}`}
-                      src={imageUrl}
+                      key={`${item.url}-${isMobile ? 'mobile' : 'desktop'}`}
+                      src={item.url}
                       autoPlay
                       muted
                       playsInline
@@ -169,8 +211,8 @@ export default function HomePageClient({
                     />
                   ) : (
                     <motion.img
-                      key={`${imageUrl}-${isMobile ? 'mobile' : 'desktop'}`}
-                      src={imageUrl}
+                      key={`${item.url}-${isMobile ? 'mobile' : 'desktop'}`}
+                      src={item.url}
                       alt=""
                       initial={{ opacity: 0, scale: 1.08 }}
                       animate={{ opacity: activeHeroOpacity, scale: 1 }}
@@ -196,6 +238,26 @@ export default function HomePageClient({
             <Image src="/images/hero-bg.png" alt="" fill className="object-cover" priority />
           )}
         </div>
+
+        {activeHeroItem?.projectId ? (
+          <button
+            type="button"
+            aria-label="Abrir proyecto"
+            onClick={() => router.push(`/proyectos/${activeHeroItem.projectId}`)}
+            className="absolute inset-0 z-10 cursor-pointer"
+          />
+        ) : null}
+
+        {heroImages.length > 1 ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-7 z-20 flex items-center justify-between px-4 sm:bottom-8 sm:px-6">
+            <button type="button" onClick={rewindHero} className={`pointer-events-auto ${heroControlClass}`} aria-label="Imagen anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={advanceHero} className={`pointer-events-auto ${heroControlClass}`} aria-label="Imagen siguiente">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
       </section>
     </main>
   )

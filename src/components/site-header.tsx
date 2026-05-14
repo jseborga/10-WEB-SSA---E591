@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Facebook, Home, Instagram, Menu, MessageCircleMore, X } from 'lucide-react'
+import { Facebook, Home, Instagram, Menu, MessageCircle, X } from 'lucide-react'
 import { LanguageSelector } from '@/components/language-selector'
 import { useLanguage } from '@/lib/language-context'
 import type { MenuItemConfig } from '@/lib/menu-config'
@@ -62,7 +62,7 @@ export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: 
       {
         label: 'WhatsApp',
         href: siteSettings?.whatsapp?.trim() ? `https://wa.me/${normalizeWhatsappLink(siteSettings.whatsapp)}` : '',
-        icon: MessageCircleMore,
+        icon: MessageCircle,
       },
     ].filter((item) => item.href)
   }, [siteSettings])
@@ -199,7 +199,12 @@ export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: 
     >
       <Home className="h-4 w-4" />
     </Link>
-    <ChatWidget buttonTone={tone} guideMessages={chatGuideMessages} />
+    <ChatWidget
+      buttonTone={tone}
+      guideMessages={chatGuideMessages}
+      brandingIconUrl={siteSettings?.faviconUrl || siteSettings?.logoUrl || '/logo.svg'}
+      companyName={siteSettings?.companyName || siteSettings?.legalName || 'SSA Ingenieria'}
+    />
     </>
   )
 }
