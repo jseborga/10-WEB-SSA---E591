@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowUpRight, MapPin } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
@@ -30,7 +29,6 @@ function getLocalizedText(project: PublicProject, language: 'es' | 'en' | 'pt', 
 
 export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClientProps) {
   const { t, language } = useLanguage()
-  const router = useRouter()
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedProject, setSelectedProject] = useState<PublicProject | null>(null)
   const [isMobile, setIsMobile] = useState(false)
@@ -115,7 +113,7 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
               <button
                 type="button"
                 aria-label={`Abrir ${getLocalizedText(project, language, 'title')}`}
-                onClick={() => router.push(`/proyectos/${project.id}`)}
+                onClick={() => setSelectedProject(project)}
                 className="absolute inset-0 z-10"
               />
               <div className="relative aspect-[9/14] overflow-hidden bg-zinc-100 sm:aspect-[4/3]">

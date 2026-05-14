@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, type TouchEvent } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ChevronLeft, ChevronRight, MapPin, Calendar, Ruler, Building2, ArrowRight, Link2, Instagram, Facebook, Linkedin, Youtube, Share2, Send } from 'lucide-react'
 import { toast } from 'sonner'
-import { ProjectMediaOverlay } from '@/components/project-media-overlay'
 import { useLanguage } from '@/lib/language-context'
 import { buildProjectMediaItems, formatTagLabel, normalizeTag, parseTagList } from '@/lib/public-site'
 import { buildSocialShareLinks, shareLink } from '@/lib/share'
@@ -60,11 +60,15 @@ const categoryLabels: Record<string, Record<string, string>> = {
 // Internal component with key-based reset
 function ProjectDetailContent({ project, similarProjects, onClose }: { project: Project; similarProjects: Project[]; onClose: () => void }) {
   const { language } = useLanguage()
+  const router = useRouter()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [isImageExpanded, setIsImageExpanded] = useState(false)
   const [activeGalleryFilter, setActiveGalleryFilter] = useState('all')
+  const touchStartXRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
+  const didSwipeRef = useRef(false)
 
   const getTitle = useCallback(() => {
     if (language === 'en' && project.titleEn) return project.titleEn
@@ -135,6 +139,75 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   const prevImage = useCallback(() => {
     setCurrentImageIndex((prev) => (prev - 1 + Math.max(filteredMediaItems.length, 1)) % Math.max(filteredMediaItems.length, 1))
   }, [filteredMediaItems.length])
+
+  useEffect(() => {
+    if (filteredMediaItems.length <= 1 || isImageExpanded) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setIsLoading(true)
+      nextImage()
+    }, 6200)
+
+    return () => window.clearInterval(interval)
+  }, [filteredMediaItems.length, isImageExpanded, nextImage])
+
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+
+    touchStartXRef.current = touch?.clientX ?? null
+    touchStartYRef.current = touch?.clientY ?? null
+    didSwipeRef.current = false
+  }
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    if (!isMobile || filteredMediaItems.length <= 1) {
+      return
+    }
+
+    const startX = touchStartXRef.current
+    const startY = touchStartYRef.current
+    const touch = event.changedTouches[0]
+
+    touchStartXRef.current = null
+    touchStartYRef.current = null
+
+    if (startX == null || startY == null || !touch) {
+      return
+    }
+
+    const deltaX = touch.clientX - startX
+    const deltaY = touch.clientY - startY
+
+    if (Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return
+    }
+
+    didSwipeRef.current = true
+    setIsLoading(true)
+
+    if (deltaX < 0) {
+      nextImage()
+      return
+    }
+
+    prevImage()
+  }
+
+  const handleExpandImage = () => {
+    if (didSwipeRef.current) {
+      didSwipeRef.current = false
+      return
+    }
+
+    setIsImageExpanded(true)
+  }
+
+  const handleOpenProjectPage = () => {
+    onClose()
+    router.push(`/proyectos/${project.id}`)
+  }
 
   const getCategoryLabel = () => categoryLabels[language]?.[project.category] || project.category
   const projectLinks = useMemo(
@@ -221,30 +294,23 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
 
         <div className="max-w-7xl mx-auto px-4">
           {/* Gallery */}
-          <div className="relative mb-6 sm:mb-8">
+          <div className="relative mb-6 sm:mb-8" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             <div
-              className="relative aspect-[4/5] rounded-lg overflow-hidden bg-zinc-900 sm:aspect-[21/9]"
+              className="relative min-h-[72vh] overflow-hidden rounded-[28px] bg-zinc-900 sm:min-h-[78vh]"
               onClick={(event) => {
                 event.stopPropagation()
-                setIsImageExpanded(true)
+                handleExpandImage()
               }}
             >
               <Image
                 src={currentMedia?.url || '/images/projects/house1.png'}
                 alt={currentMedia?.alt || project.mainImageAlt || getTitle()}
                 fill
-                className={isMobile ? 'object-contain' : 'object-cover'}
+                className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'}
                 onLoad={() => setIsLoading(false)}
                 priority
               />
-              {currentMedia ? (
-                <ProjectMediaOverlay
-                  key={`${currentMedia.url}-${currentMedia.label}`}
-                  category={currentMedia.category}
-                  label={currentMedia.label}
-                  tags={currentMedia.tags}
-                />
-              ) : null}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
               
               {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -257,18 +323,66 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); setIsLoading(true); prevImage() }}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
+                    className="absolute left-4 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 transition-colors hover:bg-black/70 md:flex md:h-12 md:w-12"
                   >
                     <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); setIsLoading(true); nextImage() }}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
+                    className="absolute right-4 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 transition-colors hover:bg-black/70 md:flex md:h-12 md:w-12"
                   >
                     <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   </button>
                 </>
               )}
+
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-5 sm:px-6 sm:pb-6">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleOpenProjectPage()
+                  }}
+                  className={`pointer-events-auto relative overflow-hidden rounded-[28px] border border-white/12 bg-black/26 px-4 py-5 text-left backdrop-blur-md transition-colors hover:border-white/34 hover:bg-black/34 ${
+                    isMobile ? 'w-full' : 'w-[min(34vw,460px)]'
+                  }`}
+                >
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black via-black/80 to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black via-black/80 to-transparent" />
+                  <div className="relative h-52 overflow-hidden">
+                    <motion.div
+                      key={`${project.id}-${currentMedia?.url}-${currentMedia?.label}-${language}`}
+                      initial={{ y: '105%' }}
+                      animate={{ y: '-115%' }}
+                      transition={{ duration: 16, ease: 'linear', repeat: Infinity }}
+                      className="absolute inset-x-0 bottom-0 origin-bottom [transform:perspective(900px)_rotateX(28deg)]"
+                    >
+                      <p className="text-center text-[11px] uppercase tracking-[0.24em] text-white/68">
+                        {currentMedia?.category || getCategoryLabel()}
+                      </p>
+                      <h2 className="mt-3 text-center text-xl font-light tracking-tight text-white sm:text-2xl">
+                        {getTitle()}
+                      </h2>
+                      <p className="mt-4 text-center text-sm leading-7 text-white/88 sm:text-base">
+                        {currentMedia?.label || project.description || getFullDescription() || getTitle()}
+                      </p>
+                      <p className="mt-4 text-center text-sm leading-7 text-white/76">
+                        {getFullDescription() || project.description || ''}
+                      </p>
+                      <div className="mt-5 flex flex-wrap justify-center gap-3 text-[11px] uppercase tracking-[0.18em] text-white/62">
+                        {project.location ? <span>{project.location}</span> : null}
+                        {project.year ? <span>{project.year}</span> : null}
+                        {project.area ? <span>{project.area}</span> : null}
+                        {project.client ? <span>{project.client}</span> : null}
+                      </div>
+                    </motion.div>
+                  </div>
+                  <div className="relative mt-4 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-white/70">
+                    <span>{shareCopy.open}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </button>
+              </div>
             </div>
 
             {currentMedia?.label ? <p className="mt-3 text-sm text-zinc-400">{currentMedia.label}</p> : null}
