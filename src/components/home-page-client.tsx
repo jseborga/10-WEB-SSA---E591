@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -58,6 +58,9 @@ export default function HomePageClient({
   const { language } = useLanguage()
   const [activeHeroIndex, setActiveHeroIndex] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
+  const touchStartXRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
+  const didSwipeRef = useRef(false)
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)')
@@ -170,12 +173,61 @@ export default function HomePageClient({
   const activeHeroSaturation = Math.max(0.9, heroImageSaturation / 100)
   const heroControlClass =
     'inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/24 bg-black/18 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] backdrop-blur-md transition-colors hover:border-white/58 hover:bg-black/34 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300'
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0]
+
+    touchStartXRef.current = touch?.clientX ?? null
+    touchStartYRef.current = touch?.clientY ?? null
+    didSwipeRef.current = false
+  }
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    if (!isMobile || heroImages.length <= 1) {
+      return
+    }
+
+    const startX = touchStartXRef.current
+    const startY = touchStartYRef.current
+    const touch = event.changedTouches[0]
+
+    touchStartXRef.current = null
+    touchStartYRef.current = null
+
+    if (startX == null || startY == null || !touch) {
+      return
+    }
+
+    const deltaX = touch.clientX - startX
+    const deltaY = touch.clientY - startY
+
+    if (Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return
+    }
+
+    didSwipeRef.current = true
+
+    if (deltaX < 0) {
+      advanceHero()
+      return
+    }
+
+    rewindHero()
+  }
+  const handleProjectHeroClick = () => {
+    if (didSwipeRef.current) {
+      didSwipeRef.current = false
+      return
+    }
+
+    if (activeHeroItem?.projectId) {
+      router.push(`/proyectos/${activeHeroItem.projectId}`)
+    }
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-zinc-950">
       <SiteHeader tone="light" chatGuideMessages={chatGuideMessages} siteSettings={siteSettings} />
 
-      <section className="relative min-h-screen">
+      <section className="relative min-h-screen" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <div className="absolute inset-0">
           {heroImages.length > 0 ? (
             <AnimatePresence mode="sync">
@@ -243,19 +295,21 @@ export default function HomePageClient({
           <button
             type="button"
             aria-label="Abrir proyecto"
-            onClick={() => router.push(`/proyectos/${activeHeroItem.projectId}`)}
+            onClick={handleProjectHeroClick}
             className="absolute inset-0 z-10 cursor-pointer"
           />
         ) : null}
 
         {heroImages.length > 1 ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-7 z-20 flex items-center justify-between px-4 sm:bottom-8 sm:px-6">
-            <button type="button" onClick={rewindHero} className={`pointer-events-auto ${heroControlClass}`} aria-label="Imagen anterior">
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={advanceHero} className={`pointer-events-auto ${heroControlClass}`} aria-label="Imagen siguiente">
-              <ChevronRight className="h-4 w-4" />
-            </button>
+          <div className="pointer-events-none absolute inset-x-0 bottom-8 z-20 hidden justify-center px-4 md:flex">
+            <div className="pointer-events-auto flex items-center gap-3">
+              <button type="button" onClick={rewindHero} className={heroControlClass} aria-label="Imagen anterior">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={advanceHero} className={heroControlClass} aria-label="Imagen siguiente">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         ) : null}
       </section>

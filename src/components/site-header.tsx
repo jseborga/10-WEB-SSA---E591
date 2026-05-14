@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Facebook, Home, Instagram, Menu, MessageCircle, X } from 'lucide-react'
+import { Facebook, Home, Instagram, Menu, MessageCircle, Share2, X } from 'lucide-react'
 import { LanguageSelector } from '@/components/language-selector'
 import { useLanguage } from '@/lib/language-context'
 import type { MenuItemConfig } from '@/lib/menu-config'
@@ -27,6 +27,7 @@ function normalizeWhatsappLink(value: string) {
 export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: SiteHeaderProps) {
   const { t } = useLanguage()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isSocialOpen, setIsSocialOpen] = useState(false)
   const [menuItems, setMenuItems] = useState<MenuItemConfig[]>([])
   const isLight = tone === 'light'
   const surfaceToneClass = isLight
@@ -103,22 +104,48 @@ export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: 
           <LanguageSelector blinking tone={tone} iconOnly />
         </div>
         <div className="flex items-center gap-2">
-          {socialLinks.map((social) => {
-            const Icon = social.icon
-
-            return (
-              <a
-                key={social.label}
-                href={social.href}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={social.label}
-                className={socialIconButtonClass}
+          {socialLinks.length > 0 ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsSocialOpen((current) => !current)}
+                className={menuButtonClass}
+                aria-label={isSocialOpen ? 'Cerrar redes sociales' : 'Abrir redes sociales'}
+                aria-expanded={isSocialOpen}
               >
-                {Icon ? <Icon className="h-4 w-4" /> : <span className="text-[11px] font-medium uppercase tracking-[0.12em]">{social.glyph}</span>}
-              </a>
-            )
-          })}
+                <Share2 className="h-4 w-4" />
+              </button>
+              <AnimatePresence>
+                {isSocialOpen ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="absolute right-0 top-full pt-3"
+                  >
+                    <div className="flex flex-col items-end gap-2">
+                      {socialLinks.map((social) => {
+                        const Icon = social.icon
+
+                        return (
+                          <a
+                            key={social.label}
+                            href={social.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={social.label}
+                            className={socialIconButtonClass}
+                          >
+                            {Icon ? <Icon className="h-4 w-4" /> : <span className="text-[11px] font-medium uppercase tracking-[0.12em]">{social.glyph}</span>}
+                          </a>
+                        )
+                      })}
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          ) : null}
           <Link
             href="/"
             aria-label="Inicio"
@@ -127,7 +154,10 @@ export function SiteHeader({ tone = 'light', chatGuideMessages, siteSettings }: 
             <Home className="h-4 w-4" />
           </Link>
           <button
-            onClick={() => setIsMenuOpen((current) => !current)}
+            onClick={() => {
+              setIsSocialOpen(false)
+              setIsMenuOpen((current) => !current)
+            }}
             className={menuButtonClass}
             aria-label={isMenuOpen ? 'Cerrar menu' : 'Abrir menu'}
             aria-expanded={isMenuOpen}
