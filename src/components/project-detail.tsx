@@ -148,7 +148,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
     const interval = window.setInterval(() => {
       setIsLoading(true)
       nextImage()
-    }, 6200)
+    }, 9800)
 
     return () => window.clearInterval(interval)
   }, [filteredMediaItems.length, isImageExpanded, nextImage])
@@ -308,7 +308,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                   initial={{ opacity: 0, scale: 1.03 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 1.01 }}
-                  transition={{ duration: 1.4, ease: 'easeOut' }}
+                  transition={{ duration: 2.1, ease: 'easeOut' }}
                   className="absolute inset-0"
                 >
                   <Image
@@ -360,12 +360,28 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 >
                   <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/82 to-transparent" />
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/88 to-transparent" />
-                  <div className={`relative overflow-hidden ${isMobile ? 'h-24' : 'h-40'}`}>
+                  <div className="relative mb-2 space-y-1">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/62">
+                      {getCategoryLabel()}
+                    </p>
+                    <p
+                      className="text-xs leading-5 text-white/84 sm:text-sm sm:leading-6"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: isMobile ? 2 : 3,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {project.description || getTitle()}
+                    </p>
+                  </div>
+                  <div className={`relative overflow-hidden ${isMobile ? 'h-20' : 'h-32'}`}>
                     <motion.div
                       key={`${project.id}-${language}`}
                       initial={false}
-                      animate={{ y: ['100%', '-125%'] }}
-                      transition={{ duration: 18, ease: 'linear', repeat: Infinity }}
+                      animate={{ y: ['28%', '-88%'] }}
+                      transition={{ duration: 30, ease: 'linear', repeat: Infinity }}
                       className={`absolute inset-x-0 bottom-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(18deg)]' : '[transform:perspective(900px)_rotateX(28deg)]'}`}
                     >
                       <p className="text-center text-[10px] uppercase tracking-[0.22em] text-white/64 sm:text-[11px]">
@@ -374,10 +390,26 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       <h2 className="mt-2 text-center text-lg font-light tracking-tight text-white sm:mt-3 sm:text-2xl">
                         {getTitle()}
                       </h2>
-                      <p className="mt-3 text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7">
+                      <p
+                        className="mt-3 text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 5,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
                         {project.description || getFullDescription() || getTitle()}
                       </p>
-                      <p className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7">
+                      <p
+                        className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 5,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
                         {getFullDescription() || ''}
                       </p>
                       <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] uppercase tracking-[0.16em] text-white/58 sm:text-[11px]">
