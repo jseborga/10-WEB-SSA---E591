@@ -152,6 +152,19 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
                       {project.year ? <span>{project.year}</span> : null}
                       {project.area ? <span>{project.area}</span> : null}
                     </div>
+                    {getLocalizedText(project, language, 'description') ? (
+                      <p
+                        className="max-w-xl text-sm leading-6 text-white/78"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 5,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {getLocalizedText(project, language, 'description')}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>

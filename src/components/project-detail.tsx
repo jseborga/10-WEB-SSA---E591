@@ -302,14 +302,25 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 handleExpandImage()
               }}
             >
-              <Image
-                src={currentMedia?.url || '/images/projects/house1.png'}
-                alt={currentMedia?.alt || project.mainImageAlt || getTitle()}
-                fill
-                className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'}
-                onLoad={() => setIsLoading(false)}
-                priority
-              />
+              <AnimatePresence mode="sync">
+                <motion.div
+                  key={currentMedia?.url || 'fallback-image'}
+                  initial={{ opacity: 0, scale: 1.03 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.01 }}
+                  transition={{ duration: 1.4, ease: 'easeOut' }}
+                  className="absolute inset-0"
+                >
+                  <Image
+                    src={currentMedia?.url || '/images/projects/house1.png'}
+                    alt={currentMedia?.alt || project.mainImageAlt || getTitle()}
+                    fill
+                    className={isMobile ? 'object-contain bg-zinc-950' : 'object-cover'}
+                    onLoad={() => setIsLoading(false)}
+                    priority
+                  />
+                </motion.div>
+              </AnimatePresence>
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
               
               {isLoading && (
@@ -343,33 +354,33 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     event.stopPropagation()
                     handleOpenProjectPage()
                   }}
-                  className={`pointer-events-auto relative overflow-hidden rounded-[28px] border border-white/12 bg-black/26 px-4 py-5 text-left backdrop-blur-md transition-colors hover:border-white/34 hover:bg-black/34 ${
+                  className={`pointer-events-auto relative overflow-hidden text-left transition-colors ${
                     isMobile ? 'w-full' : 'w-[min(34vw,460px)]'
                   }`}
                 >
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black via-black/80 to-transparent" />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black via-black/80 to-transparent" />
-                  <div className="relative h-52 overflow-hidden">
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/82 to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/88 to-transparent" />
+                  <div className={`relative overflow-hidden ${isMobile ? 'h-24' : 'h-40'}`}>
                     <motion.div
-                      key={`${project.id}-${currentMedia?.url}-${currentMedia?.label}-${language}`}
-                      initial={{ y: '105%' }}
-                      animate={{ y: '-115%' }}
-                      transition={{ duration: 16, ease: 'linear', repeat: Infinity }}
-                      className="absolute inset-x-0 bottom-0 origin-bottom [transform:perspective(900px)_rotateX(28deg)]"
+                      key={`${project.id}-${language}`}
+                      initial={false}
+                      animate={{ y: ['100%', '-125%'] }}
+                      transition={{ duration: 18, ease: 'linear', repeat: Infinity }}
+                      className={`absolute inset-x-0 bottom-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(18deg)]' : '[transform:perspective(900px)_rotateX(28deg)]'}`}
                     >
-                      <p className="text-center text-[11px] uppercase tracking-[0.24em] text-white/68">
-                        {currentMedia?.category || getCategoryLabel()}
+                      <p className="text-center text-[10px] uppercase tracking-[0.22em] text-white/64 sm:text-[11px]">
+                        {getCategoryLabel()}
                       </p>
-                      <h2 className="mt-3 text-center text-xl font-light tracking-tight text-white sm:text-2xl">
+                      <h2 className="mt-2 text-center text-lg font-light tracking-tight text-white sm:mt-3 sm:text-2xl">
                         {getTitle()}
                       </h2>
-                      <p className="mt-4 text-center text-sm leading-7 text-white/88 sm:text-base">
-                        {currentMedia?.label || project.description || getFullDescription() || getTitle()}
+                      <p className="mt-3 text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7">
+                        {project.description || getFullDescription() || getTitle()}
                       </p>
-                      <p className="mt-4 text-center text-sm leading-7 text-white/76">
-                        {getFullDescription() || project.description || ''}
+                      <p className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7">
+                        {getFullDescription() || ''}
                       </p>
-                      <div className="mt-5 flex flex-wrap justify-center gap-3 text-[11px] uppercase tracking-[0.18em] text-white/62">
+                      <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] uppercase tracking-[0.16em] text-white/58 sm:text-[11px]">
                         {project.location ? <span>{project.location}</span> : null}
                         {project.year ? <span>{project.year}</span> : null}
                         {project.area ? <span>{project.area}</span> : null}
@@ -377,7 +388,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       </div>
                     </motion.div>
                   </div>
-                  <div className="relative mt-4 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-white/70">
+                  <div className="relative mt-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-white/66 sm:mt-3 sm:text-[11px]">
                     <span>{shareCopy.open}</span>
                     <ArrowRight className="h-4 w-4" />
                   </div>
