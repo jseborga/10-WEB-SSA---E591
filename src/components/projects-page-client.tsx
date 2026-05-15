@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUpRight, MapPin } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
-import { PublicProject, PublicSiteSettings, formatCategoryLabel, getProjectCategories } from '@/lib/public-site'
+import { PublicProject, PublicSiteSettings, buildProjectMediaItems, formatCategoryLabel, getProjectCategories } from '@/lib/public-site'
 import { SiteHeader } from '@/components/site-header'
 import { ProjectDetail } from '@/components/project-detail'
 
@@ -25,6 +25,166 @@ function getLocalizedText(project: PublicProject, language: 'es' | 'en' | 'pt', 
   if (language === 'en' && project.descriptionEn) return project.descriptionEn
   if (language === 'pt' && project.descriptionPt) return project.descriptionPt
   return project.description || ''
+}
+
+function getLocalizedNarrative(project: PublicProject, language: 'es' | 'en' | 'pt') {
+  if (language === 'en' && project.fullDescriptionEn) return project.fullDescriptionEn
+  if (language === 'pt' && project.fullDescriptionPt) return project.fullDescriptionPt
+  return project.fullDescription || getLocalizedText(project, language, 'description')
+}
+
+interface ProjectPreviewCardProps {
+  project: PublicProject
+  index: number
+  language: 'es' | 'en' | 'pt'
+  isMobile: boolean
+  pageLinkLabel: string
+  onOpen: (project: PublicProject) => void
+}
+
+function ProjectPreviewCard({ project, index, language, isMobile, pageLinkLabel, onOpen }: ProjectPreviewCardProps) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const previewMedia = useMemo(
+    () =>
+      buildProjectMediaItems(project, {
+        isMobile: false,
+        fallbackUrl: '/images/hero-bg.png',
+      }),
+    [project],
+  )
+  const currentPreview = previewMedia[previewIndex] || previewMedia[0]
+  const title = getLocalizedText(project, language, 'title')
+  const shortDescription = getLocalizedText(project, language, 'description')
+  const longDescription = getLocalizedNarrative(project, language)
+
+  useEffect(() => {
+    if (isMobile || !isHovered || previewMedia.length <= 1) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      setPreviewIndex((previous) => (previous + 1) % previewMedia.length)
+    }, 2800)
+
+    return () => window.clearInterval(interval)
+  }, [isHovered, isMobile, previewMedia.length])
+
+  return (
+    <motion.article
+      key={project.id}
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, delay: index * 0.04 }}
+      className="group relative overflow-hidden rounded-[28px] bg-zinc-100 text-left"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => {
+        setIsHovered(false)
+        setPreviewIndex(0)
+      }}
+    >
+      <button
+        type="button"
+        aria-label={`Abrir ${title}`}
+        onClick={() => onOpen(project)}
+        className="absolute inset-0 z-10"
+      />
+      <div className="relative aspect-[9/14] overflow-hidden bg-zinc-100 sm:aspect-[4/3]">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={currentPreview?.url || `${project.id}-fallback`}
+            initial={{ opacity: 0, scale: 1.02 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.01 }}
+            transition={{ duration: 1.6, ease: 'easeOut' }}
+            className="absolute inset-0"
+          >
+            <Image
+              src={(isMobile ? project.mainImageMobile || project.mainImage : currentPreview?.url || project.mainImage || project.mainImageMobile) || '/images/hero-bg.png'}
+              alt={currentPreview?.alt || title}
+              fill
+              className={`object-cover ${isMobile ? '' : 'transition-transform duration-[1400ms] group-hover:scale-[1.03]'}`}
+              priority={index < 3}
+            />
+          </motion.div>
+        </AnimatePresence>
+        <div className={`absolute inset-0 bg-gradient-to-t from-black/78 via-black/22 to-transparent transition-opacity duration-500 ${isMobile ? 'opacity-100' : isHovered ? 'opacity-100' : 'opacity-0'}`} />
+        <div className="absolute right-4 top-4 z-20">
+          <Link
+            href={`/proyectos/${project.id}`}
+            className="inline-flex items-center gap-1 rounded-full border border-white/28 bg-black/18 px-3 py-2 text-[10px] uppercase tracking-[0.22em] text-white backdrop-blur-md transition-colors hover:border-white/48 hover:bg-black/28"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span>{pageLinkLabel}</span>
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-5 pt-12 sm:px-6 sm:pb-6">
+          <div className={`space-y-2 text-white transition-opacity duration-500 ${isMobile ? 'opacity-100' : isHovered ? 'opacity-100' : 'opacity-0'}`}>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-white/72">
+              {formatCategoryLabel(project.category)}
+            </p>
+            <h2 className="text-2xl font-light tracking-tight">
+              {title}
+            </h2>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-white/82">
+              {project.location ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span>{project.location}</span>
+                </span>
+              ) : null}
+              {project.year ? <span>{project.year}</span> : null}
+              {project.area ? <span>{project.area}</span> : null}
+            </div>
+            {!isMobile && longDescription ? (
+              <div className="relative h-12 overflow-hidden">
+                <motion.p
+                  initial={false}
+                  animate={isHovered ? { y: [18, -16], opacity: [0.15, 0.95, 0.82] } : { y: 18, opacity: 0 }}
+                  transition={isHovered ? { duration: 10, ease: 'linear', repeat: Infinity, repeatType: 'loop' } : { duration: 0.2 }}
+                  className="absolute inset-x-0 bottom-0 text-sm leading-6 text-white/84"
+                  style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {longDescription}
+                </motion.p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-1 border-t border-zinc-200 bg-white px-4 py-3 sm:hidden">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+          {formatCategoryLabel(project.category)}
+        </p>
+        <h2 className="text-sm font-medium text-zinc-900">
+          {title}
+        </h2>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+          {project.location ? <span>{project.location}</span> : null}
+          {project.year ? <span>{project.year}</span> : null}
+        </div>
+        {shortDescription ? (
+          <p
+            className="text-[11px] leading-5 text-zinc-500"
+            style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {shortDescription}
+          </p>
+        ) : null}
+      </div>
+    </motion.article>
+  )
 }
 
 export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClientProps) {
@@ -80,12 +240,7 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
       <SiteHeader tone="dark" />
 
       <section className="mx-auto max-w-7xl px-4 pb-12 pt-28 sm:px-6 sm:pt-32">
-        <div className="max-w-2xl">
-          <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500">{t.nav.projects}</p>
-          <h1 className="mt-3 text-3xl font-light tracking-tight sm:text-5xl">{t.projects.title}</h1>
-        </div>
-
-        <div className="mt-10 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {filterOptions.map((option) => (
             <button
               key={option.key}
@@ -101,86 +256,17 @@ export function ProjectsPageClient({ projects, siteSettings }: ProjectsPageClien
           ))}
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredProjects.map((project, index) => (
-            <motion.article
+            <ProjectPreviewCard
               key={project.id}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: index * 0.04 }}
-              className="group relative overflow-hidden rounded-[28px] bg-zinc-100 text-left"
-            >
-              <button
-                type="button"
-                aria-label={`Abrir ${getLocalizedText(project, language, 'title')}`}
-                onClick={() => setSelectedProject(project)}
-                className="absolute inset-0 z-10"
-              />
-              <div className="relative aspect-[9/14] overflow-hidden bg-zinc-100 sm:aspect-[4/3]">
-                <Image
-                  src={(isMobile ? project.mainImageMobile || project.mainImage : project.mainImage || project.mainImageMobile) || '/images/hero-bg.png'}
-                  alt={getLocalizedText(project, language, 'title')}
-                  fill
-                  className={`object-cover ${isMobile ? '' : 'transition-transform duration-700 group-hover:scale-[1.04]'}`}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/18 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <div className="absolute right-4 top-4 z-20">
-                  <Link
-                  href={`/proyectos/${project.id}`}
-                  className="inline-flex items-center gap-1 rounded-full border border-white/28 bg-black/18 px-3 py-2 text-[10px] uppercase tracking-[0.22em] text-white backdrop-blur-md transition-colors hover:border-white/48 hover:bg-black/28"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                    <span>{pageLinkLabel}</span>
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-                <div className="absolute inset-x-0 bottom-0 translate-y-4 px-5 pb-5 pt-12 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 sm:px-6 sm:pb-6">
-                  <div className="space-y-2 text-white">
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-white/72">
-                      {formatCategoryLabel(project.category)}
-                    </p>
-                    <h2 className="text-2xl font-light tracking-tight">
-                      {getLocalizedText(project, language, 'title')}
-                    </h2>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-white/82">
-                      {project.location ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5" />
-                          <span>{project.location}</span>
-                        </span>
-                      ) : null}
-                      {project.year ? <span>{project.year}</span> : null}
-                      {project.area ? <span>{project.area}</span> : null}
-                    </div>
-                    {getLocalizedText(project, language, 'description') ? (
-                      <p
-                        className="max-w-xl text-sm leading-6 text-white/78"
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 5,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {getLocalizedText(project, language, 'description')}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-1 border-t border-zinc-200 bg-white px-4 py-3 sm:hidden">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-                  {formatCategoryLabel(project.category)}
-                </p>
-                <h2 className="text-sm font-medium text-zinc-900">
-                  {getLocalizedText(project, language, 'title')}
-                </h2>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
-                  {project.location ? <span>{project.location}</span> : null}
-                  {project.year ? <span>{project.year}</span> : null}
-                </div>
-              </div>
-            </motion.article>
+              project={project}
+              index={index}
+              language={language}
+              isMobile={isMobile}
+              pageLinkLabel={pageLinkLabel}
+              onOpen={setSelectedProject}
+            />
           ))}
         </div>
 
