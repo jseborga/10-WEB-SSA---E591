@@ -395,22 +395,26 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                   }`}
                 >
                   <div className="relative mb-4 space-y-2">
-                    <h2 className="text-3xl font-light tracking-tight text-white sm:text-5xl">
-                      {getTitle()}
-                    </h2>
+                    {!isMobile ? (
+                      <>
+                        <h2 className="text-3xl font-light tracking-tight text-white sm:text-5xl">
+                          {getTitle()}
+                        </h2>
+                        <p
+                          className="text-xs uppercase tracking-[0.18em] text-white/72 sm:text-[13px]"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {technicalSubtitle}
+                        </p>
+                      </>
+                    ) : null}
                     <p
-                      className="text-xs uppercase tracking-[0.18em] text-white/72 sm:text-[13px]"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {technicalSubtitle}
-                    </p>
-                    <p
-                      className="text-sm leading-6 text-white/82 sm:max-w-2xl sm:text-base sm:leading-7"
+                      className="text-base leading-7 text-white/86 sm:max-w-2xl sm:text-base sm:leading-7"
                       style={{
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
@@ -425,7 +429,10 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
                       <div
                         className="will-change-transform"
-                        style={{ animation: `projectDetailCrawl ${isMobile ? PROJECT_DETAIL_CRAWL_MOBILE_S : PROJECT_DETAIL_CRAWL_DESKTOP_S}s linear infinite` }}
+                        style={{
+                          animation: `projectDetailCrawl ${isMobile ? PROJECT_DETAIL_CRAWL_MOBILE_S : PROJECT_DETAIL_CRAWL_DESKTOP_S}s linear infinite`,
+                          animationDelay: isMobile ? '-6s' : '0s',
+                        }}
                       >
                       {crawlSections.map((section, index) => (
                         <div key={`${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
@@ -453,7 +460,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                               {section.extended}
                             </p>
                           ) : null}
-                          {section.meta.length > 0 ? (
+                          {!isMobile && section.meta.length > 0 ? (
                             <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] uppercase tracking-[0.16em] text-white/58 sm:text-[11px]">
                               {section.meta.map((item) => (
                                 <span key={`${index}-${item}`}>{item}</span>
