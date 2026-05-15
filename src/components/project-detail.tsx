@@ -57,6 +57,12 @@ const categoryLabels: Record<string, Record<string, string>> = {
   pt: { residencial: 'Residencial', comercial: 'Comercial', industrial: 'Industrial', renovacion: 'Renovação' }
 }
 
+const PROJECT_DETAIL_IMAGE_HOLD_MS = 15600
+const PROJECT_DETAIL_IMAGE_TRANSITION_S = 3.1
+const PROJECT_DETAIL_CRAWL_MOBILE_S = 48
+const PROJECT_DETAIL_CRAWL_DESKTOP_S = 60
+const PROJECT_DETAIL_CRAWL_FULLSCREEN_S = 64
+
 // Internal component with key-based reset
 function ProjectDetailContent({ project, similarProjects, onClose }: { project: Project; similarProjects: Project[]; onClose: () => void }) {
   const { language } = useLanguage()
@@ -136,6 +142,13 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   }, [galleryFilters, mediaItems, resolvedActiveGalleryFilter])
   const resolvedCurrentImageIndex = currentImageIndex < filteredMediaItems.length ? currentImageIndex : 0
   const currentMedia = filteredMediaItems[resolvedCurrentImageIndex] || filteredMediaItems[0] || mediaItems[0]
+  const technicalSubtitle = useMemo(
+    () =>
+      [getCategoryLabel(), project.location, project.year ? String(project.year) : '', project.area, project.client]
+        .filter(Boolean)
+        .join(' · '),
+    [getCategoryLabel, project.area, project.client, project.location, project.year],
+  )
   const crawlSections = useMemo(
     () =>
       [
@@ -166,17 +179,17 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
   }, [filteredMediaItems.length])
 
   useEffect(() => {
-    if (filteredMediaItems.length <= 1 || isImageExpanded) {
+    if (filteredMediaItems.length <= 1) {
       return
     }
 
     const interval = window.setInterval(() => {
       setIsLoading(true)
       nextImage()
-    }, 13200)
+    }, PROJECT_DETAIL_IMAGE_HOLD_MS)
 
     return () => window.clearInterval(interval)
-  }, [filteredMediaItems.length, isImageExpanded, nextImage])
+  }, [filteredMediaItems.length, nextImage])
 
   const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
     const touch = event.touches[0]
@@ -332,7 +345,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                   initial={{ opacity: 0, scale: 1.03 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 1.01 }}
-                  transition={{ duration: 2.8, ease: 'easeOut' }}
+                  transition={{ duration: PROJECT_DETAIL_IMAGE_TRANSITION_S, ease: 'easeOut' }}
                   className="absolute inset-0"
                 >
                   <Image
@@ -379,20 +392,31 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     handleOpenProjectPage()
                   }}
                   className={`pointer-events-auto relative overflow-hidden text-left transition-colors ${
-                    isMobile ? 'w-full' : 'w-[min(34vw,460px)]'
+                    isMobile ? 'w-full' : 'w-[min(56vw,860px)]'
                   }`}
                 >
                   <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/86 to-transparent" />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/92 to-transparent" />
-                  <div className="relative mb-3 space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/62">
-                      {currentMedia?.category || getCategoryLabel()}
-                    </p>
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/94 to-transparent" />
+                  <div className="relative mb-4 space-y-2">
+                    <h2 className="text-2xl font-light tracking-tight text-white sm:text-4xl">
+                      {getTitle()}
+                    </h2>
                     <p
-                      className="text-xs leading-5 text-white/84 sm:text-sm sm:leading-6"
+                      className="text-[11px] uppercase tracking-[0.18em] text-white/68 sm:text-xs"
                       style={{
                         display: '-webkit-box',
-                        WebkitLineClamp: isMobile ? 2 : 3,
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {technicalSubtitle}
+                    </p>
+                    <p
+                      className="text-xs leading-5 text-white/78 sm:max-w-2xl sm:text-sm sm:leading-6"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
                       }}
@@ -400,25 +424,19 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       {currentMedia?.label || project.description || getTitle()}
                     </p>
                   </div>
-                  <div className={`relative overflow-hidden ${isMobile ? 'h-20' : 'h-32'}`}>
+                  <div className={`relative overflow-hidden ${isMobile ? 'h-20' : 'h-28'}`}>
                     <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
                       <div
                         className="will-change-transform"
-                        style={{ animation: `projectDetailCrawl ${isMobile ? 48 : 54}s linear infinite` }}
+                        style={{ animation: `projectDetailCrawl ${isMobile ? PROJECT_DETAIL_CRAWL_MOBILE_S : PROJECT_DETAIL_CRAWL_DESKTOP_S}s linear infinite` }}
                       >
                       {crawlSections.map((section, index) => (
                         <div key={`${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
-                          <p className="text-center text-[10px] uppercase tracking-[0.22em] text-white/64 sm:text-[11px]">
-                            {section.eyebrow}
-                          </p>
-                          <h2 className="mt-2 text-center text-lg font-light tracking-tight text-white sm:mt-3 sm:text-2xl">
-                            {section.title}
-                          </h2>
                           <p
-                            className="mt-3 text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
+                            className="text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
                             style={{
                               display: '-webkit-box',
-                              WebkitLineClamp: 5,
+                              WebkitLineClamp: 4,
                               WebkitBoxOrient: 'vertical',
                               overflow: 'hidden',
                             }}
@@ -430,7 +448,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                               className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7"
                               style={{
                                 display: '-webkit-box',
-                                WebkitLineClamp: 5,
+                                WebkitLineClamp: 4,
                                 WebkitBoxOrient: 'vertical',
                                 overflow: 'hidden',
                               }}
@@ -729,6 +747,75 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 className="max-h-full max-w-full object-contain"
                 onClick={(event) => event.stopPropagation()}
               />
+            </div>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/88 via-black/24 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 z-[95] flex justify-center px-4 pb-6 sm:px-8 sm:pb-10">
+              <div className={`relative overflow-hidden text-left ${isMobile ? 'w-full' : 'w-[min(58vw,900px)]'}`}>
+                <div className="mb-4 space-y-2">
+                  <h2 className="text-2xl font-light tracking-tight text-white sm:text-5xl">
+                    {getTitle()}
+                  </h2>
+                  <p
+                    className="text-[11px] uppercase tracking-[0.18em] text-white/68 sm:text-xs"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {technicalSubtitle}
+                  </p>
+                  <p
+                    className="text-xs leading-5 text-white/78 sm:max-w-3xl sm:text-sm sm:leading-6"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {currentMedia?.label || project.description || getTitle()}
+                  </p>
+                </div>
+                <div className={`relative overflow-hidden ${isMobile ? 'h-20' : 'h-32'}`}>
+                  <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
+                    <div
+                      className="will-change-transform"
+                      style={{ animation: `projectDetailCrawl ${isMobile ? PROJECT_DETAIL_CRAWL_MOBILE_S : PROJECT_DETAIL_CRAWL_FULLSCREEN_S}s linear infinite` }}
+                    >
+                      {crawlSections.map((section, index) => (
+                        <div key={`fullscreen-${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
+                          <p
+                            className="text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
+                            style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 4,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {section.body}
+                          </p>
+                          {section.extended ? (
+                            <p
+                              className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7"
+                              style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 4,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {section.extended}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             {filteredMediaItems.length > 1 ? (
               <>
