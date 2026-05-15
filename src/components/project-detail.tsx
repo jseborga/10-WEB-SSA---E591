@@ -740,45 +740,23 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-8">
+            <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-3">
               <img
                 src={currentMedia?.url || '/images/projects/house1.png'}
                 alt={currentMedia?.alt || project.mainImageAlt || getTitle()}
-                className="max-h-full max-w-full object-contain"
+                className="h-full w-full object-contain"
                 onClick={(event) => event.stopPropagation()}
               />
             </div>
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/88 via-black/24 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 z-[95] flex justify-center px-4 pb-6 sm:px-8 sm:pb-10">
-              <div className={`relative overflow-hidden text-left ${isMobile ? 'w-full' : 'w-[min(58vw,900px)]'}`}>
-                <div className="mb-4 space-y-2">
-                  <h2 className="text-2xl font-light tracking-tight text-white sm:text-5xl">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/72 via-black/8 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 z-[95] flex justify-center px-4 pb-6 sm:px-8 sm:pb-12">
+              <div className={`relative overflow-hidden text-center ${isMobile ? 'w-full' : 'w-[min(34vw,560px)]'}`}>
+                <div className="mb-3">
+                  <h2 className="text-2xl font-light tracking-tight text-white sm:text-6xl">
                     {getTitle()}
                   </h2>
-                  <p
-                    className="text-[11px] uppercase tracking-[0.18em] text-white/68 sm:text-xs"
-                    style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {technicalSubtitle}
-                  </p>
-                  <p
-                    className="text-xs leading-5 text-white/78 sm:max-w-3xl sm:text-sm sm:leading-6"
-                    style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {currentMedia?.label || project.description || getTitle()}
-                  </p>
                 </div>
-                <div className={`relative overflow-hidden ${isMobile ? 'h-20' : 'h-32'}`}>
+                <div className={`relative overflow-hidden ${isMobile ? 'h-24' : 'h-40'}`}>
                   <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
                     <div
                       className="will-change-transform"
@@ -787,10 +765,10 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       {crawlSections.map((section, index) => (
                         <div key={`fullscreen-${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
                           <p
-                            className="text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
+                            className="text-center text-sm leading-7 text-white/88 sm:text-lg sm:leading-9"
                             style={{
                               display: '-webkit-box',
-                              WebkitLineClamp: 4,
+                              WebkitLineClamp: 3,
                               WebkitBoxOrient: 'vertical',
                               overflow: 'hidden',
                             }}
@@ -799,10 +777,10 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                           </p>
                           {section.extended ? (
                             <p
-                              className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7"
+                              className="mt-3 text-center text-sm leading-7 text-white/72 sm:text-lg sm:leading-9"
                               style={{
                                 display: '-webkit-box',
-                                WebkitLineClamp: 4,
+                                WebkitLineClamp: 3,
                                 WebkitBoxOrient: 'vertical',
                                 overflow: 'hidden',
                               }}
