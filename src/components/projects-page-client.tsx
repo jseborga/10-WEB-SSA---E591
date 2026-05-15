@@ -4,11 +4,15 @@ import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, MapPin } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { useLanguage } from '@/lib/language-context'
 import { PublicProject, PublicSiteSettings, buildProjectMediaItems, formatCategoryLabel, getProjectCategories } from '@/lib/public-site'
 import { SiteHeader } from '@/components/site-header'
 import { ProjectDetail } from '@/components/project-detail'
+
+const DESKTOP_PREVIEW_IMAGE_HOLD_MS = 4200
+const DESKTOP_PREVIEW_IMAGE_TRANSITION_S = 1.6
+const DESKTOP_PREVIEW_TEXT_SCROLL_S = 10
 
 interface ProjectsPageClientProps {
   projects: PublicProject[]
@@ -65,7 +69,7 @@ function ProjectPreviewCard({ project, index, language, isMobile, pageLinkLabel,
 
     const interval = window.setInterval(() => {
       setPreviewIndex((previous) => (previous + 1) % previewMedia.length)
-    }, 2800)
+    }, DESKTOP_PREVIEW_IMAGE_HOLD_MS)
 
     return () => window.clearInterval(interval)
   }, [isHovered, isMobile, previewMedia.length])
@@ -96,7 +100,7 @@ function ProjectPreviewCard({ project, index, language, isMobile, pageLinkLabel,
             initial={{ opacity: 0, scale: 1.02 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.01 }}
-            transition={{ duration: 1.6, ease: 'easeOut' }}
+            transition={{ duration: DESKTOP_PREVIEW_IMAGE_TRANSITION_S, ease: 'easeOut' }}
             className="absolute inset-0"
           >
             <Image
@@ -121,28 +125,15 @@ function ProjectPreviewCard({ project, index, language, isMobile, pageLinkLabel,
         </div>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-5 pt-12 sm:px-6 sm:pb-6">
           <div className={`space-y-2 text-white transition-opacity duration-500 ${isMobile ? 'opacity-100' : isHovered ? 'opacity-100' : 'opacity-0'}`}>
-            <p className="text-[11px] uppercase tracking-[0.24em] text-white/72">
-              {formatCategoryLabel(project.category)}
-            </p>
             <h2 className="text-2xl font-light tracking-tight">
               {title}
             </h2>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-white/82">
-              {project.location ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" />
-                  <span>{project.location}</span>
-                </span>
-              ) : null}
-              {project.year ? <span>{project.year}</span> : null}
-              {project.area ? <span>{project.area}</span> : null}
-            </div>
             {!isMobile && longDescription ? (
               <div className="relative h-12 overflow-hidden">
                 <motion.p
                   initial={false}
                   animate={isHovered ? { y: [18, -16], opacity: [0.15, 0.95, 0.82] } : { y: 18, opacity: 0 }}
-                  transition={isHovered ? { duration: 10, ease: 'linear', repeat: Infinity, repeatType: 'loop' } : { duration: 0.2 }}
+                  transition={isHovered ? { duration: DESKTOP_PREVIEW_TEXT_SCROLL_S, ease: 'linear', repeat: Infinity, repeatType: 'loop' } : { duration: 0.2 }}
                   className="absolute inset-x-0 bottom-0 text-sm leading-6 text-white/84"
                   style={{
                     display: '-webkit-box',
