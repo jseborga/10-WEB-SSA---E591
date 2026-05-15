@@ -60,8 +60,7 @@ const categoryLabels: Record<string, Record<string, string>> = {
 const PROJECT_DETAIL_IMAGE_HOLD_MS = 15600
 const PROJECT_DETAIL_IMAGE_TRANSITION_S = 3.1
 const PROJECT_DETAIL_CRAWL_MOBILE_S = 48
-const PROJECT_DETAIL_CRAWL_DESKTOP_S = 60
-const PROJECT_DETAIL_CRAWL_FULLSCREEN_S = 64
+const PROJECT_DETAIL_CRAWL_DESKTOP_S = 52
 
 // Internal component with key-based reset
 function ProjectDetailContent({ project, similarProjects, onClose }: { project: Project; similarProjects: Project[]; onClose: () => void }) {
@@ -395,14 +394,12 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     isMobile ? 'w-full' : 'w-[min(56vw,860px)]'
                   }`}
                 >
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/86 to-transparent" />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/94 to-transparent" />
                   <div className="relative mb-4 space-y-2">
-                    <h2 className="text-2xl font-light tracking-tight text-white sm:text-4xl">
+                    <h2 className="text-3xl font-light tracking-tight text-white sm:text-5xl">
                       {getTitle()}
                     </h2>
                     <p
-                      className="text-[11px] uppercase tracking-[0.18em] text-white/68 sm:text-xs"
+                      className="text-xs uppercase tracking-[0.18em] text-white/72 sm:text-[13px]"
                       style={{
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
@@ -413,7 +410,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       {technicalSubtitle}
                     </p>
                     <p
-                      className="text-xs leading-5 text-white/78 sm:max-w-2xl sm:text-sm sm:leading-6"
+                      className="text-sm leading-6 text-white/82 sm:max-w-2xl sm:text-base sm:leading-7"
                       style={{
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
@@ -433,7 +430,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       {crawlSections.map((section, index) => (
                         <div key={`${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
                           <p
-                            className="text-center text-xs leading-6 text-white/84 sm:text-sm sm:leading-7"
+                            className="text-center text-sm leading-7 text-white/88 sm:text-base sm:leading-8"
                             style={{
                               display: '-webkit-box',
                               WebkitLineClamp: 4,
@@ -445,7 +442,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                           </p>
                           {section.extended ? (
                             <p
-                              className="mt-3 text-center text-xs leading-6 text-white/74 sm:text-sm sm:leading-7"
+                              className="mt-3 text-center text-sm leading-7 text-white/76 sm:text-base sm:leading-8"
                               style={{
                                 display: '-webkit-box',
                                 WebkitLineClamp: 4,
@@ -747,52 +744,6 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 className="h-full w-full object-contain"
                 onClick={(event) => event.stopPropagation()}
               />
-            </div>
-            <div className="absolute inset-x-0 bottom-0 z-[95] flex justify-center px-4 pb-6 sm:px-8 sm:pb-12">
-              <div className={`relative overflow-hidden text-center ${isMobile ? 'w-full' : 'w-[min(34vw,560px)]'}`}>
-                <div className="mb-3">
-                  <h2 className="text-2xl font-light tracking-tight text-white sm:text-6xl">
-                    {getTitle()}
-                  </h2>
-                </div>
-                <div className={`relative overflow-hidden ${isMobile ? 'h-28' : 'h-48'}`}>
-                  <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
-                    <div
-                      className="will-change-transform"
-                      style={{ animation: `projectDetailCrawl ${isMobile ? PROJECT_DETAIL_CRAWL_MOBILE_S : PROJECT_DETAIL_CRAWL_FULLSCREEN_S}s linear infinite` }}
-                    >
-                      {crawlSections.map((section, index) => (
-                        <div key={`fullscreen-${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
-                          <p
-                            className="text-center text-base leading-8 text-white/92 sm:text-[1.7rem] sm:leading-[2.8rem]"
-                            style={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            {section.body}
-                          </p>
-                          {section.extended ? (
-                            <p
-                              className="mt-3 text-center text-base leading-8 text-white/76 sm:text-[1.7rem] sm:leading-[2.8rem]"
-                              style={{
-                                display: '-webkit-box',
-                                WebkitLineClamp: 3,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              {section.extended}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
             {filteredMediaItems.length > 1 ? (
               <>
