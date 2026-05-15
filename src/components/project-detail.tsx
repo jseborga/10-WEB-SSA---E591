@@ -748,7 +748,6 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 onClick={(event) => event.stopPropagation()}
               />
             </div>
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/72 via-black/8 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 z-[95] flex justify-center px-4 pb-6 sm:px-8 sm:pb-12">
               <div className={`relative overflow-hidden text-center ${isMobile ? 'w-full' : 'w-[min(34vw,560px)]'}`}>
                 <div className="mb-3">
@@ -756,7 +755,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     {getTitle()}
                   </h2>
                 </div>
-                <div className={`relative overflow-hidden ${isMobile ? 'h-24' : 'h-40'}`}>
+                <div className={`relative overflow-hidden ${isMobile ? 'h-28' : 'h-48'}`}>
                   <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
                     <div
                       className="will-change-transform"
@@ -765,7 +764,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       {crawlSections.map((section, index) => (
                         <div key={`fullscreen-${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
                           <p
-                            className="text-center text-sm leading-7 text-white/88 sm:text-lg sm:leading-9"
+                            className="text-center text-base leading-8 text-white/92 sm:text-[1.7rem] sm:leading-[2.8rem]"
                             style={{
                               display: '-webkit-box',
                               WebkitLineClamp: 3,
@@ -777,7 +776,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                           </p>
                           {section.extended ? (
                             <p
-                              className="mt-3 text-center text-sm leading-7 text-white/72 sm:text-lg sm:leading-9"
+                              className="mt-3 text-center text-base leading-8 text-white/76 sm:text-[1.7rem] sm:leading-[2.8rem]"
                               style={{
                                 display: '-webkit-box',
                                 WebkitLineClamp: 3,
