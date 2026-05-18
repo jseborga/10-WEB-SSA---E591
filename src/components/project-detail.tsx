@@ -414,7 +414,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       </>
                     ) : null}
                     <p
-                      className="text-base leading-7 text-white/86 sm:max-w-2xl sm:text-base sm:leading-7"
+                      className="text-base leading-7 text-white/86 sm:max-w-2xl sm:text-lg sm:leading-8"
                       style={{
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
@@ -422,7 +422,9 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                         overflow: 'hidden',
                       }}
                     >
-                      {currentMedia?.label || project.description || getTitle()}
+                      {isMobile
+                        ? currentMedia?.label || project.description || getTitle()
+                        : getFullDescription() || project.description || getTitle()}
                     </p>
                   </div>
                   <div className={`relative overflow-hidden ${isMobile ? 'h-20' : 'h-28'}`}>
@@ -431,13 +433,13 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                         className="will-change-transform"
                         style={{
                           animation: `projectDetailCrawl ${isMobile ? PROJECT_DETAIL_CRAWL_MOBILE_S : PROJECT_DETAIL_CRAWL_DESKTOP_S}s linear infinite`,
-                          animationDelay: isMobile ? '-6s' : '0s',
+                          animationDelay: isMobile ? '-6s' : '-8s',
                         }}
                       >
                       {crawlSections.map((section, index) => (
                         <div key={`${section.title}-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
                           <p
-                            className="text-center text-sm leading-7 text-white/88 sm:text-base sm:leading-8"
+                            className="text-center text-sm leading-7 text-white/88 sm:text-lg sm:leading-9"
                             style={{
                               display: '-webkit-box',
                               WebkitLineClamp: 4,
@@ -449,7 +451,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                           </p>
                           {section.extended ? (
                             <p
-                              className="mt-3 text-center text-sm leading-7 text-white/76 sm:text-base sm:leading-8"
+                              className="mt-3 text-center text-sm leading-7 text-white/76 sm:text-lg sm:leading-9"
                               style={{
                                 display: '-webkit-box',
                                 WebkitLineClamp: 4,
