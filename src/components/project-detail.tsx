@@ -59,7 +59,7 @@ const categoryLabels: Record<string, Record<string, string>> = {
 
 const PROJECT_DETAIL_IMAGE_HOLD_MS = 15600
 const PROJECT_DETAIL_IMAGE_TRANSITION_S = 3.1
-const PROJECT_DETAIL_CRAWL_MOBILE_S = 42
+const PROJECT_DETAIL_CRAWL_MOBILE_S = 36
 const PROJECT_DETAIL_CRAWL_DESKTOP_S = 46
 
 // Internal component with key-based reset
@@ -390,7 +390,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       {crawlSections.map((section, index) => (
                         <div key={`crawl-section-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
                           <p
-                            className="text-center text-lg leading-8 text-white/90 sm:text-[15px] sm:leading-8"
+                            className="text-center text-xl leading-9 text-white/90 sm:text-[1.75rem] sm:leading-[2.7rem]"
                             style={{
                               whiteSpace: 'pre-line',
                             }}
@@ -660,6 +660,8 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
               event.stopPropagation()
               setIsImageExpanded(false)
             }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
           >
             <button
               type="button"
@@ -679,30 +681,6 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                 onClick={(event) => event.stopPropagation()}
               />
             </div>
-            {filteredMediaItems.length > 1 ? (
-              <>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    prevImage()
-                  }}
-                  className="absolute left-4 top-1/2 z-[95] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    nextImage()
-                  }}
-                  className="absolute right-4 top-1/2 z-[95] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </button>
-              </>
-            ) : null}
           </motion.div>
         ) : null}
       </AnimatePresence>
