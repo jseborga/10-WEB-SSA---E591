@@ -390,7 +390,7 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                       {crawlSections.map((section, index) => (
                         <div key={`crawl-section-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
                           <p
-                            className="text-center text-base leading-7 text-white/90 sm:text-[13px] sm:leading-7"
+                            className="text-center text-lg leading-8 text-white/90 sm:text-[15px] sm:leading-8"
                             style={{
                               whiteSpace: 'pre-line',
                             }}
