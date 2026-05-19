@@ -378,19 +378,19 @@ function ProjectDetailContent({ project, similarProjects, onClose }: { project: 
                     isMobile ? 'w-full' : 'w-[min(56vw,860px)]'
                   }`}
                 >
-                  <div className={`relative overflow-hidden ${isMobile ? 'h-24' : 'h-32'}`}>
+                  <div className={`relative overflow-hidden ${isMobile ? 'h-24' : 'h-40'}`}>
                     <div className={`absolute inset-x-0 top-0 origin-bottom ${isMobile ? '[transform:perspective(700px)_rotateX(16deg)]' : '[transform:perspective(900px)_rotateX(24deg)]'}`}>
                       <div
                         className="will-change-transform"
                         style={{
                           animation: `projectDetailCrawl ${isMobile ? PROJECT_DETAIL_CRAWL_MOBILE_S : PROJECT_DETAIL_CRAWL_DESKTOP_S}s linear infinite`,
-                          animationDelay: isMobile ? '-8s' : '-10s',
+                          animationDelay: isMobile ? '-8s' : '-22s',
                         }}
                       >
                       {crawlSections.map((section, index) => (
                         <div key={`crawl-section-${index}`} className={`${index > 0 ? 'pt-10' : ''}`}>
                           <p
-                            className="text-center text-xl leading-9 text-white/90 sm:text-[1.75rem] sm:leading-[2.7rem]"
+                            className="text-center text-xl leading-9 text-white/90 sm:text-[2.7rem] sm:leading-[4rem]"
                             style={{
                               whiteSpace: 'pre-line',
                             }}
