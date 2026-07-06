@@ -8611,32 +8611,20 @@ function MigrationSection() {
   const [confirmImport, setConfirmImport] = useState(false)
   const [importSummary, setImportSummary] = useState<MigrationImportSummary | null>(null)
 
-  const handleExport = async () => {
+  const handleExport = () => {
     setExporting(true)
 
-    try {
-      const response = await fetch(`/api/admin/backup/export${includeAnalytics ? '' : '?analytics=0'}`)
+    // Descarga directa: el navegador gestiona la descarga (con su barra de
+    // progreso) mientras el servidor envía el backup en streaming.
+    const link = document.createElement('a')
+    link.href = `/api/admin/backup/export${includeAnalytics ? '' : '?analytics=0'}`
+    link.download = `ssa-portal-backup-${new Date().toISOString().slice(0, 10)}.tar`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => null)
-        throw new Error(data?.error || 'Error al generar el backup')
-      }
-
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `ssa-portal-backup-${new Date().toISOString().slice(0, 10)}.tar`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-      toast.success('Backup generado. Guarda el archivo en un lugar seguro.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al generar el backup')
-    } finally {
-      setExporting(false)
-    }
+    toast.success('Generando backup… la descarga aparecerá en tu navegador en unos segundos.')
+    window.setTimeout(() => setExporting(false), 4000)
   }
 
   const handleImport = async () => {
@@ -8705,7 +8693,7 @@ function MigrationSection() {
           />
           Incluir datos de analítica (sesiones de visitantes, eventos y logs de automatización)
         </label>
-        <Button onClick={() => void handleExport()} disabled={exporting} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
+        <Button onClick={handleExport} disabled={exporting} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
           {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4 rotate-180" />}
           {exporting ? 'Generando backup…' : 'Descargar backup'}
         </Button>

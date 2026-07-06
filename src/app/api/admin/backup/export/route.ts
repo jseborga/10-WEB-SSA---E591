@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { exportBackup } from '@/lib/backup'
+import { exportBackupStream } from '@/lib/backup'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,14 +15,13 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const includeAnalytics = url.searchParams.get('analytics') !== '0'
 
-    const { archive } = await exportBackup({ includeAnalytics })
+    const { stream } = await exportBackupStream({ includeAnalytics })
     const fileName = `ssa-portal-backup-${new Date().toISOString().slice(0, 10)}.tar`
 
-    return new NextResponse(new Uint8Array(archive), {
+    return new NextResponse(stream, {
       headers: {
         'Content-Type': 'application/x-tar',
         'Content-Disposition': `attachment; filename="${fileName}"`,
-        'Content-Length': String(archive.length),
         'Cache-Control': 'no-store',
       },
     })

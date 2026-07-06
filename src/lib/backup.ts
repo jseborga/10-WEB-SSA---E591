@@ -104,23 +104,9 @@ function createTarHeader(name: string, size: number) {
   return header
 }
 
-function buildTar(entries: TarEntry[]) {
-  const blocks: Buffer[] = []
-
-  for (const entry of entries) {
-    blocks.push(createTarHeader(entry.name, entry.data.length))
-    blocks.push(entry.data)
-
-    const remainder = entry.data.length % 512
-
-    if (remainder > 0) {
-      blocks.push(Buffer.alloc(512 - remainder))
-    }
-  }
-
-  blocks.push(Buffer.alloc(1024))
-
-  return Buffer.concat(blocks)
+function tarPadding(size: number) {
+  const remainder = size % 512
+  return remainder > 0 ? Buffer.alloc(512 - remainder) : null
 }
 
 function readTarString(block: Buffer, offset: number, length: number) {
@@ -167,7 +153,10 @@ function parseTar(buffer: Buffer) {
 
 // --- Exportación ---
 
-export async function exportBackup(options?: { includeAnalytics?: boolean }) {
+// Genera el tar por partes: la base de datos primero y luego cada archivo de
+// medios leído justo antes de enviarse, para no cargar todo el backup en RAM
+// y que la descarga comience de inmediato.
+export async function exportBackupStream(options?: { includeAnalytics?: boolean }) {
   const includeAnalytics = options?.includeAnalytics ?? true
   const tables: Record<string, Record<string, unknown>[]> = {}
 
@@ -186,37 +175,66 @@ export async function exportBackup(options?: { includeAnalytics?: boolean }) {
     tables,
   }
 
-  const entries: TarEntry[] = [
-    {
-      name: 'database.json',
-      data: Buffer.from(JSON.stringify(payload), 'utf8'),
-    },
-  ]
-
+  const databaseBuffer = Buffer.from(JSON.stringify(payload), 'utf8')
   const mediaRoot = await ensureMediaRoot()
-  const mediaFiles = await readdir(mediaRoot)
-  let mediaCount = 0
+  const mediaFileNames: string[] = []
 
-  for (const fileName of mediaFiles) {
-    const filePath = path.join(mediaRoot, fileName)
-    const fileStat = await stat(filePath)
+  for (const fileName of await readdir(mediaRoot)) {
+    const fileStat = await stat(path.join(mediaRoot, fileName))
 
-    if (!fileStat.isFile()) {
-      continue
+    if (fileStat.isFile()) {
+      mediaFileNames.push(fileName)
+    }
+  }
+
+  async function* tarChunks() {
+    yield createTarHeader('database.json', databaseBuffer.length)
+    yield databaseBuffer
+
+    const databasePadding = tarPadding(databaseBuffer.length)
+
+    if (databasePadding) {
+      yield databasePadding
     }
 
-    entries.push({
-      name: `uploads/${fileName}`,
-      data: await readFile(filePath),
-    })
-    mediaCount += 1
+    for (const fileName of mediaFileNames) {
+      const data = await readFile(path.join(mediaRoot, fileName))
+      yield createTarHeader(`uploads/${fileName}`, data.length)
+      yield data
+
+      const padding = tarPadding(data.length)
+
+      if (padding) {
+        yield padding
+      }
+    }
+
+    yield Buffer.alloc(1024)
   }
 
-  return {
-    archive: buildTar(entries),
-    tableCounts: Object.fromEntries(Object.entries(tables).map(([model, rows]) => [model, rows.length])),
-    mediaCount,
-  }
+  const iterator = tarChunks()
+
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { value, done } = await iterator.next()
+
+        if (done) {
+          controller.close()
+          return
+        }
+
+        controller.enqueue(new Uint8Array(value))
+      } catch (error) {
+        controller.error(error)
+      }
+    },
+    cancel() {
+      void iterator.return?.(undefined)
+    },
+  })
+
+  return { stream, mediaCount: mediaFileNames.length }
 }
 
 // --- Importación ---
