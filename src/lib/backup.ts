@@ -65,36 +65,22 @@ function writeOctal(header: Buffer, offset: number, length: number, value: numbe
   header.write(value.toString(8).padStart(length - 1, '0') + '\0', offset, 'ascii')
 }
 
-function createTarHeader(name: string, size: number) {
+function buildTarHeaderBlock(name: string, size: number, typeFlag: string, prefix = '') {
   const header = Buffer.alloc(512)
 
-  let fileName = name
-  let prefix = ''
-
-  if (Buffer.byteLength(fileName) > 100) {
-    const slashIndex = name.indexOf('/')
-
-    if (slashIndex === -1 || Buffer.byteLength(name.slice(slashIndex + 1)) > 100) {
-      throw new Error(`Nombre de archivo demasiado largo para el backup: ${name}`)
-    }
-
-    prefix = name.slice(0, slashIndex)
-    fileName = name.slice(slashIndex + 1)
-  }
-
-  header.write(fileName, 0, 'utf8')
+  header.write(name, 0, 100, 'utf8')
   writeOctal(header, 100, 8, 0o644)
   writeOctal(header, 108, 8, 0)
   writeOctal(header, 116, 8, 0)
   writeOctal(header, 124, 12, size)
   writeOctal(header, 136, 12, Math.floor(Date.now() / 1000))
   header.fill(' ', 148, 156)
-  header.write('0', 156, 'ascii')
+  header.write(typeFlag, 156, 'ascii')
   header.write('ustar\0', 257, 'ascii')
   header.write('00', 263, 'ascii')
 
   if (prefix) {
-    header.write(prefix, 345, 'utf8')
+    header.write(prefix, 345, 155, 'utf8')
   }
 
   let checksum = 0
@@ -106,6 +92,43 @@ function createTarHeader(name: string, size: number) {
   header.write(checksum.toString(8).padStart(6, '0') + '\0 ', 148, 'ascii')
 
   return header
+}
+
+// Cabecera(s) de una entrada. Los nombres que no caben en los 100 bytes del
+// formato clásico usan el mecanismo GNU @LongLink (compatible con tar y 7-Zip):
+// una pseudo-entrada 'L' lleva el nombre completo como datos.
+function createTarEntryBlocks(name: string, size: number) {
+  if (Buffer.byteLength(name, 'utf8') <= 100) {
+    return [buildTarHeaderBlock(name, size, '0')]
+  }
+
+  const slashIndex = name.indexOf('/')
+
+  if (slashIndex !== -1) {
+    const prefix = name.slice(0, slashIndex)
+    const rest = name.slice(slashIndex + 1)
+
+    if (Buffer.byteLength(rest, 'utf8') <= 100 && Buffer.byteLength(prefix, 'utf8') <= 155) {
+      return [buildTarHeaderBlock(rest, size, '0', prefix)]
+    }
+  }
+
+  const nameData = Buffer.from(name + '\0', 'utf8')
+  const blocks = [buildTarHeaderBlock('././@LongLink', nameData.length, 'L'), nameData]
+  const padding = tarPadding(nameData.length)
+
+  if (padding) {
+    blocks.push(padding)
+  }
+
+  let truncatedName = name.slice(0, 100)
+
+  while (Buffer.byteLength(truncatedName, 'utf8') > 100) {
+    truncatedName = truncatedName.slice(0, -1)
+  }
+
+  blocks.push(buildTarHeaderBlock(truncatedName, size, '0'))
+  return blocks
 }
 
 function tarPadding(size: number) {
@@ -122,6 +145,7 @@ function readTarString(block: Buffer, offset: number, length: number) {
 function parseTar(buffer: Buffer) {
   const entries: TarEntry[] = []
   let offset = 0
+  let pendingLongName: string | null = null
 
   while (offset + 512 <= buffer.length) {
     const block = buffer.subarray(offset, offset + 512)
@@ -140,16 +164,24 @@ function parseTar(buffer: Buffer) {
 
     const typeFlag = block[156]
     offset += 512
+    const data = buffer.subarray(offset, offset + size)
+    offset += Math.ceil(size / 512) * 512
+
+    if (typeFlag === 0x4c) {
+      // Entrada GNU @LongLink: contiene el nombre completo de la siguiente entrada
+      pendingLongName = data.toString('utf8').replace(/\0+$/, '')
+      continue
+    }
 
     // Solo archivos regulares (typeflag '0' o NUL)
     if (typeFlag === 0x30 || typeFlag === 0) {
       entries.push({
-        name: prefix ? `${prefix}/${name}` : name,
-        data: Buffer.from(buffer.subarray(offset, offset + size)),
+        name: pendingLongName ?? (prefix ? `${prefix}/${name}` : name),
+        data: Buffer.from(data),
       })
     }
 
-    offset += Math.ceil(size / 512) * 512
+    pendingLongName = null
   }
 
   return entries
@@ -273,7 +305,7 @@ async function generateBackupTar(id: string, includeAnalytics: boolean) {
   }
 
   async function* tarChunks() {
-    yield createTarHeader('database.json', databaseBuffer.length)
+    yield* createTarEntryBlocks('database.json', databaseBuffer.length)
     yield databaseBuffer
 
     const databasePadding = tarPadding(databaseBuffer.length)
@@ -284,7 +316,7 @@ async function generateBackupTar(id: string, includeAnalytics: boolean) {
 
     for (const fileName of mediaFileNames) {
       const data = await readFile(path.join(mediaRoot, fileName))
-      yield createTarHeader(`uploads/${fileName}`, data.length)
+      yield* createTarEntryBlocks(`uploads/${fileName}`, data.length)
       yield data
 
       const padding = tarPadding(data.length)
