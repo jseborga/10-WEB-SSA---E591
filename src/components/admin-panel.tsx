@@ -8611,20 +8611,39 @@ function MigrationSection() {
   const [confirmImport, setConfirmImport] = useState(false)
   const [importSummary, setImportSummary] = useState<MigrationImportSummary | null>(null)
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setExporting(true)
 
-    // Descarga directa: el navegador gestiona la descarga (con su barra de
-    // progreso) mientras el servidor envía el backup en streaming.
-    const link = document.createElement('a')
-    link.href = `/api/admin/backup/export${includeAnalytics ? '' : '?analytics=0'}`
-    link.download = `ssa-portal-backup-${new Date().toISOString().slice(0, 10)}.tar`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    try {
+      // Paso 1: el servidor genera el backup como archivo temporal.
+      const response = await fetch('/api/admin/backup/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ includeAnalytics }),
+      })
 
-    toast.success('Generando backup… la descarga aparecerá en tu navegador en unos segundos.')
-    window.setTimeout(() => setExporting(false), 4000)
+      const data = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Error al generar el backup')
+      }
+
+      // Paso 2: descarga gestionada por el navegador, con soporte de
+      // reanudación si la conexión se corta (HTTP Range).
+      const link = document.createElement('a')
+      link.href = `/api/admin/backup/file?id=${encodeURIComponent(data.id)}`
+      link.download = data.fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      const sizeMb = (data.size / (1024 * 1024)).toFixed(1)
+      toast.success(`Backup listo (${sizeMb} MB). Si la descarga se interrumpe, usa "Reanudar" en las descargas del navegador; el archivo queda disponible 6 horas.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al generar el backup')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const handleImport = async () => {
@@ -8693,7 +8712,7 @@ function MigrationSection() {
           />
           Incluir datos de analítica (sesiones de visitantes, eventos y logs de automatización)
         </label>
-        <Button onClick={handleExport} disabled={exporting} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
+        <Button onClick={() => void handleExport()} disabled={exporting} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
           {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4 rotate-180" />}
           {exporting ? 'Generando backup…' : 'Descargar backup'}
         </Button>

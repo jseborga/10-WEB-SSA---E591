@@ -1,4 +1,8 @@
-import { readdir, readFile, stat } from 'fs/promises'
+import { createWriteStream } from 'fs'
+import { mkdir, readdir, readFile, rm, stat } from 'fs/promises'
+import { randomBytes } from 'node:crypto'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import path from 'path'
 import { db } from '@/lib/db'
 import { ensureMediaRoot, saveUploadedFile } from '@/lib/media-storage'
@@ -153,10 +157,47 @@ function parseTar(buffer: Buffer) {
 
 // --- Exportación ---
 
-// Genera el tar por partes: la base de datos primero y luego cada archivo de
-// medios leído justo antes de enviarse, para no cargar todo el backup en RAM
-// y que la descarga comience de inmediato.
-export async function exportBackupStream(options?: { includeAnalytics?: boolean }) {
+export function getBackupsDir() {
+  return process.env.BACKUP_DIR?.trim() || path.join(process.cwd(), 'data', 'backups')
+}
+
+const BACKUP_FILE_MAX_AGE_MS = 6 * 60 * 60 * 1000
+
+function isValidBackupId(id: string) {
+  return /^[a-z0-9-]{8,80}$/.test(id)
+}
+
+async function cleanupOldBackups(backupsDir: string) {
+  let fileNames: string[]
+
+  try {
+    fileNames = await readdir(backupsDir)
+  } catch {
+    return
+  }
+
+  for (const fileName of fileNames) {
+    if (!fileName.endsWith('.tar')) {
+      continue
+    }
+
+    try {
+      const filePath = path.join(backupsDir, fileName)
+      const fileStat = await stat(filePath)
+
+      if (Date.now() - fileStat.mtimeMs > BACKUP_FILE_MAX_AGE_MS) {
+        await rm(filePath, { force: true })
+      }
+    } catch {
+      // Si un archivo no se puede limpiar, no bloquea la generación del backup
+    }
+  }
+}
+
+// Genera el backup como archivo en disco (data/backups) para poder servirlo
+// después con soporte de rangos HTTP: la descarga es reanudable y no depende
+// de mantener viva una única conexión larga.
+export async function prepareBackupFile(options?: { includeAnalytics?: boolean }) {
   const includeAnalytics = options?.includeAnalytics ?? true
   const tables: Record<string, Record<string, unknown>[]> = {}
 
@@ -212,29 +253,48 @@ export async function exportBackupStream(options?: { includeAnalytics?: boolean 
     yield Buffer.alloc(1024)
   }
 
-  const iterator = tarChunks()
+  const backupsDir = getBackupsDir()
+  await mkdir(backupsDir, { recursive: true })
+  await cleanupOldBackups(backupsDir)
 
-  const stream = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { value, done } = await iterator.next()
+  const id = `${new Date().toISOString().slice(0, 10)}-${randomBytes(8).toString('hex')}`
+  const filePath = path.join(backupsDir, `${id}.tar`)
 
-        if (done) {
-          controller.close()
-          return
-        }
+  try {
+    await pipeline(Readable.from(tarChunks()), createWriteStream(filePath))
+  } catch (error) {
+    await rm(filePath, { force: true }).catch(() => undefined)
+    throw error
+  }
 
-        controller.enqueue(new Uint8Array(value))
-      } catch (error) {
-        controller.error(error)
-      }
-    },
-    cancel() {
-      void iterator.return?.(undefined)
-    },
-  })
+  const fileStat = await stat(filePath)
 
-  return { stream, mediaCount: mediaFileNames.length }
+  return {
+    id,
+    size: fileStat.size,
+    fileName: `ssa-portal-backup-${id}.tar`,
+    mediaCount: mediaFileNames.length,
+  }
+}
+
+export async function resolveBackupFile(id: string) {
+  if (!isValidBackupId(id)) {
+    return null
+  }
+
+  const filePath = path.join(getBackupsDir(), `${id}.tar`)
+
+  try {
+    const fileStat = await stat(filePath)
+
+    if (!fileStat.isFile()) {
+      return null
+    }
+
+    return { path: filePath, size: fileStat.size }
+  } catch {
+    return null
+  }
 }
 
 // --- Importación ---
