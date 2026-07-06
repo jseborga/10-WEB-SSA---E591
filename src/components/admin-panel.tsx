@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin, ArrowUp, ArrowDown, CornerDownRight, Share2 } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin, ArrowUp, ArrowDown, CornerDownRight, Share2, DatabaseBackup } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -312,7 +312,7 @@ interface AutomationLogEntry {
   createdAt: string
 }
 
-type TabType = 'analytics' | 'projects' | 'publications' | 'crm' | 'requests' | 'telegram' | 'logs' | 'leads' | 'contacts' | 'site-config' | 'ai-config' | 'automation' | 'users'
+type TabType = 'analytics' | 'projects' | 'publications' | 'crm' | 'requests' | 'telegram' | 'logs' | 'leads' | 'contacts' | 'site-config' | 'ai-config' | 'automation' | 'users' | 'migration'
 type SessionState = {
   checking: boolean
   configured: boolean
@@ -2411,7 +2411,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
       return
     }
 
-    if (session.role !== 'admin' && ['site-config', 'ai-config', 'telegram', 'logs', 'users'].includes(activeTab)) {
+    if (session.role !== 'admin' && ['site-config', 'ai-config', 'telegram', 'logs', 'users', 'migration'].includes(activeTab)) {
       setActiveTab('analytics')
     }
   }, [activeTab, session.role])
@@ -4178,6 +4178,7 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
           { key: 'ai-config' as TabType, label: t.admin.aiConfig, icon: Bot },
           { key: 'telegram' as TabType, label: 'Telegram', icon: Send },
           { key: 'users' as TabType, label: 'Usuarios', icon: Users },
+          { key: 'migration' as TabType, label: 'Migración', icon: DatabaseBackup },
         ]
       : []),
   ]
@@ -7489,6 +7490,8 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
                       </div>
                     </div>
                   )}
+
+                  {activeTab === 'migration' && <MigrationSection />}
                         </div>
                       </ScrollArea>
                   </div>
@@ -8591,5 +8594,190 @@ export function AdminPanel({ initialOpen = false, hideLauncher = false, fullPage
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+type MigrationImportSummary = {
+  exportedAt: string | null
+  tables: Record<string, number>
+  mediaFiles: number
+}
+
+function MigrationSection() {
+  const [exporting, setExporting] = useState(false)
+  const [includeAnalytics, setIncludeAnalytics] = useState(true)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [confirmImport, setConfirmImport] = useState(false)
+  const [importSummary, setImportSummary] = useState<MigrationImportSummary | null>(null)
+
+  const handleExport = async () => {
+    setExporting(true)
+
+    try {
+      const response = await fetch(`/api/admin/backup/export${includeAnalytics ? '' : '?analytics=0'}`)
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'Error al generar el backup')
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `ssa-portal-backup-${new Date().toISOString().slice(0, 10)}.tar`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      toast.success('Backup generado. Guarda el archivo en un lugar seguro.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al generar el backup')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleImport = async () => {
+    if (!importFile) {
+      return
+    }
+
+    setImporting(true)
+    setImportSummary(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', importFile)
+
+      const response = await fetch('/api/admin/backup/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Error al importar el backup')
+      }
+
+      setImportSummary(data as MigrationImportSummary)
+      setImportFile(null)
+      setConfirmImport(false)
+      toast.success('Backup restaurado correctamente. Recarga la página para ver los datos.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al importar el backup')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const totalRestoredRows = importSummary
+    ? Object.values(importSummary.tables).reduce((sum, count) => sum + count, 0)
+    : 0
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-base font-light">Migración y backups</h2>
+        <p className="text-xs text-zinc-500 mt-1">
+          Exporta todo el contenido del portal (base de datos + imágenes y videos subidos) en un solo archivo, y restáuralo en otra instancia para migrar de servidor.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 p-4 space-y-4">
+        <div className="flex items-start gap-3">
+          <DatabaseBackup className="mt-0.5 h-5 w-5 text-zinc-500" />
+          <div>
+            <h3 className="text-sm font-medium text-zinc-900">Exportar backup</h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              Descarga un archivo <code>.tar</code> con todas las tablas (proyectos, publicaciones, CRM, configuración, usuarios) y los archivos de la carpeta de medios.
+            </p>
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-zinc-600">
+          <input
+            type="checkbox"
+            checked={includeAnalytics}
+            onChange={(event) => setIncludeAnalytics(event.target.checked)}
+            className="h-3.5 w-3.5 rounded border-zinc-300"
+          />
+          Incluir datos de analítica (sesiones de visitantes, eventos y logs de automatización)
+        </label>
+        <Button onClick={() => void handleExport()} disabled={exporting} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
+          {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4 rotate-180" />}
+          {exporting ? 'Generando backup…' : 'Descargar backup'}
+        </Button>
+      </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 space-y-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />
+          <div>
+            <h3 className="text-sm font-medium text-zinc-900">Restaurar backup</h3>
+            <p className="mt-1 text-xs text-zinc-600">
+              Sube un backup generado por otra instancia del portal. <strong>Esta acción reemplaza TODOS los datos actuales</strong> (incluidos los usuarios del panel) por los del backup. Los archivos de medios se agregan sin borrar los existentes.
+            </p>
+          </div>
+        </div>
+        <input
+          type="file"
+          accept=".tar,application/x-tar"
+          onChange={(event) => {
+            setImportFile(event.target.files?.[0] ?? null)
+            setConfirmImport(false)
+            setImportSummary(null)
+          }}
+          className="block w-full text-xs text-zinc-600 file:mr-3 file:rounded-full file:border-0 file:bg-zinc-900 file:px-4 file:py-2 file:text-xs file:text-white hover:file:bg-zinc-800"
+        />
+        {importFile && (
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-600">
+              Archivo seleccionado: <strong>{importFile.name}</strong> ({(importFile.size / (1024 * 1024)).toFixed(1)} MB)
+            </p>
+            <label className="flex items-center gap-2 text-xs text-zinc-700">
+              <input
+                type="checkbox"
+                checked={confirmImport}
+                onChange={(event) => setConfirmImport(event.target.checked)}
+                className="h-3.5 w-3.5 rounded border-zinc-300"
+              />
+              Entiendo que se reemplazarán todos los datos actuales de esta instancia.
+            </label>
+            <Button
+              onClick={() => void handleImport()}
+              disabled={!confirmImport || importing}
+              className="bg-amber-600 hover:bg-amber-700 text-sm"
+            >
+              {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              {importing ? 'Restaurando…' : 'Restaurar backup'}
+            </Button>
+          </div>
+        )}
+        {importSummary && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+            <p className="flex items-center gap-1.5 font-medium">
+              <CheckCircle2 className="h-4 w-4" /> Restauración completada
+            </p>
+            <p className="mt-1">
+              {totalRestoredRows} registros restaurados en {Object.keys(importSummary.tables).length} tablas · {importSummary.mediaFiles} archivos de medios
+              {importSummary.exportedAt ? ` · backup del ${new Date(importSummary.exportedAt).toLocaleString()}` : ''}
+            </p>
+            <p className="mt-1 text-emerald-700">Recarga la página (o vuelve a iniciar sesión si cambiaron los usuarios).</p>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 p-4 text-xs text-zinc-500 space-y-2">
+        <p className="font-medium text-zinc-700">Cómo migrar de servidor</p>
+        <ol className="list-decimal space-y-1 pl-4">
+          <li>En el servidor actual: descarga el backup desde esta pestaña.</li>
+          <li>En el servidor nuevo: despliega la aplicación (misma versión) y configura <code>ADMIN_PASSWORD</code>.</li>
+          <li>Ingresa al panel del servidor nuevo y restaura el backup aquí.</li>
+          <li>Verifica proyectos, imágenes y configuración; luego apunta el dominio al servidor nuevo.</li>
+        </ol>
+      </div>
+    </div>
   )
 }
