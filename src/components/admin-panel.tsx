@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Plus, Pencil, Trash2, Building2, FileText, Mail, Bot, Save, Image as ImageIcon, Power, Globe, LockKeyhole, LogIn, LogOut, Upload, Video, Loader2, Users, Send, Check, XCircle, RefreshCw, BarChart3, Link2, Sparkles, CheckCircle2, AlertTriangle, Facebook, Instagram, Youtube, Linkedin, ArrowUp, ArrowDown, CornerDownRight, Share2, DatabaseBackup } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8603,19 +8603,59 @@ type MigrationImportSummary = {
   mediaFiles: number
 }
 
+type BackupListItem = {
+  id: string
+  status: 'generating' | 'ready' | 'error'
+  createdAt: string
+  size?: number
+  mediaCount?: number
+  includeAnalytics?: boolean
+  error?: string
+}
+
 function MigrationSection() {
-  const [exporting, setExporting] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [includeAnalytics, setIncludeAnalytics] = useState(true)
+  const [backups, setBackups] = useState<BackupListItem[]>([])
+  const [backupsLoaded, setBackupsLoaded] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [confirmImport, setConfirmImport] = useState(false)
   const [importSummary, setImportSummary] = useState<MigrationImportSummary | null>(null)
 
-  const handleExport = async () => {
-    setExporting(true)
+  const refreshBackups = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/backup/list')
+      const data = await response.json().catch(() => null)
+
+      if (response.ok && Array.isArray(data?.backups)) {
+        setBackups(data.backups as BackupListItem[])
+      }
+    } catch {
+      // La lista se reintenta en el siguiente refresco
+    } finally {
+      setBackupsLoaded(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshBackups()
+  }, [refreshBackups])
+
+  // Mientras haya un backup generándose, refresca la lista cada 4 segundos.
+  useEffect(() => {
+    if (!backups.some((backup) => backup.status === 'generating')) {
+      return
+    }
+
+    const interval = window.setInterval(() => void refreshBackups(), 4000)
+    return () => window.clearInterval(interval)
+  }, [backups, refreshBackups])
+
+  const handleGenerate = async () => {
+    setGenerating(true)
 
     try {
-      // Paso 1: el servidor genera el backup como archivo temporal.
       const response = await fetch('/api/admin/backup/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -8625,25 +8665,42 @@ function MigrationSection() {
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Error al generar el backup')
+        throw new Error(data?.error || 'Error al iniciar la generación del backup')
       }
 
-      // Paso 2: descarga gestionada por el navegador, con soporte de
-      // reanudación si la conexión se corta (HTTP Range).
-      const link = document.createElement('a')
-      link.href = `/api/admin/backup/file?id=${encodeURIComponent(data.id)}`
-      link.download = data.fileName
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-
-      const sizeMb = (data.size / (1024 * 1024)).toFixed(1)
-      toast.success(`Backup listo (${sizeMb} MB). Si la descarga se interrumpe, usa "Reanudar" en las descargas del navegador; el archivo queda disponible 6 horas.`)
+      toast.success('Generación iniciada. El backup aparecerá en la lista como "Listo" en unos momentos.')
+      await refreshBackups()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al generar el backup')
+      toast.error(error instanceof Error ? error.message : 'Error al iniciar la generación del backup')
     } finally {
-      setExporting(false)
+      setGenerating(false)
     }
+  }
+
+  const handleDeleteBackup = async (id: string) => {
+    try {
+      const response = await fetch(`/api/admin/backup/file?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'Error al eliminar el backup')
+      }
+
+      toast.success('Backup eliminado.')
+      await refreshBackups()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar el backup')
+    }
+  }
+
+  const formatSize = (size?: number) => {
+    if (!size && size !== 0) {
+      return '—'
+    }
+
+    return size >= 1024 * 1024
+      ? `${(size / (1024 * 1024)).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(size / 1024))} KB`
   }
 
   const handleImport = async () => {
@@ -8697,9 +8754,9 @@ function MigrationSection() {
         <div className="flex items-start gap-3">
           <DatabaseBackup className="mt-0.5 h-5 w-5 text-zinc-500" />
           <div>
-            <h3 className="text-sm font-medium text-zinc-900">Exportar backup</h3>
+            <h3 className="text-sm font-medium text-zinc-900">Generar backup</h3>
             <p className="mt-1 text-xs text-zinc-500">
-              Descarga un archivo <code>.tar</code> con todas las tablas (proyectos, publicaciones, CRM, configuración, usuarios) y los archivos de la carpeta de medios.
+              Crea un archivo <code>.tar</code> con todas las tablas (proyectos, publicaciones, CRM, configuración, usuarios) y los archivos de la carpeta de medios. El backup se genera en el servidor y luego lo descargas desde la lista.
             </p>
           </div>
         </div>
@@ -8712,10 +8769,69 @@ function MigrationSection() {
           />
           Incluir datos de analítica (sesiones de visitantes, eventos y logs de automatización)
         </label>
-        <Button onClick={() => void handleExport()} disabled={exporting} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
-          {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4 rotate-180" />}
-          {exporting ? 'Generando backup…' : 'Descargar backup'}
+        <Button onClick={() => void handleGenerate()} disabled={generating} className="bg-zinc-900 hover:bg-zinc-800 text-sm">
+          {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          {generating ? 'Iniciando…' : 'Generar backup'}
         </Button>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-medium text-zinc-900">Backups disponibles</h3>
+          <button type="button" onClick={() => void refreshBackups()} className="rounded-full border border-zinc-200 px-3 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50">
+            <RefreshCw className="mr-1 inline h-3 w-3" />
+            Actualizar
+          </button>
+        </div>
+        <p className="text-xs text-zinc-500">Los backups se conservan 24 horas en el servidor. La descarga es reanudable si se corta la conexión.</p>
+        {!backupsLoaded && <p className="py-4 text-center text-sm text-zinc-500">Cargando…</p>}
+        {backupsLoaded && backups.length === 0 && (
+          <p className="py-4 text-center text-sm text-zinc-500">No hay backups generados. Usa &quot;Generar backup&quot; para crear el primero.</p>
+        )}
+        <div className="space-y-2">
+          {backups.map((backup) => (
+            <div key={backup.id} className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm text-zinc-900">
+                  {new Date(backup.createdAt).toLocaleString()}
+                  {backup.includeAnalytics === false && <span className="ml-2 text-[11px] text-zinc-400">sin analítica</span>}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {backup.status === 'generating' && (
+                    <span className="inline-flex items-center gap-1 text-amber-600"><Loader2 className="h-3 w-3 animate-spin" /> Generando…</span>
+                  )}
+                  {backup.status === 'ready' && (
+                    <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-3 w-3" /> Listo · {formatSize(backup.size)}{typeof backup.mediaCount === 'number' ? ` · ${backup.mediaCount} archivos de medios` : ''}</span>
+                  )}
+                  {backup.status === 'error' && (
+                    <span className="inline-flex items-center gap-1 text-red-600"><XCircle className="h-3 w-3" /> Error: {backup.error || 'desconocido'}</span>
+                  )}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {backup.status === 'ready' && (
+                  <a
+                    href={`/api/admin/backup/file?id=${encodeURIComponent(backup.id)}`}
+                    download={`ssa-portal-backup-${backup.id}.tar`}
+                    className="inline-flex items-center rounded-full bg-zinc-900 px-3 py-1.5 text-xs text-white hover:bg-zinc-800"
+                  >
+                    <Upload className="mr-1 h-3.5 w-3.5 rotate-180" />
+                    Descargar
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteBackup(backup.id)}
+                  disabled={backup.status === 'generating'}
+                  className="inline-flex items-center rounded-full border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 space-y-4">

@@ -1,5 +1,5 @@
 import { createWriteStream } from 'fs'
-import { mkdir, readdir, readFile, rm, stat } from 'fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
 import { randomBytes } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -161,10 +161,58 @@ export function getBackupsDir() {
   return process.env.BACKUP_DIR?.trim() || path.join(process.cwd(), 'data', 'backups')
 }
 
-const BACKUP_FILE_MAX_AGE_MS = 6 * 60 * 60 * 1000
+const BACKUP_FILE_MAX_AGE_MS = 24 * 60 * 60 * 1000
+const BACKUP_GENERATION_STALE_MS = 30 * 60 * 1000
+
+export type BackupStatus = {
+  id: string
+  status: 'generating' | 'ready' | 'error'
+  createdAt: string
+  finishedAt?: string
+  size?: number
+  mediaCount?: number
+  includeAnalytics?: boolean
+  error?: string
+}
 
 function isValidBackupId(id: string) {
   return /^[a-z0-9-]{8,80}$/.test(id)
+}
+
+function tarFilePath(id: string) {
+  return path.join(getBackupsDir(), `${id}.tar`)
+}
+
+function statusFilePath(id: string) {
+  return path.join(getBackupsDir(), `${id}.json`)
+}
+
+async function writeBackupStatus(status: BackupStatus) {
+  await writeFile(statusFilePath(status.id), JSON.stringify(status), 'utf8')
+}
+
+async function readBackupStatus(id: string): Promise<BackupStatus | null> {
+  try {
+    const parsed = JSON.parse(await readFile(statusFilePath(id), 'utf8')) as BackupStatus
+
+    if (parsed?.id !== id || !['generating', 'ready', 'error'].includes(parsed.status)) {
+      return null
+    }
+
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+// Un backup que sigue "generando" tras un reinicio del servidor queda huérfano:
+// se reporta como error para que el usuario genere uno nuevo.
+function withStaleCheck(status: BackupStatus): BackupStatus {
+  if (status.status === 'generating' && Date.now() - new Date(status.createdAt).getTime() > BACKUP_GENERATION_STALE_MS) {
+    return { ...status, status: 'error', error: 'La generación se interrumpió (posible reinicio del servidor). Genera un backup nuevo.' }
+  }
+
+  return status
 }
 
 async function cleanupOldBackups(backupsDir: string) {
@@ -177,7 +225,7 @@ async function cleanupOldBackups(backupsDir: string) {
   }
 
   for (const fileName of fileNames) {
-    if (!fileName.endsWith('.tar')) {
+    if (!fileName.endsWith('.tar') && !fileName.endsWith('.json')) {
       continue
     }
 
@@ -194,11 +242,7 @@ async function cleanupOldBackups(backupsDir: string) {
   }
 }
 
-// Genera el backup como archivo en disco (data/backups) para poder servirlo
-// después con soporte de rangos HTTP: la descarga es reanudable y no depende
-// de mantener viva una única conexión larga.
-export async function prepareBackupFile(options?: { includeAnalytics?: boolean }) {
-  const includeAnalytics = options?.includeAnalytics ?? true
+async function generateBackupTar(id: string, includeAnalytics: boolean) {
   const tables: Record<string, Record<string, unknown>[]> = {}
 
   for (const model of BACKUP_MODELS) {
@@ -253,12 +297,7 @@ export async function prepareBackupFile(options?: { includeAnalytics?: boolean }
     yield Buffer.alloc(1024)
   }
 
-  const backupsDir = getBackupsDir()
-  await mkdir(backupsDir, { recursive: true })
-  await cleanupOldBackups(backupsDir)
-
-  const id = `${new Date().toISOString().slice(0, 10)}-${randomBytes(8).toString('hex')}`
-  const filePath = path.join(backupsDir, `${id}.tar`)
+  const filePath = tarFilePath(id)
 
   try {
     await pipeline(Readable.from(tarChunks()), createWriteStream(filePath))
@@ -269,12 +308,79 @@ export async function prepareBackupFile(options?: { includeAnalytics?: boolean }
 
   const fileStat = await stat(filePath)
 
-  return {
+  return { size: fileStat.size, mediaCount: mediaFileNames.length }
+}
+
+// Lanza la generación en segundo plano y responde de inmediato: el avance se
+// consulta con listBackups() y el archivo se descarga cuando está "ready".
+export async function startBackupGeneration(options?: { includeAnalytics?: boolean }) {
+  const includeAnalytics = options?.includeAnalytics ?? true
+  const backupsDir = getBackupsDir()
+  await mkdir(backupsDir, { recursive: true })
+  await cleanupOldBackups(backupsDir)
+
+  const id = `${new Date().toISOString().slice(0, 10)}-${randomBytes(6).toString('hex')}`
+  const status: BackupStatus = {
     id,
-    size: fileStat.size,
-    fileName: `ssa-portal-backup-${id}.tar`,
-    mediaCount: mediaFileNames.length,
+    status: 'generating',
+    createdAt: new Date().toISOString(),
+    includeAnalytics,
   }
+
+  await writeBackupStatus(status)
+
+  void (async () => {
+    try {
+      const { size, mediaCount } = await generateBackupTar(id, includeAnalytics)
+      await writeBackupStatus({ ...status, status: 'ready', size, mediaCount, finishedAt: new Date().toISOString() })
+    } catch (error) {
+      console.error(`Error generating backup ${id}:`, error)
+      await writeBackupStatus({
+        ...status,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Error desconocido al generar el backup',
+        finishedAt: new Date().toISOString(),
+      }).catch(() => undefined)
+    }
+  })()
+
+  return status
+}
+
+export async function listBackups(): Promise<BackupStatus[]> {
+  let fileNames: string[]
+
+  try {
+    fileNames = await readdir(getBackupsDir())
+  } catch {
+    return []
+  }
+
+  const backups: BackupStatus[] = []
+
+  for (const fileName of fileNames) {
+    if (!fileName.endsWith('.json')) {
+      continue
+    }
+
+    const status = await readBackupStatus(fileName.slice(0, -5))
+
+    if (status) {
+      backups.push(withStaleCheck(status))
+    }
+  }
+
+  return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export async function deleteBackup(id: string) {
+  if (!isValidBackupId(id)) {
+    return false
+  }
+
+  await rm(tarFilePath(id), { force: true })
+  await rm(statusFilePath(id), { force: true })
+  return true
 }
 
 export async function resolveBackupFile(id: string) {
@@ -282,16 +388,20 @@ export async function resolveBackupFile(id: string) {
     return null
   }
 
-  const filePath = path.join(getBackupsDir(), `${id}.tar`)
+  const status = await readBackupStatus(id)
+
+  if (!status || status.status !== 'ready') {
+    return null
+  }
 
   try {
-    const fileStat = await stat(filePath)
+    const fileStat = await stat(tarFilePath(id))
 
     if (!fileStat.isFile()) {
       return null
     }
 
-    return { path: filePath, size: fileStat.size }
+    return { path: tarFilePath(id), size: fileStat.size }
   } catch {
     return null
   }

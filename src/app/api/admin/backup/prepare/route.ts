@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { prepareBackupFile } from '@/lib/backup'
+import { startBackupGeneration } from '@/lib/backup'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     const includeAnalytics = body?.includeAnalytics !== false
 
-    const backup = await prepareBackupFile({ includeAnalytics })
+    const backup = await startBackupGeneration({ includeAnalytics })
 
     return NextResponse.json({ success: true, ...backup })
   } catch (error) {

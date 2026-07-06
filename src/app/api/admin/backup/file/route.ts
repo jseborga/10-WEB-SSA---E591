@@ -2,7 +2,7 @@ import { createReadStream } from 'fs'
 import { Readable } from 'node:stream'
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { resolveBackupFile } from '@/lib/backup'
+import { deleteBackup, resolveBackupFile } from '@/lib/backup'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,5 +91,28 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error downloading backup:', error)
     return NextResponse.json({ error: 'Error al descargar el backup' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const unauthorized = await requireAdmin(request)
+
+    if (unauthorized) {
+      return unauthorized
+    }
+
+    const url = new URL(request.url)
+    const id = url.searchParams.get('id') || ''
+    const deleted = await deleteBackup(id)
+
+    if (!deleted) {
+      return NextResponse.json({ error: 'Identificador de backup inválido' }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting backup:', error)
+    return NextResponse.json({ error: 'Error al eliminar el backup' }, { status: 500 })
   }
 }
