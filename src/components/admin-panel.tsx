@@ -8620,6 +8620,7 @@ function MigrationSection() {
   const [backupsLoaded, setBackupsLoaded] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
+  const [importProgress, setImportProgress] = useState<number | null>(null)
   const [confirmImport, setConfirmImport] = useState(false)
   const [importSummary, setImportSummary] = useState<MigrationImportSummary | null>(null)
 
@@ -8710,23 +8711,65 @@ function MigrationSection() {
 
     setImporting(true)
     setImportSummary(null)
+    setImportProgress(0)
 
     try {
-      const formData = new FormData()
-      formData.append('file', importFile)
+      // Subida por fragmentos: peticiones cortas que atraviesan los límites
+      // del proxy, con reintentos automáticos por fragmento.
+      const startResponse = await fetch('/api/admin/backup/import/start', { method: 'POST' })
+      const startData = await startResponse.json().catch(() => null)
 
-      const response = await fetch('/api/admin/backup/import', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const data = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        throw new Error(data?.error || 'Error al importar el backup')
+      if (!startResponse.ok || !startData?.id) {
+        throw new Error(startData?.error || 'No se pudo iniciar la subida del backup')
       }
 
-      setImportSummary(data as MigrationImportSummary)
+      const uploadId = startData.id as string
+      const chunkSize = 8 * 1024 * 1024
+
+      for (let offset = 0; offset < importFile.size; offset += chunkSize) {
+        const chunk = importFile.slice(offset, offset + chunkSize)
+        let uploaded = false
+        let lastError: Error | null = null
+
+        for (let attempt = 0; attempt < 3 && !uploaded; attempt++) {
+          try {
+            const response = await fetch(
+              `/api/admin/backup/import/chunk?id=${encodeURIComponent(uploadId)}&offset=${offset}`,
+              { method: 'POST', body: chunk },
+            )
+            const data = await response.json().catch(() => null)
+
+            if (!response.ok) {
+              throw new Error(data?.error || 'Error subiendo un fragmento del backup')
+            }
+
+            uploaded = true
+          } catch (error) {
+            lastError = error instanceof Error ? error : new Error('Error subiendo un fragmento del backup')
+            await new Promise((resolve) => window.setTimeout(resolve, 1500 * (attempt + 1)))
+          }
+        }
+
+        if (!uploaded) {
+          throw lastError ?? new Error('Error subiendo un fragmento del backup')
+        }
+
+        setImportProgress(Math.min(99, Math.round(((offset + chunkSize) / importFile.size) * 100)))
+      }
+
+      setImportProgress(100)
+
+      const finishResponse = await fetch(
+        `/api/admin/backup/import/finish?id=${encodeURIComponent(uploadId)}`,
+        { method: 'POST' },
+      )
+      const finishData = await finishResponse.json().catch(() => null)
+
+      if (!finishResponse.ok) {
+        throw new Error(finishData?.error || 'Error al restaurar el backup')
+      }
+
+      setImportSummary(finishData as MigrationImportSummary)
       setImportFile(null)
       setConfirmImport(false)
       toast.success('Backup restaurado correctamente. Recarga la página para ver los datos.')
@@ -8734,6 +8777,7 @@ function MigrationSection() {
       toast.error(error instanceof Error ? error.message : 'Error al importar el backup')
     } finally {
       setImporting(false)
+      setImportProgress(null)
     }
   }
 
@@ -8874,7 +8918,11 @@ function MigrationSection() {
               className="bg-amber-600 hover:bg-amber-700 text-sm"
             >
               {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              {importing ? 'Restaurando…' : 'Restaurar backup'}
+              {importing
+                ? importProgress !== null && importProgress < 100
+                  ? `Subiendo… ${importProgress}%`
+                  : 'Restaurando…'
+                : 'Restaurar backup'}
             </Button>
           </div>
         )}

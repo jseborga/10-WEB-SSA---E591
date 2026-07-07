@@ -1,11 +1,11 @@
 import { createWriteStream } from 'fs'
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
+import { appendFile, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
 import { randomBytes } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import path from 'path'
 import { db } from '@/lib/db'
-import { ensureMediaRoot, saveUploadedFile } from '@/lib/media-storage'
+import { ensureMediaRoot } from '@/lib/media-storage'
 
 export const BACKUP_FORMAT = 'ssa-portal-backup'
 export const BACKUP_VERSION = 1
@@ -55,11 +55,6 @@ function getDelegate(client: unknown, model: BackupModel) {
 }
 
 // --- Escritura/lectura de archivos tar (formato ustar, sin dependencias) ---
-
-type TarEntry = {
-  name: string
-  data: Buffer
-}
 
 function writeOctal(header: Buffer, offset: number, length: number, value: number) {
   header.write(value.toString(8).padStart(length - 1, '0') + '\0', offset, 'ascii')
@@ -142,50 +137,6 @@ function readTarString(block: Buffer, offset: number, length: number) {
   return slice.subarray(0, end === -1 ? length : end).toString('utf8')
 }
 
-function parseTar(buffer: Buffer) {
-  const entries: TarEntry[] = []
-  let offset = 0
-  let pendingLongName: string | null = null
-
-  while (offset + 512 <= buffer.length) {
-    const block = buffer.subarray(offset, offset + 512)
-
-    if (block.every((byte) => byte === 0)) {
-      break
-    }
-
-    const name = readTarString(block, 0, 100)
-    const prefix = readTarString(block, 345, 155)
-    const size = parseInt(readTarString(block, 124, 12).trim() || '0', 8)
-
-    if (Number.isNaN(size) || size < 0 || offset + 512 + size > buffer.length) {
-      throw new Error('El archivo de backup está corrupto o incompleto.')
-    }
-
-    const typeFlag = block[156]
-    offset += 512
-    const data = buffer.subarray(offset, offset + size)
-    offset += Math.ceil(size / 512) * 512
-
-    if (typeFlag === 0x4c) {
-      // Entrada GNU @LongLink: contiene el nombre completo de la siguiente entrada
-      pendingLongName = data.toString('utf8').replace(/\0+$/, '')
-      continue
-    }
-
-    // Solo archivos regulares (typeflag '0' o NUL)
-    if (typeFlag === 0x30 || typeFlag === 0) {
-      entries.push({
-        name: pendingLongName ?? (prefix ? `${prefix}/${name}` : name),
-        data: Buffer.from(data),
-      })
-    }
-
-    pendingLongName = null
-  }
-
-  return entries
-}
 
 // --- Exportación ---
 
@@ -257,7 +208,7 @@ async function cleanupOldBackups(backupsDir: string) {
   }
 
   for (const fileName of fileNames) {
-    if (!fileName.endsWith('.tar') && !fileName.endsWith('.json')) {
+    if (!fileName.endsWith('.tar') && !fileName.endsWith('.json') && !fileName.endsWith('.part')) {
       continue
     }
 
@@ -447,18 +398,11 @@ export type ImportSummary = {
   mediaFiles: number
 }
 
-export async function importBackup(archive: Buffer): Promise<ImportSummary> {
-  const entries = parseTar(archive)
-  const databaseEntry = entries.find((entry) => entry.name === 'database.json')
-
-  if (!databaseEntry) {
-    throw new Error('El archivo no contiene database.json. ¿Es un backup válido del portal?')
-  }
-
+function parseBackupPayload(buffer: Buffer): BackupPayload {
   let payload: BackupPayload
 
   try {
-    payload = JSON.parse(databaseEntry.data.toString('utf8')) as BackupPayload
+    payload = JSON.parse(buffer.toString('utf8')) as BackupPayload
   } catch {
     throw new Error('No se pudo leer database.json del backup.')
   }
@@ -471,6 +415,10 @@ export async function importBackup(archive: Buffer): Promise<ImportSummary> {
     throw new Error(`Versión de backup no soportada (${payload.version}). Esta instancia soporta la versión ${BACKUP_VERSION}.`)
   }
 
+  return payload
+}
+
+async function restoreDatabase(payload: BackupPayload) {
   const restoredTables: Record<string, number> = {}
 
   await db.$transaction(
@@ -495,27 +443,174 @@ export async function importBackup(archive: Buffer): Promise<ImportSummary> {
     { timeout: 180_000, maxWait: 15_000 },
   )
 
-  await ensureMediaRoot()
-  let mediaFiles = 0
+  return restoredTables
+}
 
-  for (const entry of entries) {
-    if (!entry.name.startsWith('uploads/')) {
-      continue
+// Restaura leyendo el tar directamente desde disco: database.json se procesa
+// primero (transacción de BD) y los medios se copian por bloques de 1 MB, sin
+// cargar el backup completo en memoria.
+async function importBackupFromFile(filePath: string): Promise<ImportSummary> {
+  const handle = await open(filePath, 'r')
+
+  try {
+    const fileSize = (await handle.stat()).size
+    const header = Buffer.alloc(512)
+    let offset = 0
+    let pendingLongName: string | null = null
+    let payload: BackupPayload | null = null
+    let restoredTables: Record<string, number> = {}
+    let mediaFiles = 0
+    let mediaRoot: string | null = null
+
+    while (offset + 512 <= fileSize) {
+      await handle.read(header, 0, 512, offset)
+
+      if (header.every((byte) => byte === 0)) {
+        break
+      }
+
+      const name = readTarString(header, 0, 100)
+      const prefix = readTarString(header, 345, 155)
+      const entrySize = parseInt(readTarString(header, 124, 12).trim() || '0', 8)
+      const typeFlag = header[156]
+      offset += 512
+      const dataStart = offset
+
+      if (Number.isNaN(entrySize) || entrySize < 0 || dataStart + entrySize > fileSize) {
+        throw new Error('El archivo de backup está corrupto o incompleto.')
+      }
+
+      offset += Math.ceil(entrySize / 512) * 512
+
+      if (typeFlag === 0x4c) {
+        // Entrada GNU @LongLink: contiene el nombre completo de la siguiente entrada
+        const nameBuffer = Buffer.alloc(entrySize)
+        await handle.read(nameBuffer, 0, entrySize, dataStart)
+        pendingLongName = nameBuffer.toString('utf8').replace(/\0+$/, '')
+        continue
+      }
+
+      if (typeFlag !== 0x30 && typeFlag !== 0) {
+        pendingLongName = null
+        continue
+      }
+
+      const entryName = pendingLongName ?? (prefix ? `${prefix}/${name}` : name)
+      pendingLongName = null
+
+      if (entryName === 'database.json') {
+        const payloadBuffer = Buffer.alloc(entrySize)
+        await handle.read(payloadBuffer, 0, entrySize, dataStart)
+        payload = parseBackupPayload(payloadBuffer)
+        restoredTables = await restoreDatabase(payload)
+        continue
+      }
+
+      if (entryName.startsWith('uploads/')) {
+        if (!payload) {
+          throw new Error('El archivo no contiene database.json al inicio. ¿Es un backup válido del portal?')
+        }
+
+        const fileName = path.basename(entryName)
+
+        if (!fileName) {
+          continue
+        }
+
+        if (!mediaRoot) {
+          mediaRoot = await ensureMediaRoot()
+        }
+
+        const target = await open(path.join(mediaRoot, fileName), 'w')
+
+        try {
+          const chunk = Buffer.alloc(1024 * 1024)
+          let copied = 0
+
+          while (copied < entrySize) {
+            const toRead = Math.min(chunk.length, entrySize - copied)
+            await handle.read(chunk, 0, toRead, dataStart + copied)
+            await target.write(chunk, 0, toRead)
+            copied += toRead
+          }
+        } finally {
+          await target.close()
+        }
+
+        mediaFiles += 1
+      }
     }
 
-    const fileName = path.basename(entry.name)
-
-    if (!fileName) {
-      continue
+    if (!payload) {
+      throw new Error('El archivo no contiene database.json. ¿Es un backup válido del portal?')
     }
 
-    await saveUploadedFile(fileName, entry.data)
-    mediaFiles += 1
+    return {
+      exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : null,
+      tables: restoredTables,
+      mediaFiles,
+    }
+  } finally {
+    await handle.close()
+  }
+}
+
+// --- Subida por fragmentos ---
+// El cliente envía el backup en fragmentos pequeños (varias peticiones cortas
+// en lugar de una sola gigante) para atravesar los límites de tamaño y tiempo
+// del proxy; el servidor los va anexando a un archivo temporal.
+
+function uploadFilePath(id: string) {
+  return path.join(getBackupsDir(), `upload-${id}.part`)
+}
+
+export async function createImportUpload() {
+  const backupsDir = getBackupsDir()
+  await mkdir(backupsDir, { recursive: true })
+  await cleanupOldBackups(backupsDir)
+
+  const id = `${new Date().toISOString().slice(0, 10)}-${randomBytes(6).toString('hex')}`
+  await writeFile(uploadFilePath(id), Buffer.alloc(0))
+  return { id }
+}
+
+export async function appendImportChunk(id: string, offset: number, data: Buffer) {
+  if (!isValidBackupId(id)) {
+    throw new Error('Identificador de subida inválido')
   }
 
-  return {
-    exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : null,
-    tables: restoredTables,
-    mediaFiles,
+  const filePath = uploadFilePath(id)
+  let currentSize: number
+
+  try {
+    currentSize = (await stat(filePath)).size
+  } catch {
+    throw new Error('La subida no existe o expiró. Vuelve a iniciar la importación.')
+  }
+
+  if (offset < currentSize) {
+    // Reintento de un fragmento ya escrito: se acepta sin duplicar
+    return { size: currentSize }
+  }
+
+  if (offset > currentSize) {
+    throw new Error('Fragmento fuera de orden. Vuelve a iniciar la importación.')
+  }
+
+  await appendFile(filePath, data)
+  return { size: currentSize + data.length }
+}
+
+export async function finishImportUpload(id: string): Promise<ImportSummary> {
+  if (!isValidBackupId(id)) {
+    throw new Error('Identificador de subida inválido')
+  }
+
+  const filePath = uploadFilePath(id)
+
+  try {
+    return await importBackupFromFile(filePath)
+  } finally {
+    await rm(filePath, { force: true }).catch(() => undefined)
   }
 }
