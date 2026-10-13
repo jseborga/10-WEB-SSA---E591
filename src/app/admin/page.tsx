@@ -1,4 +1,4 @@
-import { AdminPanel } from '@/components/admin-panel'
+import { AdminShell } from '@/components/admin/admin-shell'
 
 export const metadata = {
   title: 'Admin | SSA Ingenieria',
@@ -9,9 +9,5 @@ export const metadata = {
 }
 
 export default function AdminPage() {
-  return (
-    <main className="min-h-screen bg-zinc-100">
-      <AdminPanel initialOpen hideLauncher fullPage />
-    </main>
-  )
+  return <AdminShell />
 }

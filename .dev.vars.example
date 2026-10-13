@@ -1,0 +1,6 @@
+# Copia este archivo a .dev.vars para desarrollo local (wrangler dev / preview).
+# En producción se definen con: npx wrangler secret put NOMBRE
+ADMIN_PASSWORD=una-contraseña-larga-de-12+-caracteres
+ADMIN_SESSION_SECRET=genera-con-openssl-rand-hex-32
+# Opcional: si no se configura desde el panel (Integraciones)
+GEMINI_API_KEY=

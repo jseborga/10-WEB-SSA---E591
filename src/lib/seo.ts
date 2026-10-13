@@ -32,13 +32,13 @@ type SeoProjectSource = {
   galleryMobile?: string | null
 }
 
-const FALLBACK_SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-  process.env.SITE_URL?.trim() ||
-  'http://localhost:3000'
+// Se lee en cada llamada: en Workers las variables llegan con la petición, no al cargar el módulo.
+function getFallbackSiteUrl() {
+  return process.env.SITE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'http://localhost:3000'
+}
 
 export function getSiteUrl(siteSettings?: SeoSiteSettings | null) {
-  const raw = siteSettings?.siteUrl?.trim() || FALLBACK_SITE_URL
+  const raw = siteSettings?.siteUrl?.trim() || getFallbackSiteUrl()
   const normalized = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`
   return normalized.replace(/\/+$/, '')
 }

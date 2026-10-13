@@ -97,6 +97,30 @@ async function ensureChatConfig() {
   return config
 }
 
+const SECRET_FIELDS = ['apiKey', 'automationApiKey', 'automationFallbackApiKey', 'imageApiKey'] as const
+const MASK_PREFIX = '••••'
+
+/** Las claves nunca viajan al navegador: solo un indicador con los últimos 4 caracteres. */
+function maskSecret(value: string | null) {
+  return value ? `${MASK_PREFIX}${value.slice(-4)}` : null
+}
+
+function getAdminChatConfig(config: Awaited<ReturnType<typeof ensureChatConfig>>) {
+  return {
+    ...config,
+    ...Object.fromEntries(SECRET_FIELDS.map((field) => [field, maskSecret(config[field])])),
+  }
+}
+
+/** Un valor enmascarado (o undefined) significa "no cambiar"; cadena vacía borra la clave. */
+function resolveSecret(next: unknown, current: string | null) {
+  if (typeof next !== 'string' || next.startsWith(MASK_PREFIX)) {
+    return current
+  }
+
+  return next.trim() || null
+}
+
 function getPublicChatConfig(config: Awaited<ReturnType<typeof ensureChatConfig>>) {
   return {
     enabled: config.enabled,
@@ -117,7 +141,7 @@ export async function GET(request: Request) {
     const config = await ensureChatConfig()
 
     if (getSessionFromRequest(request)?.role === 'admin') {
-      return NextResponse.json(config)
+      return NextResponse.json(getAdminChatConfig(config))
     }
 
     return NextResponse.json(getPublicChatConfig(config))
@@ -143,19 +167,19 @@ export async function PUT(request: Request) {
       data: {
         enabled: body.enabled ?? currentConfig.enabled,
         provider: body.provider ?? currentConfig.provider,
-        apiKey: body.apiKey ?? currentConfig.apiKey,
+        apiKey: resolveSecret(body.apiKey, currentConfig.apiKey),
         apiBaseUrl: body.apiBaseUrl ?? currentConfig.apiBaseUrl,
         model: body.model ?? currentConfig.model,
         automationProvider: body.automationProvider ?? currentConfig.automationProvider,
-        automationApiKey: body.automationApiKey ?? currentConfig.automationApiKey,
+        automationApiKey: resolveSecret(body.automationApiKey, currentConfig.automationApiKey),
         automationApiBaseUrl: body.automationApiBaseUrl ?? currentConfig.automationApiBaseUrl,
         automationModel: body.automationModel ?? currentConfig.automationModel,
         automationFallbackProvider: body.automationFallbackProvider ?? currentConfig.automationFallbackProvider,
-        automationFallbackApiKey: body.automationFallbackApiKey ?? currentConfig.automationFallbackApiKey,
+        automationFallbackApiKey: resolveSecret(body.automationFallbackApiKey, currentConfig.automationFallbackApiKey),
         automationFallbackApiBaseUrl: body.automationFallbackApiBaseUrl ?? currentConfig.automationFallbackApiBaseUrl,
         automationFallbackModel: body.automationFallbackModel ?? currentConfig.automationFallbackModel,
         imageProvider: body.imageProvider ?? currentConfig.imageProvider,
-        imageApiKey: body.imageApiKey ?? currentConfig.imageApiKey,
+        imageApiKey: resolveSecret(body.imageApiKey, currentConfig.imageApiKey),
         imageApiBaseUrl: body.imageApiBaseUrl ?? currentConfig.imageApiBaseUrl,
         imageModel: body.imageModel ?? currentConfig.imageModel,
         imagePrompt: body.imagePrompt ?? currentConfig.imagePrompt,
@@ -177,7 +201,7 @@ export async function PUT(request: Request) {
       },
     })
 
-    return NextResponse.json(config)
+    return NextResponse.json(getAdminChatConfig(config))
   } catch (error) {
     console.error('Error updating chat config:', error)
     return NextResponse.json({ error: 'Error al actualizar configuración' }, { status: 500 })

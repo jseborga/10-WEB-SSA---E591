@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import type { PublicSiteSettings } from '@/lib/public-site'
 
 interface SiteFooterProps {
@@ -8,6 +9,12 @@ interface SiteFooterProps {
 }
 
 export function SiteFooter({ siteSettings }: SiteFooterProps) {
+  const pathname = usePathname()
+
+  if (pathname?.startsWith('/admin')) {
+    return null
+  }
+
   const iconUrl = (siteSettings?.faviconUrl || siteSettings?.logoUrl || '/logo.svg').trim() || '/logo.svg'
   const companyName = (siteSettings?.legalName || siteSettings?.companyName || 'SSA Ingenieria SRL').trim()
   const descriptor = (siteSettings?.footerText || 'Empresa de servicios de construccion').trim()
