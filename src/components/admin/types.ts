@@ -81,3 +81,60 @@ export type PhotoEditorProps = {
   /** Se llama con la nueva versión guardada (el original nunca se sobrescribe). */
   onSaved: (asset: MediaAssetDTO) => void
 }
+
+/* ---- Publicaciones y redes sociales (Meta) ---- */
+
+/** Respuesta del API de publicaciones: el DTO más la galería ya parseada y la ruta pública. */
+export type PublicationListItem = PublicationDTO & {
+  galleryUrls: string[]
+  href: string
+}
+
+export type SocialNetwork = 'instagram' | 'facebook'
+
+export type SocialConnectionStatus = {
+  connected: boolean
+  provider: 'meta'
+  pageId: string | null
+  pageName: string | null
+  igUserId: string | null
+  igUsername: string | null
+  tokenPreview: string | null
+  tokenExpiresAt: string | null
+  autoPublish: boolean
+  lastSyncAt: string | null
+  lastSyncError: string | null
+  graphVersion: string
+}
+
+export type SocialPostMedia = {
+  type: 'image' | 'video'
+  url: string
+  thumbnailUrl?: string
+}
+
+export type SocialPostDTO = {
+  id: string
+  network: SocialNetwork
+  caption: string
+  permalink: string | null
+  timestamp: string | null
+  mediaType: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
+  media: SocialPostMedia[]
+  alreadyImported: boolean
+  publicationId?: string
+}
+
+export type SocialPostsResponse = {
+  posts: SocialPostDTO[]
+  nextCursor: string | null
+}
+
+export type SocialImportResult = {
+  imported: Array<{ id: string; publicationId: string }>
+  skipped: Array<{ id: string; reason: string; publicationId?: string }>
+  errors: Array<{ id: string; error: string }>
+}
+
+/** Clave de sessionStorage para pedir a la sección Publicaciones que abra una publicación concreta. */
+export const OPEN_PUBLICATION_KEY = 'ssa-admin:open-publication'

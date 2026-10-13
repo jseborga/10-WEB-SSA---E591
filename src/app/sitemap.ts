@@ -80,6 +80,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
+      url: `${siteUrl}/publicaciones`,
+      lastModified: pages[0]?.updatedAt ?? new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.75,
+    },
+    {
       url: `${siteUrl}/cotizacion`,
       lastModified: new Date(),
       changeFrequency: 'weekly',

@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server'
-import { isAdminAuthenticated, requireAuthenticatedUser } from '@/lib/admin-auth'
+import type { Prisma } from '@/lib/db'
+import { isAdminAuthenticated, requireAdmin, requireAuthenticatedUser } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
-import { ensureUniquePublicationSlug, normalizeSeoKeywords, slugifyPublicationValue } from '@/lib/publications'
-
-function parseMenuOrder(value: unknown) {
-  return typeof value === 'number' ? value : parseInt(String(value ?? ''), 10) || 0
-}
+import { buildPublicationWriteData, ensureUniquePublicationSlug, toPublicationDTO } from '@/lib/publications'
 
 export async function GET(
   request: Request,
@@ -25,7 +22,7 @@ export async function GET(
       return NextResponse.json({ error: 'Publicacion no encontrada' }, { status: 404 })
     }
 
-    return NextResponse.json(publication)
+    return NextResponse.json(toPublicationDTO(publication))
   } catch (error) {
     console.error('Error fetching publication:', error)
     return NextResponse.json({ error: 'Error al obtener publicacion' }, { status: 500 })
@@ -44,40 +41,36 @@ export async function PUT(
     }
 
     const { id } = await params
-    const body = await request.json()
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     const title = typeof body.title === 'string' ? body.title.trim() : ''
 
     if (!title) {
       return NextResponse.json({ error: 'El titulo es obligatorio' }, { status: 400 })
     }
 
-    const slug = await ensureUniquePublicationSlug(body.slug || title, id)
+    const existing = await db.publication.findUnique({
+      where: { id },
+      select: { id: true, publishedAt: true },
+    })
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Publicacion no encontrada' }, { status: 404 })
+    }
+
+    const slug = await ensureUniquePublicationSlug(typeof body.slug === 'string' && body.slug.trim() ? body.slug : title, id)
+    const data = buildPublicationWriteData(body)
+
+    // Se fija una sola vez, al publicar por primera vez (a menos que el cliente envíe una fecha).
+    if (data.published && !existing.publishedAt && !data.publishedAt) {
+      data.publishedAt = new Date()
+    }
 
     const publication = await db.publication.update({
       where: { id },
-      data: {
-        title,
-        titleEn: typeof body.titleEn === 'string' ? body.titleEn.trim() : null,
-        titlePt: typeof body.titlePt === 'string' ? body.titlePt.trim() : null,
-        slug,
-        excerpt: typeof body.excerpt === 'string' ? body.excerpt.trim() : null,
-        excerptEn: typeof body.excerptEn === 'string' ? body.excerptEn.trim() : null,
-        excerptPt: typeof body.excerptPt === 'string' ? body.excerptPt.trim() : null,
-        content: typeof body.content === 'string' ? body.content.trim() : null,
-        contentEn: typeof body.contentEn === 'string' ? body.contentEn.trim() : null,
-        contentPt: typeof body.contentPt === 'string' ? body.contentPt.trim() : null,
-        image: typeof body.image === 'string' ? body.image.trim() : null,
-        seoTitle: typeof body.seoTitle === 'string' ? body.seoTitle.trim() : null,
-        seoDescription: typeof body.seoDescription === 'string' ? body.seoDescription.trim() : null,
-        seoKeywords: normalizeSeoKeywords(body.seoKeywords),
-        published: Boolean(body.published),
-        category: typeof body.category === 'string' ? slugifyPublicationValue(body.category) || body.category.trim() : null,
-        showInMenu: Boolean(body.showInMenu),
-        menuOrder: parseMenuOrder(body.menuOrder),
-      },
+      data: { ...data, title, slug } as Prisma.PublicationUpdateInput,
     })
 
-    return NextResponse.json(publication)
+    return NextResponse.json(toPublicationDTO(publication))
   } catch (error) {
     console.error('Error updating publication:', error)
     if (error instanceof Error && error.message.toLowerCase().includes('unique constraint')) {
@@ -96,7 +89,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const unauthorized = await requireAuthenticatedUser(request)
+    const unauthorized = await requireAdmin(request)
 
     if (unauthorized) {
       return unauthorized

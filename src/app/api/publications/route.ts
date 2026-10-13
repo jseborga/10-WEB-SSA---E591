@@ -1,28 +1,58 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@/lib/db'
 import { isAdminAuthenticated, requireAuthenticatedUser } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
-import { ensureUniquePublicationSlug, normalizeSeoKeywords, slugifyPublicationValue } from '@/lib/publications'
-
-function parseMenuOrder(value: unknown) {
-  return typeof value === 'number' ? value : parseInt(String(value ?? ''), 10) || 0
-}
+import {
+  MANAGED_PUBLICATION_SLUGS,
+  buildPublicationWriteData,
+  ensureUniquePublicationSlug,
+  normalizePublicationSource,
+  toPublicationDTO,
+} from '@/lib/publications'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const isAdmin = isAdminAuthenticated(request)
-    const publishedOnly = isAdmin ? searchParams.get('published') === 'true' : true
+    const status = searchParams.get('status')
+    // Compatibilidad: ?published=true del panel antiguo.
+    const statusFilter = !isAdmin
+      ? 'published'
+      : status === 'draft' || status === 'published'
+        ? status
+        : searchParams.get('published') === 'true'
+          ? 'published'
+          : 'all'
     const menuOnly = searchParams.get('menu') === 'true'
+    const q = (searchParams.get('q') || '').trim().slice(0, 120)
+    const source = searchParams.get('source')
+    const kind = searchParams.get('kind')
+
+    const and: Prisma.PublicationWhereInput[] = []
+
+    if (statusFilter === 'published') and.push({ published: true })
+    if (statusFilter === 'draft') and.push({ published: false })
+    if (menuOnly) and.push({ showInMenu: true })
+    if (source) and.push({ source: normalizePublicationSource(source) })
+
+    if (kind === 'page') {
+      and.push({ OR: [{ showInMenu: true }, { slug: { in: MANAGED_PUBLICATION_SLUGS } }] })
+    } else if (kind === 'post') {
+      and.push({ showInMenu: false, slug: { notIn: MANAGED_PUBLICATION_SLUGS } })
+    }
+
+    if (q) {
+      and.push({
+        OR: [{ title: { contains: q } }, { excerpt: { contains: q } }, { slug: { contains: q } }, { category: { contains: q } }],
+      })
+    }
 
     const publications = await db.publication.findMany({
-      where: {
-        ...(publishedOnly ? { published: true } : {}),
-        ...(menuOnly ? { showInMenu: true } : {}),
-      },
+      where: and.length > 0 ? { AND: and } : {},
       orderBy: menuOnly ? [{ menuOrder: 'asc' }, { createdAt: 'asc' }] : [{ createdAt: 'desc' }],
     })
 
-    return NextResponse.json(publications)
+    return NextResponse.json(publications.map(toPublicationDTO))
   } catch (error) {
     console.error('Error fetching publications:', error)
     return NextResponse.json({ error: 'Error al obtener publicaciones' }, { status: 500 })
@@ -37,39 +67,26 @@ export async function POST(request: Request) {
       return unauthorized
     }
 
-    const body = await request.json()
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     const title = typeof body.title === 'string' ? body.title.trim() : ''
 
     if (!title) {
       return NextResponse.json({ error: 'El titulo es obligatorio' }, { status: 400 })
     }
 
-    const slug = await ensureUniquePublicationSlug(body.slug || title)
+    const slug = await ensureUniquePublicationSlug(typeof body.slug === 'string' && body.slug.trim() ? body.slug : title)
+    const data = buildPublicationWriteData(body)
+
+    // Fecha de publicación: la primera vez que se publica.
+    if (data.published && !data.publishedAt) {
+      data.publishedAt = new Date()
+    }
 
     const publication = await db.publication.create({
-      data: {
-        title,
-        titleEn: typeof body.titleEn === 'string' ? body.titleEn.trim() : null,
-        titlePt: typeof body.titlePt === 'string' ? body.titlePt.trim() : null,
-        slug,
-        excerpt: typeof body.excerpt === 'string' ? body.excerpt.trim() : null,
-        excerptEn: typeof body.excerptEn === 'string' ? body.excerptEn.trim() : null,
-        excerptPt: typeof body.excerptPt === 'string' ? body.excerptPt.trim() : null,
-        content: typeof body.content === 'string' ? body.content.trim() : null,
-        contentEn: typeof body.contentEn === 'string' ? body.contentEn.trim() : null,
-        contentPt: typeof body.contentPt === 'string' ? body.contentPt.trim() : null,
-        image: typeof body.image === 'string' ? body.image.trim() : null,
-        seoTitle: typeof body.seoTitle === 'string' ? body.seoTitle.trim() : null,
-        seoDescription: typeof body.seoDescription === 'string' ? body.seoDescription.trim() : null,
-        seoKeywords: normalizeSeoKeywords(body.seoKeywords),
-        published: Boolean(body.published),
-        category: typeof body.category === 'string' ? slugifyPublicationValue(body.category) || body.category.trim() : null,
-        showInMenu: Boolean(body.showInMenu),
-        menuOrder: parseMenuOrder(body.menuOrder),
-      },
+      data: { ...data, title, slug } as Prisma.PublicationCreateInput,
     })
 
-    return NextResponse.json(publication, { status: 201 })
+    return NextResponse.json(toPublicationDTO(publication), { status: 201 })
   } catch (error) {
     console.error('Error creating publication:', error)
     if (error instanceof Error && error.message.toLowerCase().includes('unique constraint')) {
