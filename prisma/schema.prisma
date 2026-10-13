@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Project {
@@ -70,8 +69,15 @@ model Publication {
   showInMenu  Boolean  @default(false)
   menuOrder   Int      @default(0)
   category    String?
+  gallery     String?
+  source      String   @default("manual")
+  externalId  String?
+  externalUrl String?
+  publishedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([source, externalId])
 }
 
 model ChatMessage {
@@ -250,8 +256,15 @@ model MediaAsset {
   telegramUserId    String?
   status            String   @default("ready")
   metadata          String?
+  alt               String?
+  width             Int?
+  height            Int?
+  parentId          String?
+  editRecipe        String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  @@index([parentId])
 }
 
 model ApprovalItem {
@@ -363,4 +376,26 @@ model ChatConfig {
   maxTokens         Int      @default(1000)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+model SocialConnection {
+  id            String    @id @default(cuid())
+  provider      String    @unique
+  pageId        String?
+  pageName      String?
+  igUserId      String?
+  igUsername    String?
+  accessToken   String?
+  tokenExpiresAt DateTime?
+  autoPublish   Boolean   @default(false)
+  lastSyncAt    DateTime?
+  lastSyncError String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model RateLimitBucket {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
 }

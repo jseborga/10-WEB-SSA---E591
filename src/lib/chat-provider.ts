@@ -1,4 +1,3 @@
-import ZAI from 'z-ai-web-dev-sdk'
 
 type ChatRole = 'user' | 'assistant'
 
@@ -18,7 +17,6 @@ type ProviderConfig = {
 }
 
 const DEFAULT_MODELS = {
-  default: 'default',
   openai: 'gpt-4o-mini',
   'openai-compatible': 'gpt-4o-mini',
   openrouter: 'openai/gpt-4o-mini',
@@ -27,12 +25,14 @@ const DEFAULT_MODELS = {
 } as const
 
 function normalizeProvider(provider: string | null | undefined) {
-  const normalized = (provider || 'default').trim().toLowerCase()
+  const normalized = (provider || 'google').trim().toLowerCase()
 
   switch (normalized) {
+    // El SDK z-ai no funciona en Workers: el proveedor por defecto pasa a ser Gemini.
+    case 'default':
     case 'z-ai':
     case 'zai':
-      return 'default'
+      return 'google'
     case 'openai-compatible':
     case 'openai_compatible':
     case 'compatible':
@@ -45,7 +45,7 @@ function normalizeProvider(provider: string | null | undefined) {
     case 'claude':
       return 'anthropic'
     default:
-      return normalized || 'default'
+      return normalized || 'google'
   }
 }
 
@@ -296,29 +296,10 @@ async function generateWithGoogle(config: ProviderConfig, history: ChatMessage[]
     .trim()
 }
 
-async function generateWithZAI(config: ProviderConfig, history: ChatMessage[], message: string) {
-  const zai = await ZAI.create()
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: 'assistant', content: config.systemPrompt },
-      ...history.map((item) => ({
-        role: item.role,
-        content: item.content,
-      })),
-      { role: 'user', content: message },
-    ],
-    thinking: { type: 'disabled' },
-  })
-
-  return completion.choices?.[0]?.message?.content || ''
-}
-
 export async function generateChatResponse(config: ProviderConfig, history: ChatMessage[], message: string) {
   const provider = normalizeProvider(config.provider)
 
   switch (provider) {
-    case 'default':
-      return generateWithZAI(config, history, message)
     case 'openai':
     case 'openai-compatible':
     case 'openrouter':

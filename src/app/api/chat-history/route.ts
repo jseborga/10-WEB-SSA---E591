@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { CHAT_SESSION_ID_PATTERN } from '@/lib/rate-limit'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get('sessionId')?.trim()
 
-    if (!sessionId) {
-      return NextResponse.json({ error: 'sessionId requerido' }, { status: 400 })
+    // El sessionId es un UUID aleatorio que solo conoce el navegador del visitante.
+    if (!sessionId || !CHAT_SESSION_ID_PATTERN.test(sessionId)) {
+      return NextResponse.json({ error: 'sessionId inválido' }, { status: 400 })
     }
 
     const messages = await db.chatMessage.findMany({

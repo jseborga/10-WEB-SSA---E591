@@ -1,3 +1,4 @@
+import { serializeJsonLd } from '@/lib/seo'
 import type { Metadata } from "next";
 import "./globals.css";
 import { SiteAnalyticsTracker } from "@/components/site-analytics-tracker";
@@ -109,11 +110,11 @@ export default async function RootLayout({
         `}} />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(websiteJsonLd) }}
         />
       </head>
       <body

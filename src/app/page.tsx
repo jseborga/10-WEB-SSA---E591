@@ -1,3 +1,4 @@
+import { serializeJsonLd } from '@/lib/seo'
 import HomePageClient from '@/components/home-page-client'
 import { db } from '@/lib/db'
 import { getHeroAiMessages } from '@/lib/hero-messages'
@@ -37,7 +38,7 @@ export default async function HomePage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(homeJsonLd),
+          __html: serializeJsonLd(homeJsonLd),
         }}
       />
       <HomePageClient initialProjects={projects} siteSettings={siteSettings} aiHeroMessages={aiHeroMessages} />

@@ -1,16 +1,16 @@
-import path from 'path'
 import { NextResponse } from 'next/server'
 import { requireAuthenticatedUser } from '@/lib/admin-auth'
-import { createStoredFileName, saveUploadedFile } from '@/lib/media-storage'
+import { db } from '@/lib/db'
+import { UPLOADABLE_CONTENT_TYPES, createStoredFileName, getMediaUrl, saveUploadedFile, toMediaKey } from '@/lib/media-storage'
+import { safeFetch } from '@/lib/safe-fetch'
 
-const MAX_FILE_SIZE = 120 * 1024 * 1024
+const MAX_FILE_SIZE = 95 * 1024 * 1024
 
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
   'image/gif': '.gif',
-  'image/svg+xml': '.svg',
   'video/mp4': '.mp4',
   'video/webm': '.webm',
   'video/quicktime': '.mov',
@@ -36,7 +36,7 @@ function normalizeHttpUrl(value: unknown) {
 
 function guessOriginalName(sourceUrl: string, contentType: string | null) {
   const parsed = new URL(sourceUrl)
-  const baseName = path.basename(parsed.pathname || '').trim()
+  const baseName = toMediaKey(decodeURIComponent(parsed.pathname || '')).trim()
   const extension = contentType ? EXTENSION_BY_CONTENT_TYPE[contentType.toLowerCase()] || '' : ''
 
   if (baseName) {
@@ -48,8 +48,7 @@ function guessOriginalName(sourceUrl: string, contentType: string | null) {
 
 function isAllowedContentType(contentType: string | null) {
   if (!contentType) return false
-  const normalized = contentType.toLowerCase()
-  return normalized.startsWith('image/') || normalized.startsWith('video/')
+  return UPLOADABLE_CONTENT_TYPES.has(contentType.toLowerCase()) && contentType !== 'application/pdf'
 }
 
 export async function POST(request: Request) {
@@ -83,8 +82,7 @@ export async function POST(request: Request) {
     }> = []
 
     for (const sourceUrl of urls) {
-      const response = await fetch(sourceUrl, {
-        redirect: 'follow',
+      const response = await safeFetch(sourceUrl, {
         headers: {
           'user-agent': 'SSA-Ingenieria-MediaImporter/1.0',
         },
@@ -107,8 +105,8 @@ export async function POST(request: Request) {
 
       const finalUrl = response.url || sourceUrl
       const originalName = guessOriginalName(finalUrl, contentType)
-      const storedFileName = createStoredFileName(originalName)
-      const buffer = Buffer.from(await response.arrayBuffer())
+      const storedFileName = createStoredFileName(originalName, contentType)
+      const buffer = new Uint8Array(await response.arrayBuffer())
 
       if (buffer.byteLength <= 0) {
         throw new Error(`El archivo descargado está vacío: ${sourceUrl}`)
@@ -118,11 +116,26 @@ export async function POST(request: Request) {
         throw new Error(`El archivo supera el límite de ${Math.round(MAX_FILE_SIZE / (1024 * 1024))} MB`)
       }
 
-      await saveUploadedFile(storedFileName, buffer)
+      await saveUploadedFile(storedFileName, buffer, contentType)
+      const url = getMediaUrl(storedFileName)
+
+      await db.mediaAsset.create({
+        data: {
+          source: 'import',
+          kind: contentType?.startsWith('video/') ? 'video' : 'image',
+          fileName: storedFileName,
+          originalName: originalName.slice(0, 200),
+          mimeType: contentType,
+          size: buffer.byteLength,
+          url,
+          storagePath: storedFileName,
+          metadata: JSON.stringify({ sourceUrl }),
+        },
+      })
 
       items.push({
         sourceUrl,
-        url: `/api/media/${storedFileName}`,
+        url,
         fileName: storedFileName,
         contentType,
         size: buffer.byteLength,

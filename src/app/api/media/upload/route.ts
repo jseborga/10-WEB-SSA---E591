@@ -1,8 +1,18 @@
 import { NextResponse } from 'next/server'
-import { requireAuthenticatedUser } from '@/lib/admin-auth'
-import { createStoredFileName, saveUploadedFile } from '@/lib/media-storage'
+import { getSessionFromRequest, requireAuthenticatedUser } from '@/lib/admin-auth'
+import { db } from '@/lib/db'
+import { UPLOADABLE_CONTENT_TYPES, createStoredFileName, getMediaUrl, saveUploadedFile } from '@/lib/media-storage'
 
-const MAX_FILE_SIZE = 80 * 1024 * 1024
+const MAX_FILE_SIZE = 95 * 1024 * 1024
+
+function readOptionalInt(value: FormDataEntryValue | null) {
+  const parsed = typeof value === 'string' ? Number.parseInt(value, 10) : Number.NaN
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function readOptionalText(value: FormDataEntryValue | null, maxLength = 500) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, maxLength) : null
+}
 
 export async function POST(request: Request) {
   try {
@@ -24,19 +34,49 @@ export async function POST(request: Request) {
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'El archivo supera el límite de 80 MB' }, { status: 400 })
+      return NextResponse.json({ error: 'El archivo supera el límite de 95 MB' }, { status: 400 })
     }
 
-    const storedFileName = createStoredFileName(file.name)
-    const buffer = Buffer.from(await file.arrayBuffer())
-    await saveUploadedFile(storedFileName, buffer)
+    const contentType = (file.type || '').toLowerCase()
+
+    if (!UPLOADABLE_CONTENT_TYPES.has(contentType)) {
+      return NextResponse.json(
+        { error: 'Formato no permitido. Usa JPG, PNG, WebP, AVIF, GIF, MP4, WebM, MOV o PDF.' },
+        { status: 400 },
+      )
+    }
+
+    const storedFileName = createStoredFileName(file.name, contentType)
+    await saveUploadedFile(storedFileName, file.stream(), contentType)
+    const url = getMediaUrl(storedFileName)
+    const session = getSessionFromRequest(request)
+
+    const asset = await db.mediaAsset.create({
+      data: {
+        source: readOptionalText(formData.get('source'), 40) || 'manual',
+        kind: contentType.startsWith('video/') ? 'video' : contentType === 'application/pdf' ? 'document' : 'image',
+        fileName: storedFileName,
+        originalName: file.name.slice(0, 200),
+        mimeType: contentType,
+        size: file.size,
+        url,
+        storagePath: storedFileName,
+        alt: readOptionalText(formData.get('alt')),
+        width: readOptionalInt(formData.get('width')),
+        height: readOptionalInt(formData.get('height')),
+        parentId: readOptionalText(formData.get('parentId'), 64),
+        editRecipe: readOptionalText(formData.get('editRecipe'), 4000),
+        metadata: session ? JSON.stringify({ uploadedBy: session.username }) : null,
+      },
+    })
 
     return NextResponse.json({
       success: true,
+      id: asset.id,
       fileName: storedFileName,
       originalName: file.name,
-      url: `/api/media/${storedFileName}`,
-      contentType: file.type || null,
+      url,
+      contentType,
       size: file.size,
     })
   } catch (error) {

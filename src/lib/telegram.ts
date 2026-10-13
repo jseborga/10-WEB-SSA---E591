@@ -1435,7 +1435,15 @@ async function applyProjectMediaApproval(payload: {
 }
 
 export async function syncTelegramWebhook(configOverride?: Awaited<ReturnType<typeof ensureTelegramConfig>>) {
-  const config = configOverride || (await ensureTelegramConfig())
+  let config = configOverride || (await ensureTelegramConfig())
+
+  // Sin secreto el webhook rechaza todo: se genera uno automáticamente al sincronizar.
+  if (!config.webhookSecret) {
+    config = await db.telegramConfig.update({
+      where: { id: config.id },
+      data: { webhookSecret: crypto.randomUUID().replace(/-/g, '') },
+    })
+  }
 
   if (!config.botToken || !config.webhookUrl) {
     throw new Error('Configura botToken y webhookUrl antes de sincronizar el webhook')
@@ -1447,9 +1455,7 @@ export async function syncTelegramWebhook(configOverride?: Awaited<ReturnType<ty
     drop_pending_updates: false,
   }
 
-  if (config.webhookSecret) {
-    payload.secret_token = config.webhookSecret
-  }
+  payload.secret_token = config.webhookSecret
 
   const commands = [
     { command: 'nuevo', description: 'Iniciar flujo guiado de publicacion' },

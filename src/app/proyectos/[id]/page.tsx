@@ -1,3 +1,4 @@
+import { serializeJsonLd } from '@/lib/seo'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { db } from '@/lib/db'
@@ -221,11 +222,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(projectJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(projectJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
       />
       <ProjectPageClient key={project.id} project={project} similarProjects={similarProjects} siteSettings={siteSettings} />
     </>

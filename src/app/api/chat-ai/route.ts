@@ -12,6 +12,10 @@ import {
   extractTelegramHandle,
   inferContactConsent,
 } from '@/lib/chat-sales'
+import { CHAT_SESSION_ID_PATTERN, consumeRateLimit, getClientIp, tooManyRequests } from '@/lib/rate-limit'
+
+const MAX_MESSAGE_LENGTH = 2000
+const MAX_HISTORY_ITEMS = 16
 
 type HistoryMessage = {
   role: string
@@ -245,11 +249,36 @@ function resolveFallback(
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { sessionId, message, history = [], language = 'es', name = 'Visitante', email = '' } = body
+    const body = await request.json().catch(() => ({}))
+    const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : ''
+    const message = typeof body.message === 'string' ? body.message.trim().slice(0, MAX_MESSAGE_LENGTH) : ''
+    const language = ['es', 'en', 'pt'].includes(body.language) ? body.language : 'es'
+    const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 120) : 'Visitante'
+    const email = typeof body.email === 'string' ? body.email.trim().slice(0, 200) : ''
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter((item: unknown): item is { role: string; content: string } =>
+        Boolean(item) && typeof (item as { content?: unknown }).content === 'string',
+      )
+      .slice(-MAX_HISTORY_ITEMS)
+      .map((item: { role: string; content: string }) => ({
+        role: item.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+        content: item.content.slice(0, MAX_MESSAGE_LENGTH),
+      }))
 
     if (!message) {
       return NextResponse.json({ error: 'Mensaje requerido' }, { status: 400 })
+    }
+
+    if (!CHAT_SESSION_ID_PATTERN.test(sessionId)) {
+      return NextResponse.json({ error: 'Sesión de chat inválida' }, { status: 400 })
+    }
+
+    const ip = getClientIp(request)
+    const allowed =
+      (await consumeRateLimit(`chat-ai:ip:${ip}`, 40, 60 * 60)) && (await consumeRateLimit(`chat-ai:session:${sessionId}`, 25, 60 * 60))
+
+    if (!allowed) {
+      return tooManyRequests('Has enviado muchos mensajes seguidos. Escríbenos por WhatsApp o intenta más tarde.')
     }
 
     const config = await db.chatConfig.findFirst()

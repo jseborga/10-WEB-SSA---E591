@@ -18,3 +18,5 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     host: siteUrl,
   }
 }
+
+export const dynamic = 'force-dynamic'

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Offset inválido' }, { status: 400 })
     }
 
-    const data = Buffer.from(await request.arrayBuffer())
+    const data = new Uint8Array(await request.arrayBuffer())
 
     if (data.length === 0) {
       return NextResponse.json({ error: 'Fragmento vacío' }, { status: 400 })

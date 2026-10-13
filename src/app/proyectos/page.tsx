@@ -1,3 +1,4 @@
+import { serializeJsonLd } from '@/lib/seo'
 import type { Metadata } from 'next'
 import { ProjectsPageClient } from '@/components/projects-page-client'
 import { db } from '@/lib/db'
@@ -86,11 +87,11 @@ export default async function ProjectsPage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(projectsCollectionJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(projectsCollectionJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(projectsJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(projectsJsonLd) }}
       />
       <ProjectsPageClient projects={projects} siteSettings={siteSettings} />
     </>

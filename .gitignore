@@ -60,3 +60,11 @@ examples/
 db/*.db
 db/*.db-journal
 data/uploads/
+src/generated/
+
+# cloudflare
+.open-next/
+.wrangler/
+.dev.vars*
+!.dev.vars.example
+prisma/dev.db*

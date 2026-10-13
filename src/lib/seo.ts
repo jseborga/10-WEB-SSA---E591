@@ -185,3 +185,8 @@ export function getWebsiteJsonLd(siteSettings?: SeoSiteSettings | null) {
     inLanguage: ['es', 'en', 'pt'],
   }
 }
+
+/** JSON-LD seguro para <script>: escapa "<" para que un texto no pueda cerrar la etiqueta. */
+export function serializeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
+}

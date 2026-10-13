@@ -1,3 +1,4 @@
+import { serializeJsonLd } from '@/lib/seo'
 import Image from 'next/image'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
@@ -116,7 +117,7 @@ export default async function InfoPage({ params }: { params: Promise<{ slug: str
     <main className="min-h-screen bg-white text-zinc-900">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(pageJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(pageJsonLd) }}
       />
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         <div className="flex items-center justify-between gap-4 border-b border-zinc-200 pb-6">

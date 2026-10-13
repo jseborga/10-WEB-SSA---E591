@@ -1,6 +1,5 @@
-import path from 'path'
-import sharp from 'sharp'
-import { createStoredFileName, readStoredFile, saveUploadedFile } from '@/lib/media-storage'
+import { getEnv } from '@/lib/cloudflare'
+import { createStoredFileName, getMediaKeyFromUrl, getMediaUrl, getStoredObject, saveUploadedFile } from '@/lib/media-storage'
 
 export type ImageVariantTarget = 'project' | 'publication' | 'hero' | 'social'
 export type ImageTreatment = 'original' | 'enhanced' | 'editorial' | 'monochrome'
@@ -30,141 +29,87 @@ const TARGET_SIZES: Record<ImageVariantTarget, { desktop: VariantSize; mobile: V
   },
 }
 
-function getMediaFileNameFromUrl(sourceUrl: string) {
-  try {
-    const parsed = sourceUrl.startsWith('http://') || sourceUrl.startsWith('https://')
-      ? new URL(sourceUrl)
-      : new URL(sourceUrl, 'http://localhost')
-    const parts = parsed.pathname.split('/').filter(Boolean)
+const TREATMENTS: Record<ImageTreatment, ImageTransform> = {
+  original: {},
+  enhanced: { brightness: 1.03, contrast: 1.06, saturation: 1.08, sharpen: 1.2 },
+  editorial: { brightness: 1.01, saturation: 0.92, gamma: 1.04, sharpen: 1 },
+  monochrome: { saturation: 0, contrast: 1.08, sharpen: 0.9 },
+}
 
-    if (parts[0] === 'api' && parts[1] === 'media' && parts[2]) {
-      return decodeURIComponent(parts.slice(2).join('/'))
+function getImages() {
+  const images = getEnv().IMAGES
+
+  if (!images) {
+    throw new Error('Binding de Cloudflare Images "IMAGES" no configurado en wrangler.jsonc.')
+  }
+
+  return images
+}
+
+async function loadSourceBytes(sourceUrl: string) {
+  const mediaKey = getMediaKeyFromUrl(sourceUrl)
+
+  if (mediaKey) {
+    const object = await getStoredObject(mediaKey)
+
+    if (!object) {
+      throw new Error('No se encontró la imagen de origen en la biblioteca.')
     }
-  } catch {
-    return null
+
+    return { bytes: new Uint8Array(await object.arrayBuffer()), fileName: mediaKey }
   }
 
-  return null
+  throw new Error('Selecciona una imagen de la biblioteca de medios (importa primero las URLs externas).')
 }
 
-async function loadSourceBuffer(sourceUrl: string) {
-  const mediaFileName = getMediaFileNameFromUrl(sourceUrl)
+// Los tipos de stream de Workers y del DOM no coinciden aunque en runtime son el mismo objeto.
+type WorkerStream = Parameters<ImagesBinding['input']>[0]
 
-  if (mediaFileName) {
-    return {
-      buffer: await readStoredFile(path.basename(mediaFileName)),
-      fileName: path.basename(mediaFileName),
-    }
-  }
-
-  if (!sourceUrl.startsWith('http://') && !sourceUrl.startsWith('https://')) {
-    throw new Error('Solo se admiten archivos locales del media manager o URLs absolutas.')
-  }
-
-  const response = await fetch(sourceUrl)
-
-  if (!response.ok) {
-    throw new Error('No se pudo descargar la imagen de origen.')
-  }
-
-  const contentType = response.headers.get('content-type') || ''
-
-  if (!contentType.startsWith('image/')) {
-    throw new Error('La URL de origen no apunta a una imagen compatible.')
-  }
-
-  return {
-    buffer: Buffer.from(await response.arrayBuffer()),
-    fileName: path.basename(new URL(sourceUrl).pathname) || 'source-image',
-  }
-}
-
-function applyTreatment(instance: sharp.Sharp, treatment: ImageTreatment) {
-  switch (treatment) {
-    case 'enhanced':
-      return instance
-        .modulate({ brightness: 1.03, saturation: 1.08 })
-        .sharpen(1.1, 1.2, 1.8)
-        .normalise()
-    case 'editorial':
-      return instance
-        .modulate({ brightness: 1.01, saturation: 0.92 })
-        .gamma(1.04)
-        .sharpen(0.9, 1.1, 1.6)
-    case 'monochrome':
-      return instance
-        .grayscale()
-        .normalise()
-        .sharpen(0.8, 1.05, 1.5)
-    default:
-      return instance
-  }
-}
-
-async function buildContainedVariant(
-  sourceBuffer: Buffer,
-  size: VariantSize,
-  treatment: ImageTreatment,
-) {
-  const background = await sharp(sourceBuffer)
-    .rotate()
-    .resize(size.width, size.height, {
-      fit: 'cover',
-      position: 'attention',
-      withoutEnlargement: false,
-    })
-    .blur(20)
-    .modulate({ brightness: 0.84, saturation: treatment === 'monochrome' ? 0 : 0.88 })
-    .webp({ quality: 82, effort: 4 })
-    .toBuffer()
-
-  const foreground = await applyTreatment(sharp(sourceBuffer).rotate(), treatment)
-    .resize(size.width, size.height, {
-      fit: 'contain',
-      withoutEnlargement: false,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .png()
-    .toBuffer()
-
-  return sharp(background)
-    .composite([{ input: foreground, gravity: 'center' }])
-    .webp({
-      quality: 84,
-      effort: 5,
-    })
+function toStream(bytes: Uint8Array): WorkerStream {
+  return new Blob([bytes as BlobPart]).stream() as unknown as WorkerStream
 }
 
 async function createVariant(
-  sourceBuffer: Buffer,
+  bytes: Uint8Array,
+  sourceSize: { width: number; height: number } | null,
   fileName: string,
   size: VariantSize,
   label: 'desktop' | 'mobile',
   treatment: ImageTreatment,
   fitMode: ImageVariantFitMode,
 ) {
-  const processed =
-    fitMode === 'contain'
-      ? await buildContainedVariant(sourceBuffer, size, treatment)
-      : applyTreatment(sharp(sourceBuffer).rotate(), treatment)
-          .resize(size.width, size.height, {
-            fit: 'cover',
-            position: 'attention',
-            withoutEnlargement: false,
-          })
-          .webp({
-            quality: 84,
-            effort: 5,
-          })
+  const images = getImages()
+  const look = TREATMENTS[treatment]
+  let transformer: ImageTransformer
 
-  const buffer = await processed.toBuffer()
-  const stem = path.parse(fileName).name || 'image'
+  if (fitMode === 'contain' && sourceSize) {
+    // Fondo desenfocado a sangre + imagen completa centrada encima.
+    const scale = Math.min(size.width / sourceSize.width, size.height / sourceSize.height)
+    const width = Math.max(1, Math.round(sourceSize.width * scale))
+    const height = Math.max(1, Math.round(sourceSize.height * scale))
+
+    transformer = images
+      .input(toStream(bytes))
+      .transform({ width: size.width, height: size.height, fit: 'cover', gravity: 'auto', blur: 40, brightness: 0.84, saturation: treatment === 'monochrome' ? 0 : 0.88 })
+      .draw(images.input(toStream(bytes)).transform({ ...look, width, height, fit: 'scale-down' }), {
+        left: Math.round((size.width - width) / 2),
+        top: Math.round((size.height - height) / 2),
+      })
+  } else {
+    transformer = images
+      .input(toStream(bytes))
+      .transform({ ...look, width: size.width, height: size.height, fit: 'cover', gravity: 'auto' })
+  }
+
+  const result = await transformer.output({ format: 'image/webp', quality: 84 })
+  const output = new Uint8Array(await new Response(result.image() as unknown as ReadableStream).arrayBuffer())
+  const stem = fileName.replace(/\.[a-z0-9]+$/i, '').replace(/^\d+-[a-z0-9]+-/, '') || 'image'
   const outputFileName = createStoredFileName(`${stem}-${label}-${treatment}-${fitMode}.webp`)
-  await saveUploadedFile(outputFileName, buffer)
+  await saveUploadedFile(outputFileName, output, 'image/webp')
 
   return {
     fileName: outputFileName,
-    url: `/api/media/${outputFileName}`,
+    url: getMediaUrl(outputFileName),
     width: size.width,
     height: size.height,
   }
@@ -181,13 +126,14 @@ export async function generateImageVariants({
   treatment: ImageTreatment
   fitMode?: ImageVariantFitMode
 }) {
-  const { buffer, fileName } = await loadSourceBuffer(sourceUrl)
-  const metadata = await sharp(buffer).metadata()
+  const { bytes, fileName } = await loadSourceBytes(sourceUrl)
+  const info = await getImages().info(toStream(bytes))
+  const sourceSize = 'width' in info ? { width: info.width, height: info.height } : null
   const sizes = TARGET_SIZES[target]
 
   const [desktop, mobile] = await Promise.all([
-    createVariant(buffer, fileName, sizes.desktop, 'desktop', treatment, fitMode),
-    createVariant(buffer, fileName, sizes.mobile, 'mobile', treatment, fitMode),
+    createVariant(bytes, sourceSize, fileName, sizes.desktop, 'desktop', treatment, fitMode),
+    createVariant(bytes, sourceSize, fileName, sizes.mobile, 'mobile', treatment, fitMode),
   ])
 
   return {
@@ -196,9 +142,9 @@ export async function generateImageVariants({
     fitMode,
     original: {
       url: sourceUrl,
-      width: metadata.width || null,
-      height: metadata.height || null,
-      format: metadata.format || null,
+      width: sourceSize?.width ?? null,
+      height: sourceSize?.height ?? null,
+      format: info.format,
     },
     desktop,
     mobile,

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { io, Socket } from 'socket.io-client'
 import { MessageCircle, X, Send, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -153,10 +152,7 @@ export function ChatWidget({
   const [sessionId, setSessionId] = useState<string>('')
   const [activeGuideIndex, setActiveGuideIndex] = useState(0)
   const [typedGuideLength, setTypedGuideLength] = useState(0)
-  const socketRef = useRef<Socket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const socketUrl = process.env.NEXT_PUBLIC_CHAT_SOCKET_URL?.trim() || '/?XTransformPort=3003'
-  const socketPath = process.env.NEXT_PUBLIC_CHAT_SOCKET_PATH?.trim() || undefined
   const isLightTone = buttonTone === 'light'
   const normalizedGuideMessages = useMemo(() => normalizeGuideMessages(guideMessages), [guideMessages])
   const guideActions = useMemo(() => getGuideActions(language), [language])
@@ -252,9 +248,10 @@ export function ChatWidget({
     if (!hasOpened) return
 
     const savedSessionId = localStorage.getItem('chat_session_id')
-    const newSessionId = savedSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const newSessionId =
+      savedSessionId && /^session_[0-9a-f-]{36}$/.test(savedSessionId) ? savedSessionId : `session_${crypto.randomUUID()}`
     setSessionId(newSessionId)
-    if (!savedSessionId) localStorage.setItem('chat_session_id', newSessionId)
+    if (newSessionId !== savedSessionId) localStorage.setItem('chat_session_id', newSessionId)
   }, [hasOpened])
 
   useEffect(() => {
@@ -283,43 +280,8 @@ export function ChatWidget({
   }, [chatConfig?.enabled, hasLoadedConfig, isJoined, isOpen, sessionId])
 
   useEffect(() => {
-    if (!isOpen) {
-      setIsConnected(false)
-      return
-    }
-
-    if (!hasLoadedConfig) return
-
-    if (chatConfig?.enabled) {
-      setIsConnected(true)
-      return
-    }
-
-    const socket = io(socketUrl, {
-      path: socketPath,
-      transports: ['websocket', 'polling'],
-      forceNew: true,
-      reconnection: true,
-      reconnectionAttempts: 3,
-    })
-
-    socketRef.current = socket
-    socket.on('connect', () => {
-      setIsConnected(true)
-      const savedSession = getSavedSession()
-      if (savedSession) {
-        socket.emit('join-session', { sessionId, name: savedSession.name, email: savedSession.email })
-      }
-    })
-    socket.on('disconnect', () => setIsConnected(false))
-    socket.on('session-history', (data: { sessionId: string; messages: Message[] }) => setMessages(data.messages))
-    socket.on('new-message', (msg: Message) => setMessages(prev => [...prev, msg]))
-
-    return () => {
-      socket.disconnect()
-      socketRef.current = null
-    }
-  }, [chatConfig?.enabled, hasLoadedConfig, isOpen, socketPath, socketUrl])
+    setIsConnected(isOpen && hasLoadedConfig)
+  }, [hasLoadedConfig, isOpen])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -413,10 +375,6 @@ export function ChatWidget({
     const pendingMessage = queuedMessage.trim()
     const shouldAutoSend = queuedAutoSend
 
-    if (socketRef.current) {
-      socketRef.current.emit('join-session', { sessionId, name: name.trim(), email: email.trim() || undefined })
-    }
-
     setIsJoined(true)
 
     if (pendingMessage) {
@@ -427,7 +385,7 @@ export function ChatWidget({
         setQueuedMessage('')
       }
     }
-  }, [name, email, queuedAutoSend, queuedMessage, sessionId])
+  }, [name, email, queuedAutoSend, queuedMessage])
 
   const sendPreparedMessage = useCallback(async (rawMessage: string) => {
     if (!rawMessage.trim() || !isJoined) return
@@ -474,8 +432,6 @@ export function ChatWidget({
         }])
       }
       finally { setIsTyping(false) }
-    } else if (socketRef.current && isConnected) {
-      socketRef.current.emit('send-message', { content: userMessage })
     } else {
       setMessages(prev => [...prev, {
         id: `system_${Date.now()}`, sessionId,
@@ -483,7 +439,7 @@ export function ChatWidget({
         content: getFallbackMessage(), timestamp: new Date(), type: 'admin'
       }])
     }
-  }, [getFallbackMessage, isConnected, isJoined, chatConfig, messages, name, sessionId, language])
+  }, [getFallbackMessage, isJoined, chatConfig, messages, name, sessionId, language])
 
   const sendMessage = useCallback(async () => {
     await sendPreparedMessage(inputMessage)
@@ -513,7 +469,7 @@ export function ChatWidget({
     sendAnalyticsEvent({
       eventType: 'chat-open',
       payload: {
-        provider: chatConfig?.provider || 'socket',
+        provider: chatConfig?.provider || 'none',
       },
     })
   }, [chatConfig?.provider, isOpen])

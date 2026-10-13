@@ -22,12 +22,32 @@ function getEnvValue(name: string) {
   return process.env[name]?.trim() ?? ''
 }
 
+const PLACEHOLDER_PATTERN = /^(cambiar|change|changeme|change-me|password|secret|admin)/i
+
 function getAdminPassword() {
-  return getEnvValue('ADMIN_PASSWORD')
+  const password = getEnvValue('ADMIN_PASSWORD')
+
+  if (password && (password.length < 12 || PLACEHOLDER_PATTERN.test(password))) {
+    console.error('ADMIN_PASSWORD ignorado: debe tener 12+ caracteres y no ser un valor de ejemplo.')
+    return ''
+  }
+
+  return password
 }
 
+/** Secreto HMAC de las cookies. Obligatorio, independiente del password y de 32+ caracteres. */
 function getAdminSessionSecret() {
-  return getEnvValue('ADMIN_SESSION_SECRET') || getAdminPassword()
+  const secret = getEnvValue('ADMIN_SESSION_SECRET')
+
+  if (!secret || secret.length < 32 || PLACEHOLDER_PATTERN.test(secret)) {
+    if (secret) {
+      console.error('ADMIN_SESSION_SECRET ignorado: genera uno aleatorio de 32+ caracteres (openssl rand -hex 32).')
+    }
+
+    return ''
+  }
+
+  return secret
 }
 
 export function normalizeUsername(value: string) {
@@ -204,6 +224,12 @@ export function getSessionFromRequest(request: Request): AuthSession | null {
     return null
   }
 
+  const age = Date.now() - parsedPayload.issuedAt
+
+  if (age < 0 || age > SESSION_MAX_AGE * 1000) {
+    return null
+  }
+
   return {
     username: parsedPayload.username,
     role: parsedPayload.role,
@@ -230,7 +256,7 @@ export async function getAdminSessionStatus(request: Request) {
 
 function configurationError() {
   return NextResponse.json(
-    { error: 'Admin no configurado. Define ADMIN_PASSWORD o crea un usuario administrador.' },
+    { error: 'Admin no configurado. Define ADMIN_SESSION_SECRET (32+ caracteres) y ADMIN_PASSWORD o crea un usuario administrador.' },
     { status: 503 },
   )
 }

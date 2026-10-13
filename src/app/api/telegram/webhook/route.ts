@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server'
 import { createAutomationLog } from '@/lib/automation-log'
 import { ensureTelegramConfig, processTelegramUpdate } from '@/lib/telegram'
 
+function safeEqual(left: string, right: string) {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  let diff = 0
+
+  for (let index = 0; index < left.length; index += 1) {
+    diff |= left.charCodeAt(index) ^ right.charCodeAt(index)
+  }
+
+  return diff === 0
+}
+
 export async function GET() {
   const config = await ensureTelegramConfig().catch(() => null)
 
@@ -17,12 +31,14 @@ export async function POST(request: Request) {
     const config = await ensureTelegramConfig()
     const secretHeader = request.headers.get('x-telegram-bot-api-secret-token')?.trim() || ''
 
-    if (config.webhookSecret && secretHeader !== config.webhookSecret) {
+    if (!config.webhookSecret || !safeEqual(secretHeader, config.webhookSecret)) {
       await createAutomationLog({
         source: 'telegram',
         eventType: 'webhook.rejected',
         status: 'rejected',
-        summary: 'Webhook de Telegram rechazado por secret token invalido',
+        summary: config.webhookSecret
+          ? 'Webhook de Telegram rechazado por secret token invalido'
+          : 'Webhook de Telegram rechazado: falta secret token (vuelve a sincronizar el webhook)',
       })
 
       return NextResponse.json({ error: 'Secret token invalido' }, { status: 401 })
