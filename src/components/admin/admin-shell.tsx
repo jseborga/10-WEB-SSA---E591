@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import { Toaster } from 'sonner'
 import {
   ExternalLink,
@@ -71,6 +71,11 @@ function readSectionFromHash(): AdminSectionId {
 
   const value = window.location.hash.replace('#', '')
   return NAV_ITEMS.some((item) => item.id === value) ? (value as AdminSectionId) : 'inicio'
+}
+
+function subscribeToHash(onChange: () => void) {
+  window.addEventListener('hashchange', onChange)
+  return () => window.removeEventListener('hashchange', onChange)
 }
 
 function LoginScreen({ configured, onLoggedIn }: { configured: boolean; onLoggedIn: () => void }) {
@@ -175,24 +180,20 @@ function SectionHeader({ item, children }: { item: NavItem; children?: ReactNode
 
 export function AdminShell() {
   const [session, setSession] = useState<AdminSessionInfo | null>(null)
-  const [section, setSection] = useState<AdminSectionId>('inicio')
+  // La sección vive en el hash (#medios, #publicaciones…) para poder enlazarla y usar "atrás".
+  const section = useSyncExternalStore(subscribeToHash, readSectionFromHash, () => 'inicio' as AdminSectionId)
 
-  const loadSession = useCallback(async () => {
-    try {
-      const response = await fetch('/api/admin/session', { cache: 'no-store' })
-      setSession(await response.json())
-    } catch {
-      setSession({ configured: true, authenticated: false, role: null, username: null, root: false })
-    }
-  }, [])
+  const loadSession = useCallback(
+    () =>
+      fetch('/api/admin/session', { cache: 'no-store' })
+        .then((response) => response.json() as Promise<AdminSessionInfo>)
+        .catch(() => ({ configured: true, authenticated: false, role: null, username: null, root: false }) as AdminSessionInfo)
+        .then(setSession),
+    [],
+  )
 
   useEffect(() => {
     void loadSession()
-    setSection(readSectionFromHash())
-
-    const handleHashChange = () => setSection(readSectionFromHash())
-    window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
   }, [loadSession])
 
   const visibleItems = useMemo(
@@ -203,7 +204,6 @@ export function AdminShell() {
 
   const navigate = useCallback((next: AdminSectionId) => {
     window.location.hash = next
-    setSection(next)
     window.scrollTo({ top: 0 })
   }, [])
 
@@ -295,7 +295,8 @@ export function AdminShell() {
 
       <main className="px-4 pb-28 pt-6 sm:px-6 lg:ml-64 lg:px-10 lg:pb-12 lg:pt-10">
         <div className={activeItem.id === 'clasico' ? '' : 'mx-auto max-w-6xl'}>
-          {activeItem.id !== 'clasico' ? <SectionHeader item={activeItem} /> : null}
+          {/* Publicaciones, medios y redes traen su propia cabecera con acciones. */}
+          {activeItem.id === 'inicio' || activeItem.id === 'integraciones' ? <SectionHeader item={activeItem} /> : null}
           {activeItem.id === 'inicio' ? <AdminDashboard onNavigate={navigate} isAdmin={session.role === 'admin'} /> : null}
           {activeItem.id === 'publicaciones' ? <PublicationsManager /> : null}
           {activeItem.id === 'medios' ? <MediaLibrary /> : null}
